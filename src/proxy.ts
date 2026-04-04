@@ -3,7 +3,7 @@ import { createMiddlewareClient } from '@/lib/supabase/middleware';
 
 const PUBLIC_ROUTES = ['/login'];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { supabase, response } = createMiddlewareClient(request);
 
   // Refresh session — this keeps the session alive
