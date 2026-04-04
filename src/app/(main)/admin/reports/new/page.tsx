@@ -37,6 +37,39 @@ export default function CreateReportPage() {
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
 
+  // AI Format state
+  const [aiRawText, setAiRawText] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState('');
+
+  const handleAiFormat = async () => {
+    if (!aiRawText.trim()) return;
+    setAiLoading(true);
+    setAiError('');
+    try {
+      const res = await fetch('/api/ai/format-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: aiRawText, reportType: type }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAiError(data.error || 'AI formatting failed');
+        return;
+      }
+      // Fill metadata
+      if (data.title) setTitle(data.title);
+      if (data.dateRange) setDateRange(data.dateRange);
+      // Fill content
+      setContent(data as ReportContent);
+      setAiRawText('');
+    } catch {
+      setAiError('Network error — could not reach AI service.');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   const handleSave = async (publish: boolean) => {
     setErrors([]);
     if (!title.trim() || !dateRange.trim() || !domainId) {
@@ -98,6 +131,29 @@ export default function CreateReportPage() {
         </button>
         <h1 className="text-2xl font-bold text-[#232f3e] mb-6">{t('admin.createReport')}</h1>
 
+        {/* AI Format — paste entire report */}
+        <div className="mb-6 rounded-lg border-2 border-dashed border-[#ff9900] bg-orange-50 p-4">
+          <h3 className="text-sm font-bold text-[#232f3e] mb-2">🤖 AI Format — 智能填充整份报告</h3>
+          <p className="text-xs text-gray-500 mb-2">
+            Paste the entire raw report text. AI will extract the title, date range, and all content modules automatically.
+          </p>
+          <textarea
+            value={aiRawText}
+            onChange={(e) => setAiRawText(e.target.value)}
+            rows={6}
+            className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-[#ff9900] focus:outline-none"
+            placeholder="Paste full report text here (Chinese or English)…&#10;&#10;AI will extract title, date range, and structure all content modules."
+          />
+          {aiError && <p className="text-xs text-red-600 mt-1">{aiError}</p>}
+          <button
+            onClick={handleAiFormat}
+            disabled={aiLoading || !aiRawText.trim()}
+            className="mt-2 rounded bg-[#ff9900] px-4 py-2 text-sm font-medium text-white hover:bg-[#e88b00] disabled:opacity-50"
+          >
+            {aiLoading ? 'AI Processing…' : '🤖 AI 智能格式化'}
+          </button>
+        </div>
+
         {errors.length > 0 && (
           <div className="mb-4 rounded border border-red-300 bg-red-50 p-3">
             {errors.map((e, i) => (
@@ -151,7 +207,7 @@ export default function CreateReportPage() {
         </div>
 
         {/* Content Editor */}
-        <ContentEditor value={content} onChange={setContent} />
+        <ContentEditor value={content} onChange={setContent} reportType={type} />
 
         {/* Actions */}
         <div className="flex gap-3 mt-6">

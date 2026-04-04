@@ -505,14 +505,77 @@ function ModuleEditor({
   );
 }
 
+/* ─── Smart Paste ─── */
+
+function SmartPasteSection({
+  reportType,
+  onResult,
+}: {
+  reportType: 'regular' | 'topic';
+  onResult: (content: ReportContent) => void;
+}) {
+  const [rawText, setRawText] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleFormat = async () => {
+    if (!rawText.trim()) return;
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch('/api/ai/format-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: rawText, reportType }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'AI formatting failed');
+        return;
+      }
+      onResult(data as ReportContent);
+      setRawText('');
+    } catch {
+      setError('Network error — could not reach AI service.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="mb-6 rounded-lg border-2 border-dashed border-[#ff9900] bg-orange-50 p-4">
+      <h3 className="text-sm font-bold text-[#232f3e] mb-2">🤖 Smart Paste — AI 智能格式化</h3>
+      <p className="text-xs text-gray-500 mb-2">
+        Paste your raw report text below and let AI structure it into modules, tables, and analysis sections.
+      </p>
+      <textarea
+        value={rawText}
+        onChange={(e) => setRawText(e.target.value)}
+        rows={6}
+        className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-[#ff9900] focus:outline-none"
+        placeholder="Paste raw report text here (Chinese or English)…&#10;&#10;Example:&#10;账户健康雷达报告 2025-03-03 ~ 2025-03-16&#10;一、政策违规概览&#10;IP投诉 45件 高风险&#10;产品真实性 23件 中风险&#10;…"
+      />
+      {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+      <button
+        onClick={handleFormat}
+        disabled={loading || !rawText.trim()}
+        className="mt-2 rounded bg-[#ff9900] px-4 py-2 text-sm font-medium text-white hover:bg-[#e88b00] disabled:opacity-50"
+      >
+        {loading ? 'AI Processing…' : '🤖 AI 智能格式化'}
+      </button>
+    </div>
+  );
+}
+
 /* ─── Main ContentEditor ─── */
 
 export interface ContentEditorProps {
   value: ReportContent;
   onChange: (content: ReportContent) => void;
+  reportType?: 'regular' | 'topic';
 }
 
-export default function ContentEditor({ value, onChange }: ContentEditorProps) {
+export default function ContentEditor({ value, onChange, reportType = 'regular' }: ContentEditorProps) {
   const { t } = useTranslation();
   const [showPreview, setShowPreview] = useState(false);
   const [previewModuleIndex, setPreviewModuleIndex] = useState(0);
@@ -538,6 +601,9 @@ export default function ContentEditor({ value, onChange }: ContentEditorProps) {
 
   return (
     <div>
+      {/* Smart Paste */}
+      <SmartPasteSection reportType={reportType} onResult={onChange} />
+
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-bold text-[#232f3e]">Content Editor</h2>
         <button
