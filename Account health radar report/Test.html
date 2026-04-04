@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amazon CN Seller Account Health Report</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --amazon-primary: #232f3e;
+            --amazon-secondary: #146eb4;
+            --amazon-accent: #ff9900;
+            --amazon-light: #f2f3f3;
+            --amazon-text: #0f1111;
+            --amazon-border: #d5dbdb;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: #f8f9fa;
+            color: var(--amazon-text);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 15px;
+        }
+
+        /* Header Styles */
+        header {
+            background: linear-gradient(to bottom, var(--amazon-primary), #1a2530);
+            padding: 15px 0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+        }
+
+        .logo {
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            margin-right: 20px;
+        }
+
+        .logo span {
+            color: var(--amazon-accent);
+        }
+
+        .report-title {
+            color: white;
+            font-size: 18px;
+            opacity: 0.9;
+        }
+
+        .date-range {
+            background-color: var(--amazon-secondary);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        /* Navigation */
+        .tabs {
+            display: flex;
+            margin-top: 15px;
+        }
+
+        .tab {
+            color: white;
+            padding: 8px 20px;
+            margin-right: 5px;
+            border-radius: 4px 4px 0 0;
+            cursor: pointer;
+            transition: all 0.3s;
+            background-color: rgba(255,255,255,0.1);
+        }
+
+        .tab.active {
+            background-color: var(--amazon-light);
+            color: var(--amazon-text);
+            font-weight: bold;
+        }
+
+        /* Main Content */
+        .main-content {
+            padding: 30px 0;
+        }
+
+        .card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            overflow: hidden;
+            border: 1px solid var(--amazon-border);
+        }
+
+        .card-header {
+            background: var(--amazon-primary);
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-title {
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .card-subtitle {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        .card-body {
+            padding: 20px;
+        }
+
+        /* Table Styles */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            font-size: 14px;
+        }
+
+        th {
+            background-color: var(--amazon-light);
+            text-align: left;
+            padding: 12px 15px;
+            font-weight: bold;
+            border-bottom: 2px solid var(--amazon-border);
+        }
+
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid var(--amazon-border);
+        }
+
+        tr:hover {
+            background-color: rgba(20, 110, 180, 0.05);
+        }
+
+        /* Analysis Framework */
+        .analysis-section {
+            margin: 25px 0;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--amazon-border);
+        }
+
+        .analysis-section:last-child {
+            border-bottom: none;
+        }
+
+        .section-title {
+            font-size: 18px;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--amazon-accent);
+            display: inline-block;
+            color: var(--amazon-primary);
+        }
+
+        .analysis-block {
+            background: #f8f9fa;
+            border-radius: 6px;
+            padding: 20px;
+            margin: 15px 0;
+            border-left: 4px solid var(--amazon-secondary);
+        }
+
+        .analysis-subtitle {
+            font-weight: 600;
+            color: var(--amazon-secondary);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+        }
+
+        .analysis-subtitle i {
+            margin-right: 8px;
+        }
+
+        .risk-indicator {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            margin: 5px 5px 5px 0;
+        }
+
+        .high-risk {
+            background-color: #ffe6e6;
+            color: #cc0000;
+            border: 1px solid #ff9999;
+        }
+
+        .medium-risk {
+            background-color: #fff0cc;
+            color: #996600;
+            border: 1px solid #ffcc66;
+        }
+
+        .low-risk {
+            background-color: #e6f2ff;
+            color: var(--amazon-secondary);
+            border: 1px solid #99ccff;
+        }
+
+        .quote {
+            background: var(--amazon-light);
+            border-left: 4px solid var(--amazon-secondary);
+            padding: 15px;
+            margin: 15px 0;
+            font-style: italic;
+        }
+
+        .quote-source {
+            display: block;
+            margin-top: 5px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .metric-badge {
+            display: inline-block;
+            background: var(--amazon-secondary);
+            color: white;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 12px;
+            margin: 0 5px;
+        }
+
+        /* Education Matrix */
+        .education-matrix {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .education-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid var(--amazon-border);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+
+        .education-card h4 {
+            color: var(--amazon-primary);
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .education-card .priority {
+            display: inline-block;
+            background: var(--amazon-accent);
+            color: white;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        /* Tool Feedback */
+        .tool-feedback {
+            margin-top: 40px;
+        }
+
+        .tool-card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid var(--amazon-border);
+        }
+
+        .tool-name {
+            color: var(--amazon-secondary);
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+        }
+
+        .tool-name i {
+            margin-right: 10px;
+            font-size: 20px;
+        }
+
+        .rating {
+            color: var(--amazon-accent);
+            font-size: 14px;
+            margin-top: 5px;
+        }
+
+        /* Footer */
+        footer {
+            background: var(--amazon-primary);
+            color: white;
+            padding: 20px 0;
+            text-align: center;
+            margin-top: 40px;
+            font-size: 14px;
+        }
+
+        .disclaimer {
+            max-width: 800px;
+            margin: 0 auto;
+            opacity: 0.8;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header-top {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .date-range {
+                margin-top: 10px;
+            }
+            .tabs {
+                overflow-x: auto;
+                padding-bottom: 5px;
+            }
+            table {
+                display: block;
+                overflow-x: auto;
+            }
+            .education-matrix {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <div class="container">
+            <div class="header-top">
+                <div class="logo-container">
+                    <div class="logo">Amazon<span>Seller</span></div>
+                    <div class="report-title">China Seller Account Health Radar Report</div>
+                </div>
+                <div class="date-range">
+                    <i class="fas fa-calendar-alt"></i> Feb 01 to Mar 03, 2026
+                </div>
+            </div>
+            <div class="tabs">
+                <div class="tab active">Report Overview</div>
+                <div class="tab">Account Suspension</div>
+                <div class="tab">Listing Takedowns</div>
+                <div class="tab">Education Solutions</div>
+                <div class="tab">Tools Feedback</div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="container">
+        <div class="main-content">
+            <!-- Module 1: Account Suspension Trends -->
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">Module 1: Account Suspension Trends Analysis</div>
+                        <div class="card-subtitle">Top 5 Suspension Reasons and Typical Misconceptions</div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Reason</th>
+                                <th>High-Frequency Keywords</th>
+                                <th>Volume Weight</th>
+                                <th>Typical Misconceptions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>1</td>
+                                <td>Hong Kong Company Address Compliance</td>
+                                <td>Stamp duty, secretary company, lease verification</td>
+                                <td>2,480</td>
+                                <td>Believing Hong Kong companies only need "nominal registration" while ignoring overlapping address association risks.</td>
+                            </tr>
+                            <tr>
+                                <td>2</td>
+                                <td>Existing Account Video Re-verification</td>
+                                <td>Video verification, legal representative unreachable, old account renewal</td>
+                                <td>1,950</td>
+                                <td>Assuming accounts registered three years ago have passed the safety period and no longer need to maintain legal representative contact channels.</td>
+                            </tr>
+                            <tr>
+                                <td>3</td>
+                                <td>Fraudulent Compliance Evidence Chain</td>
+                                <td>Fake invoices, image manipulation detection, non-compliant laboratories</td>
+                                <td>1,520</td>
+                                <td>Believing "non-compliant invoices" obtained for appeals can pass AI image recognition audits.</td>
+                            </tr>
+                            <tr>
+                                <td>4</td>
+                                <td>Payment Tool Chain Association</td>
+                                <td>Virtual card pools, receiving accounts, ERP withdrawals</td>
+                                <td>1,100</td>
+                                <td>Ignoring the financial association of different stores using the same withdrawal account or high-risk card pools.</td>
+                            </tr>
+                            <tr>
+                                <td>5</td>
+                                <td>AI Malicious Manipulation Behavior Detection</td>
+                                <td>Web scraping, abnormal clicks, script automation</td>
+                                <td>840</td>
+                                <td>Assuming that as long as they don't use brushing software, using scripts for "automated price changes" is safe.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="analysis-section">
+                        <h3 class="section-title">In-Depth Analysis Framework</h3>
+                        
+                        <div class="analysis-block">
+                            <h4 class="analysis-subtitle"><i class="fas fa-building"></i> 1. Hong Kong Company Address Compliance</h4>
+                            <p><strong>Underlying Behavior Logic:</strong> Many Chinese sellers use the same secretary company address to register hundreds of Hong Kong companies. In 2026, Amazon's backend introduced an <strong>"address space fingerprint"</strong> algorithm, which refines physical addresses down to coordinates and room numbers.</p>
+                            <p><strong>Misconception Deep Dive:</strong> Sellers believe "as long as I have an annual inspection report and BR (Business Registration), I'm legal." <strong>Policy Reality:</strong> Amazon requires not just "legal registration," but "authentic office operations."</p>
+                            <p><strong>Risk Quantification Indicators:</strong></p>
+                            <div>
+                                <span class="risk-indicator high-risk">High Risk: 65%</span>
+                                <span class="risk-indicator low-risk">Success Rate: 8%</span>
+                            </div>
+                        </div>
+
+                        <div class="analysis-block">
+                            <h4 class="analysis-subtitle"><i class="fas fa-video"></i> 2. Existing Account Video Re-verification</h4>
+                            <p><strong>Underlying Behavior Logic:</strong> Amazon AI is conducting "identity backtracking" for accounts registered before 2023 that show recent abnormal performance.</p>
+                            <p><strong>Misconception Deep Dive:</strong> Sellers believe "once past secondary review, the account is in the safe zone." <strong>Policy Reality:</strong> The 2026 agreement clearly states that the platform has the right to request periodic re-interviews based on <strong>"biometric feature changes"</strong>.</p>
+                            <div>
+                                <span class="risk-indicator medium-risk">Recovery: 3+ months</span>
+                            </div>
+                        </div>
+
+                        <div class="analysis-block">
+                            <h4 class="analysis-subtitle"><i class="fas fa-file-invoice"></i> 3. Fraudulent Compliance Evidence Chain</h4>
+                            <p><strong>Underlying Behavior Logic:</strong> Sellers purchase so-called "legitimate machine-printed invoices" from certain service providers when facing "authenticity reviews."</p>
+                            <p><strong>Misconception Deep Dive:</strong> Believing "as long as the invoice is real and can't be verified by calling the tax bureau, it's fine." <strong>Policy Reality:</strong> Amazon's 2026 audit system uses <strong>OCR+blockchain technology</strong> to connect with mainstream ERP and financial software databases.</p>
+                            <div>
+                                <span class="risk-indicator high-risk">Severity: Permanent Fund Freezing</span>
+                            </div>
+                        </div>
+
+                        <div class="analysis-block">
+                            <h4 class="analysis-subtitle"><i class="fas fa-money-bill-transfer"></i> 4. Payment Tool Chain Association</h4>
+                            <p><strong>Underlying Behavior Logic:</strong> Multiple stores with completely isolated information still converge to the same third-party payment account (or its sub-accounts) in the final withdrawal stage.</p>
+                            <p><strong>Misconception Deep Dive:</strong> Believing "as long as sub-accounts are different, Amazon can't detect the backend." <strong>Policy Reality:</strong> Due to anti-money laundering law upgrades, payment institutions report <strong>"Ultimate Beneficial Owner (UBO)"</strong> information to platforms.</p>
+                            <div>
+                                <span class="risk-indicator high-risk">Chain Reaction: Carpet-Bombing Suspension</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Module 2: Listing Takedown Patterns -->
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">Module 2: Listing Takedown Analysis</div>
+                        <div class="card-subtitle">Patterns in Product Listing Removals</div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Reason Type</th>
+                                <th>High-Frequency Triggered Categories</th>
+                                <th>Volume</th>
+                                <th>Seller Fatal Errors</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>False Environmental Claims (Greenwashing)</td>
+                                <td>Home goods, packaging, clothing</td>
+                                <td>1,240</td>
+                                <td>Casually using "100% Biodegradable" without certification.</td>
+                            </tr>
+                            <tr>
+                                <td>Laboratory Qualification Expiration</td>
+                                <td>Toys, 3C electronics</td>
+                                <td>960</td>
+                                <td>Using reports from low-cost laboratories whose CNAS qualifications have been revoked.</td>
+                            </tr>
+                            <tr>
+                                <td>AI Image Infringement Detection</td>
+                                <td>Accessories, shoes and bags</td>
+                                <td>780</td>
+                                <td>Background includes unauthorized famous buildings or brand logo residue.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="analysis-section">
+                        <h3 class="section-title">Detailed Analysis of Key Issues</h3>
+                        
+                        <div class="analysis-block">
+                            <h4 class="analysis-subtitle"><i class="fas fa-leaf"></i> False Environmental Claims (Greenwashing)</h4>
+                            <p><strong>Volume Calculation:</strong> (Forum posts 120×1.0) + (Service provider articles 60×2.0) + (Media reports 150×4.0) + (KOL videos 80×5.0) = <strong>1,240</strong></p>
+                            <p><strong>Underlying Behavior Logic:</strong> Sellers randomly add terms like "Eco-friendly" and "Plastic Free" to titles and detail pages to improve conversion rates.</p>
+                            <p><strong>Cognitive Blind Spot:</strong> Sellers think these are just marketing adjectives without certification requirements.</p>
+                            <div>
+                                <span class="risk-indicator high-risk">Error Rate: 80%</span>
+                            </div>
+                        </div>
+
+                        <div class="analysis-block">
+                            <h4 class="analysis-subtitle"><i class="fas fa-flask"></i> Laboratory Qualification Expiration</h4>
+                            <p><strong>Underlying Behavior Logic:</strong> Sellers hold test reports from "expedited laboratories" blacklisted by Amazon.</p>
+                            <p><strong>Policy Reality:</strong> Amazon dynamically synchronizes with the <strong>ILAC-MRA database</strong>. Once a laboratory's qualification is revoked, all historically issued reports instantly become "Invalid" in Amazon's system.</p>
+                            <div>
+                                <span class="risk-indicator medium-risk">Cost: ¥3,000-8,000 RMB</span>
+                                <span class="risk-indicator medium-risk">Downtime: 2+ weeks</span>
+                            </div>
+                        </div>
+
+                        <div class="analysis-block">
+                            <h4 class="analysis-subtitle"><i class="fas fa-image"></i> AI Image Infringement Detection</h4>
+                            <p><strong>Underlying Behavior Logic:</strong> Sellers use AI-generated models for main images, or inadvertently capture copyright-protected artwork or landmarks in the background.</p>
+                            <p><strong>Policy Reality:</strong> Amazon's visual recognition system has been upgraded to <strong>"full scene semantic retrieval,"</strong> which can precisely identify copyright-protected elements in background images.</p>
+                            <div>
+                                <span class="risk-indicator low-risk">False Positive: 12%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Module 3: Education Solutions -->
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">Module 3: Education Solution Matrix</div>
+                        <div class="card-subtitle">Targeted Training for High-Risk Scenarios</div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="education-matrix">
+                        <div class="education-card">
+                            <div class="priority">Priority 1</div>
+                            <h4>Hong Kong & Offshore Address Compliance SOP</h4>
+                            <p><strong>Target Audience:</strong> Multi-account operators</p>
+                            <p><strong>Key Focus:</strong> Breaking the "secretary company address is universal" myth</p>
+                            <p><strong>Format:</strong> Closed-door workshop with legal experts</p>
+                        </div>
+                        
+                        <div class="education-card">
+                            <div class="priority">Priority 2</div>
+                            <h4>2026 Global Laboratory Qualification Whitelist</h4>
+                            <p><strong>Target Audience:</strong> R&D-focused sellers</p>
+                            <p><strong>Key Focus:</strong> Understanding dynamic compliance requirements</p>
+                            <p><strong>Format:</strong> Interactive live sessions with certification bodies</p>
+                        </div>
+                        
+                        <div class="education-card">
+                            <div class="priority">Priority 3</div>
+                            <h4>Compliant Visual Reviews in AI Era</h4>
+                            <p><strong>Target Audience:</strong> Copywriters & designers</p>
+                            <p><strong>Key Focus:</strong> Visual copyright and trademark compliance</p>
+                            <p><strong>Format:</strong> Visual avoidance guidelines & case studies</p>
+                        </div>
+                    </div>
+
+                    <div class="analysis-section" style="margin-top: 30px;">
+                        <h3 class="section-title">Education Content Framework</h3>
+                        
+                        <div class="analysis-block">
+                            <h4 class="analysis-subtitle"><i class="fas fa-graduation-cap"></i> Core Training Structure</h4>
+                            <p><strong>Direct Hit on Misconception:</strong> Breaking the "secretary company address is universal" myth.</p>
+                            <p><strong>Teaching Anchors:</strong></p>
+                            <ul>
+                                <li><strong>Wrong Perception:</strong> Address repetition doesn't matter as long as the legal representatives differ.</li>
+                                <li><strong>Correct Perception:</strong> Accounts under the same physical address share risk; must establish an "independent lease verification" system.</li>
+                                <li><strong>Practical Implementation:</strong> Step-by-step guide to establishing compliant Hong Kong company structures.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Amazon Tools Feedback -->
+            <div class="tool-feedback">
+                <h2 style="color: var(--amazon-primary); margin-bottom: 20px;">
+                    <i class="fas fa-tools"></i> Amazon Account Security Tools Feedback Analysis
+                </h2>
+                
+                <div class="tool-card">
+                    <div class="tool-name"><i class="fas fa-phone"></i> Call Me Now</div>
+                    <p><strong>Seller Feedback Core Points:</strong> "Response time < 2 minutes, but customer service can't provide specific solutions for Hong Kong address issues."</p>
+                    <div class="rating">
+                        <i class="fas fa-star"></i>
+                        <i class="fas fa-star"></i>
+                        <i class="fas fa-star"></i>
+                        <i class="far fa-star"></i>
+                        <i class="far fa-star"></i>
+                        <span style="margin-left: 10px;">Neutral Satisfaction</span>
+                    </div>
+                    <p><strong>Quantitative Feedback:</strong> 65% of sellers believe it can only solve procedural issues.</p>
+                </div>
+                
+                <div class="tool-card">
+                    <div class="tool-name"><i class="fas fa-shield-alt"></i> Account Health Assurance (AHA)</div>
+                    <p><strong>Seller Feedback Core Points:</strong> "Enrolled in the protection program, but still instantly suspended when judged as 'serious violation.'"</p>
+                    <div class="rating">
+                        <i class="fas fa-star"></i>
+                        <i class="far fa-star"></i>
+                        <i class="far fa-star"></i>
+                        <i class="far fa-star"></i>
+                        <i class="far fa-star"></i>
+                        <span style="margin-left: 10px;">Negative Satisfaction</span>
+                    </div>
+                    <p><strong>Quantitative Feedback:</strong> Sellers complain that the "protection umbrella" fails in the face of AI scanning.</p>
+                </div>
+                
+                <div class="tool-card">
+                    <div class="tool-name"><i class="fas fa-chart-line"></i> Account Health Rating (AHR)</div>
+                    <p><strong>Seller Feedback Core Points:</strong> "Score was 250 but still received a warning; the rating system's alerts lag behind."</p>
+                    <div class="rating">
+                        <i class="fas fa-star"></i>
+                        <i class="fas fa-star"></i>
+                        <i class="fas fa-star"></i>
+                        <i class="far fa-star"></i>
+                        <i class="far fa-star"></i>
+                        <span style="margin-left: 10px;">Neutral Satisfaction</span>
+                    </div>
+                    <p><strong>Quantitative Feedback:</strong> Suggests adding "category vertical risk" rating item.</p>
+                </div>
+                
+                <div class="tool-card">
+                    <div class="tool-name"><i class="fas fa-flag-checkered"></i> Seller Challenge</div>
+                    <p><strong>Seller Feedback Core Points:</strong> "Appeal button often reports errors; 'system busy' appears when submitting PDFs."</p>
+                    <div class="rating">
+                        <i class="fas fa-star"></i>
+                        <i class="far fa-star"></i>
+                        <i class="far fa-star"></i>
+                        <i class="far fa-star"></i>
+                        <i class="far fa-star"></i>
+                        <span style="margin-left: 10px;">Negative Satisfaction</span>
+                    </div>
+                    <p><strong>Quantitative Feedback:</strong> 42% of appeal failures stem from system submission errors in the first round.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <p>Amazon Seller Central · Seller Account Health Analysis Report</p>
+            <p class="disclaimer">This compliance radar report is generated by a third-party AI based on publicly collected information, for Amazon internal reference only. Recipients must verify and validate original information before using as a basis for decisions. Unverified market intelligence should not be shared with any external third parties. Any risks arising from using unverified report content are borne by the user</p>
+            <p>© 2026, Amazon.com, Inc. or its affiliates</p>
+        </div>
+    </footer>
+
+    <script>
+        // Tab switching functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const tabs = document.querySelectorAll('.tab');
+            const cards = document.querySelectorAll('.card, .tool-feedback');
+            
+            tabs.forEach(tab => {
+                tab.addEventListener('click', function() {
+                    // Remove active class from all tabs
+                    tabs.forEach(t => t.classList.remove('active'));
+                    
+                    // Add active class to clicked tab
+                    this.classList.add('active');
+                    
+                    // Simple tab switching logic (for demonstration)
+                    // In a real implementation, you would show/hide different content sections
+                    alert('Tab navigation would show different content sections. This is a static demo.');
+                });
+            });
+        });
+    </script>
+</body>
+</html>

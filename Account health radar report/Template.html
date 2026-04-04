@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>亚马逊卖家账户健康报告模板</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --amazon-primary: #232f3e;
+            --amazon-secondary: #146eb4;
+            --amazon-accent: #ff9900;
+            --amazon-light: #f2f3f3;
+            --amazon-text: #0f1111;
+            --amazon-border: #d5dbdb;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #f8f9fa;
+            color: var(--amazon-text);
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 15px;
+        }
+        
+        /* Header Styles */
+        header {
+            background: linear-gradient(to bottom, var(--amazon-primary), #1a2530);
+            padding: 15px 0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .logo-container {
+            display: flex;
+            align-items: center;
+        }
+        
+        .logo {
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            margin-right: 20px;
+        }
+        
+        .logo span {
+            color: var(--amazon-accent);
+        }
+        
+        .report-title {
+            color: white;
+            font-size: 18px;
+            opacity: 0.9;
+        }
+        
+        .date-range {
+            background-color: var(--amazon-secondary);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        /* Navigation */
+        .tabs {
+            display: flex;
+            margin-top: 15px;
+        }
+        
+        .tab {
+            color: white;
+            padding: 8px 20px;
+            margin-right: 5px;
+            border-radius: 4px 4px 0 0;
+            cursor: pointer;
+            transition: all 0.3s;
+            background-color: rgba(255,255,255,0.1);
+        }
+        
+        .tab.active {
+            background-color: var(--amazon-light);
+            color: var(--amazon-text);
+            font-weight: bold;
+        }
+        
+        /* Main Content */
+        .main-content {
+            padding: 30px 0;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            overflow: hidden;
+            border: 1px solid var(--amazon-border);
+        }
+        
+        .card-header {
+            background: var(--amazon-primary);
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .card-title {
+            font-size: 20px;
+            font-weight: bold;
+        }
+        
+        .card-subtitle {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+        
+        .card-body {
+            padding: 20px;
+        }
+        
+        /* Table Styles */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            font-size: 14px;
+        }
+        
+        th {
+            background-color: var(--amazon-light);
+            text-align: left;
+            padding: 12px 15px;
+            font-weight: bold;
+            border-bottom: 2px solid var(--amazon-border);
+        }
+        
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid var(--amazon-border);
+        }
+        
+        tr:hover {
+            background-color: rgba(20, 110, 180, 0.05);
+        }
+        
+        /* Analysis Framework */
+        .analysis-section {
+            margin: 25px 0;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--amazon-border);
+        }
+        
+        .analysis-section:last-child {
+            border-bottom: none;
+        }
+        
+        .section-title {
+            font-size: 18px;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--amazon-accent);
+            display: inline-block;
+            color: var(--amazon-primary);
+        }
+        
+        .quote {
+            background: var(--amazon-light);
+            border-left: 4px solid var(--amazon-secondary);
+            padding: 15px;
+            margin: 15px 0;
+            font-style: italic;
+        }
+        
+        .quote-source {
+            display: block;
+            margin-top: 5px;
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .metric-badge {
+            display: inline-block;
+            background: var(--amazon-secondary);
+            color: white;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 12px;
+            margin: 0 5px;
+        }
+        
+        /* Tool Feedback */
+        .tool-feedback {
+            margin-top: 40px;
+        }
+        
+        .tool-card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid var(--amazon-border);
+        }
+        
+        .tool-name {
+            color: var(--amazon-secondary);
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .tool-name i {
+            margin-right: 10px;
+            font-size: 20px;
+        }
+        
+        /* Placeholder Elements */
+        .placeholder {
+            background-color: #f0f2f5;
+            border: 1px dashed #c7c7c7;
+            border-radius: 4px;
+            padding: 20px;
+            margin: 15px 0;
+            text-align: center;
+            color: #7a7a7a;
+        }
+        
+        .placeholder-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .placeholder-text {
+            font-size: 14px;
+        }
+        
+        /* Footer */
+        footer {
+            background: var(--amazon-primary);
+            color: white;
+            padding: 20px 0;
+            text-align: center;
+            margin-top: 40px;
+            font-size: 14px;
+        }
+        
+        .disclaimer {
+            max-width: 800px;
+            margin: 0 auto;
+            opacity: 0.8;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header-top {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .date-range {
+                margin-top: 10px;
+            }
+            
+            .tabs {
+                overflow-x: auto;
+                padding-bottom: 5px;
+            }
+            
+            table {
+                display: block;
+                overflow-x: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <div class="container">
+            <div class="header-top">
+                <div class="logo-container">
+                    <div class="logo">Amazon<span>Seller</span></div>
+                    <div class="report-title">中国卖家账户健康分析报告</div>
+                </div>
+                <div class="date-range">
+                    <i class="fas fa-calendar-alt"></i> 报告时间段占位符
+                </div>
+            </div>
+            
+            <div class="tabs">
+                <div class="tab active">报告概览</div>
+                <div class="tab">封号趋势</div>
+                <div class="tab">下架商品</div>
+                <div class="tab">教育方案</div>
+                <div class="tab">工具反馈</div>
+            </div>
+        </div>
+    </header>
+    
+    <!-- Main Content -->
+    <div class="container">
+        <div class="main-content">
+            <!-- Module 1: Account Suspension Trends -->
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">模块1: 封号趋势分析</div>
+                        <div class="card-subtitle">Account Suspension Trends</div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- 数据表格占位 -->
+                    <div class="placeholder">
+                        <div class="placeholder-title">封号原因数据表格</div>
+                        <div class="placeholder-text">此处将展示排名前5的封号原因及相关数据</div>
+                    </div>
+                    
+                    <!-- 深度分析占位 -->
+                    <div class="placeholder">
+                        <div class="placeholder-title">封号原因深度分析</div>
+                        <div class="placeholder-text">此处将展示具体封号原因的分析内容</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Module 2: Listing Takedown Patterns -->
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">模块2: 下架商品分析</div>
+                        <div class="card-subtitle">Listing Takedown Patterns</div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- 数据表格占位 -->
+                    <div class="placeholder">
+                        <div class="placeholder-title">商品下架原因数据表格</div>
+                        <div class="placeholder-text">此处将展示各类下架原因及对应品类数据</div>
+                    </div>
+                    
+                    <!-- 深度分析占位 -->
+                    <div class="placeholder">
+                        <div class="placeholder-title">下架原因深度分析</div>
+                        <div class="placeholder-text">此处将展示具体下架原因的分析内容</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Module 3: Education Solutions -->
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">模块3: 教育方案矩阵</div>
+                        <div class="card-subtitle">Education Solutions</div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- 优先级表格占位 -->
+                    <div class="placeholder">
+                        <div class="placeholder-title">教育方案优先级表格</div>
+                        <div class="placeholder-text">此处将展示培训主题优先级及目标人群</div>
+                    </div>
+                    
+                    <!-- 教育内容占位 -->
+                    <div class="placeholder">
+                        <div class="placeholder-title">教育内容框架</div>
+                        <div class="placeholder-text">此处将展示具体培训主题的内容框架</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Amazon Tools Feedback -->
+            <div class="tool-feedback">
+                <h2 style="color: var(--amazon-primary); margin-bottom: 20px;">
+                    <i class="fas fa-tools"></i> Amazon 账户安全工具反馈分析
+                </h2>
+                
+                <!-- 工具反馈占位 -->
+                <div class="placeholder">
+                    <div class="placeholder-title">工具反馈数据表格</div>
+                    <div class="placeholder-text">此处将展示卖家对Amazon工具的使用反馈</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <p>Amazon Seller Central · 卖家账户健康分析报告</p>
+            <p class="disclaimer">本报告基于多源数据生成，包含卖家论坛、社交媒体、行业媒体和服务商信息。</p>
+            <p>© 2025, Amazon.com, Inc. or its affiliates</p>
+        </div>
+    </footer>
+</body>
+</html>

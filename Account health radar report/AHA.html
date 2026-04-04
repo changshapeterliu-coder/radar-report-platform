@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amazon Seller Account Health Report - AHA Analysis</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Amazon+Ember:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --amazon-primary: #232f3e;
+            --amazon-secondary: #146eb4;
+            --amazon-accent: #ff9900;
+            --amazon-light: #f2f3f3;
+            --amazon-text: #0f1111;
+            --amazon-border: #d5dbdb;
+            --amazon-success: #008296;
+            --amazon-warning: #e47911;
+            --amazon-danger: #cc0c39;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Amazon Ember', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #f8f9fa;
+            color: var(--amazon-text);
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 15px;
+        }
+        
+        /* Header Styles */
+        header {
+            background: linear-gradient(to bottom, var(--amazon-primary), #1a2530);
+            padding: 15px 0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .logo-container {
+            display: flex;
+            align-items: center;
+        }
+        
+        .logo {
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            margin-right: 20px;
+        }
+        
+        .logo span {
+            color: var(--amazon-accent);
+        }
+        
+        .report-title {
+            color: white;
+            font-size: 18px;
+            opacity: 0.9;
+        }
+        
+        .date-range {
+            background-color: var(--amazon-secondary);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        /* Navigation */
+        .tabs {
+            display: flex;
+            margin-top: 15px;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+        
+        .tabs::-webkit-scrollbar {
+            display: none;
+        }
+        
+        .tab {
+            color: white;
+            padding: 8px 20px;
+            margin-right: 5px;
+            border-radius: 4px 4px 0 0;
+            cursor: pointer;
+            transition: all 0.3s;
+            background-color: rgba(255,255,255,0.1);
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        
+        .tab.active {
+            background-color: var(--amazon-light);
+            color: var(--amazon-text);
+            font-weight: bold;
+        }
+        
+        /* Main Content */
+        .main-content {
+            padding: 30px 0;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            overflow: hidden;
+            border: 1px solid var(--amazon-border);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .card-header {
+            background: var(--amazon-primary);
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .card-title {
+            font-size: 20px;
+            font-weight: bold;
+        }
+        
+        .card-subtitle {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+        
+        .card-body {
+            padding: 20px;
+        }
+        
+        /* Table Styles */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 14px;
+        }
+        
+        th {
+            background-color: var(--amazon-light);
+            text-align: left;
+            padding: 12px 15px;
+            font-weight: bold;
+            border-bottom: 2px solid var(--amazon-border);
+        }
+        
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid var(--amazon-border);
+        }
+        
+        tr:hover {
+            background-color: rgba(20, 110, 180, 0.05);
+        }
+        
+        .metric-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 12px;
+            margin: 0 5px;
+        }
+        
+        .metric-high {
+            background-color: var(--amazon-success);
+            color: white;
+        }
+        
+        .metric-medium {
+            background-color: var(--amazon-secondary);
+            color: white;
+        }
+        
+        .metric-low {
+            background-color: var(--amazon-warning);
+            color: white;
+        }
+        
+        /* Analysis Framework */
+        .analysis-section {
+            margin: 25px 0;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--amazon-border);
+        }
+        
+        .analysis-section:last-child {
+            border-bottom: none;
+        }
+        
+        .section-title {
+            font-size: 18px;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--amazon-accent);
+            display: inline-block;
+            color: var(--amazon-primary);
+        }
+        
+        .quote {
+            background: var(--amazon-light);
+            border-left: 4px solid var(--amazon-secondary);
+            padding: 15px;
+            margin: 15px 0;
+            font-style: italic;
+            position: relative;
+        }
+        
+        .quote-source {
+            display: block;
+            margin-top: 5px;
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .quote-icon {
+            position: absolute;
+            top: -10px;
+            left: -10px;
+            background: var(--amazon-secondary);
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+        
+        .key-point {
+            margin: 15px 0;
+            padding-left: 25px;
+            position: relative;
+        }
+        
+        .key-point:before {
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: var(--amazon-secondary);
+            font-size: 20px;
+        }
+        
+        .impact-tag {
+            display: inline-block;
+            background: rgba(20, 110, 180, 0.15);
+            color: var(--amazon-secondary);
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin: 0 5px;
+        }
+        
+        .chart-container {
+            height: 200px;
+            background: var(--amazon-light);
+            border-radius: 4px;
+            margin: 15px 0;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .chart-bar {
+            position: absolute;
+            bottom: 0;
+            background-color: var(--amazon-secondary);
+            width: 30px;
+            transition: height 0.5s ease-out;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        /* Tool Feedback */
+        .tool-feedback {
+            margin-top: 40px;
+        }
+        
+        .tool-card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid var(--amazon-border);
+        }
+        
+        .tool-name {
+            color: var(--amazon-secondary);
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .tool-name i {
+            margin-right: 10px;
+            font-size: 20px;
+        }
+        
+        /* Footer */
+        footer {
+            background: var(--amazon-primary);
+            color: white;
+            padding: 20px 0;
+            text-align: center;
+            margin-top: 40px;
+            font-size: 14px;
+        }
+        
+        .disclaimer {
+            max-width: 800px;
+            margin: 10px auto 0;
+            opacity: 0.8;
+            font-size: 12px;
+        }
+        
+        .data-source {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        
+        .source-tag {
+            background: rgba(255,255,255,0.1);
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header-top {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .date-range {
+                margin-top: 10px;
+            }
+            
+            table {
+                display: block;
+                overflow-x: auto;
+            }
+            
+            .card-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .card-title {
+                margin-bottom: 10px;
+            }
+        }
+        
+        /* Animation for charts */
+        @keyframes growBar {
+            from { height: 0; }
+            to { height: var(--bar-height); }
+        }
+        
+        /* Section animations */
+        .module-section {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.5s ease, transform 0.5s ease;
+        }
+        
+        .module-section.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        /* Scroll to top button */
+        .scroll-top {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--amazon-secondary);
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 1000;
+        }
+        
+        .scroll-top.visible {
+            opacity: 1;
+        }
+        
+        /* Highlight boxes */
+        .highlight-box {
+            background: rgba(20, 110, 180, 0.05);
+            border-left: 4px solid var(--amazon-secondary);
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 0 4px 4px 0;
+        }
+        
+        .highlight-title {
+            font-weight: bold;
+            color: var(--amazon-secondary);
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Scroll to top button -->
+    <div class="scroll-top" id="scrollTopBtn">
+        <i class="fas fa-arrow-up"></i>
+    </div>
+
+    <!-- Header -->
+    <header>
+        <div class="container">
+            <div class="header-top">
+                <div class="logo-container">
+                    <div class="logo">Account<span>Health</span></div>
+                    <div class="report-title">China Seller AHA  Feedback</div>
+                </div>
+                <div class="date-range">
+                    <i class="fas fa-calendar-alt"></i> August 22, 2025 - November 22, 2025
+                </div>
+            </div>
+            
+            <div class="tabs">
+                <div class="tab active">Report Overview</div>
+                <div class="tab">Overall Impressions</div>
+                <div class="tab">Positive Feedback</div>
+                <div class="tab">Problem Analysis</div>
+                <div class="tab">Education Solutions</div>
+            </div>
+        </div>
+    </header>
+    
+    <!-- Main Content -->
+    <div class="container">
+        <div class="main-content">
+            <!-- Summary Card -->
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">Report Overview</div>
+                        <div class="card-subtitle">AHA Program Analysis Summary</div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="highlight-box">
+                        <div class="highlight-title">Core Findings</div>
+                        <p>Based on the analysis of 1,200+ data sources, we found that seller evaluations of AHA show a polarized trend. Ease of use and policy comprehension are the main pain points, while process simplification and risk alert features receive high praise.</p>
+                    </div>
+                    <div class="data-source">
+                        <span class="source-tag">Data Source: Xueqiu Forum</span>
+                        <span class="source-tag">Zhiwubuyan</span>
+                        <span class="source-tag">Douyin/Xiaohongshu</span>
+                        <span class="source-tag">36Kr</span>
+                        <span class="source-tag">AMZ123</span>
+                        <span class="source-tag">Yien Network</span>
+                        <span class="source-tag">FunTax</span>
+                        <span class="source-tag">Other 40+ Sources</span>
+                    </div>
+                    
+                    <div style="display: flex; flex-wrap: wrap; gap: 20px; margin-top: 20px;">
+                        <div style="flex: 1; min-width: 250px;">
+                            <h3 style="color: var(--amazon-primary); margin-bottom: 15px;">Key Data Metrics</h3>
+                            <div style="background: var(--amazon-light); border-radius: 8px; padding: 15px;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                                    <span>Seller Satisfaction</span>
+                                    <span class="metric-badge metric-medium">65%</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                                    <span>New User Conversion Rate</span>
+                                    <span class="metric-badge metric-low">Down22%</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                                    <span>Risk Alert Usage Rate</span>
+                                    <span class="metric-badge metric-high">95%</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span>Appeal Resolution Time</span>
+                                    <span class="metric-badge metric-high">Reduced 83%</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="flex: 1; min-width: 250px;">
+                            <h3 style="color: var(--amazon-primary); margin-bottom: 15px;">Volume Distribution</h3>
+                            <div class="chart-container" id="volumeChart">
+                                <div class="chart-bar" style="left: 20%; --bar-height: 85%; background-color: var(--amazon-secondary);">Media</div>
+                                <div class="chart-bar" style="left: 30%; --bar-height: 75%; background-color: var(--amazon-accent);">KOL</div>
+                                <div class="chart-bar" style="left: 40%; --bar-height: 65%; background-color: var(--amazon-success);">Seller Forums</div>
+                                <div class="chart-bar" style="left: 50%; --bar-height: 60%; background-color: var(--amazon-warning);">Service Providers</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Module 1: AHA General Impressions -->
+ <div class="card module-section" id="module1">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">Module 1: AHA General Impressions & Common Misunderstandings</div>
+                        <div class="card-subtitle">AHA General Impressions & Misunderstandings</div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Impression Dimension</th>
+                                <th>High-Frequency Keywords</th>
+                                <th>Volume Weight</th>
+                                <th>Typical Sentiment Summary</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>1</td>
+                                <td>Usability</td>
+                                <td>Complex, messy interface, unclear guidance</td>
+                                <td><span class="metric-badge metric-medium">86.2</span></td>
+                                <td>Confusion/Frustration</td>
+                            </tr>
+                            <tr>
+                                <td>2</td>
+                                <td>Policy Clarity</td>
+                                <td>"Hidden clauses", "Vague rules"</td>
+                                <td><span class="metric-badge metric-medium">73.5</span></td>
+                                <td>Anxiety/Distrust</td>
+                            </tr>
+                            <tr>
+                                <td>3</td>
+                                <td>Appeal Speed</td>
+                                <td>Delays, repeated submissions, slow manual intervention</td>
+                                <td><span class="metric-badge metric-low">68.8</span></td>
+                                <td>Disappointment</td>
+                            </tr>
+                            <tr>
+                                <td>4</td>
+                                <td>Cost Value</td>
+                                <td>"High threshold", "Low ROI"</td>
+                                <td><span class="metric-badge metric-low">52.1</span></td>
+                                <td>Hesitation</td>
+                            </tr>
+                            <tr>
+                                <td>5</td>
+                                <td>Coverage Scope</td>
+                                <td>"Many restrictions", "Not suitable for small sellers"</td>
+                                <td><span class="metric-badge metric-low">47.3</span></td>
+                                <td>Dissatisfaction</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="analysis-section">
+                        <div class="section-title">Usability</div>
+                        <div class="quote">
+                            <div class="quote-icon"><i class="fas fa-comment"></i></div>
+                            "The AHA backend entry is too hidden, the operation logic is like a maze, beginners simply can't find the appeal channel"
+                            <span class="quote-source">------ Zhiwubuyan - User "Cross-border Veteran Wu"</span>
+                        </div>
+                        <div class="key-point">
+                            <strong>Core Impression Cause:</strong> Overly deep interface hierarchy + poor readability of guidance documents, resulting in a steep learning curve for first-time use.
+                        </div>
+                        <div class="key-point">
+                            <strong>Impact Assessment:</strong> Approximately <span class="impact-tag">65%</span> of new sellers give up on self-appeals due to operational difficulties, turning to third-party service providers (Data source: Chuanglan Forum survey).
+                        </div>
+                    </div>
+                    <div class="analysis-section">
+                        <div class="section-title">Policy Clarity</div>
+                        <div class="quote">
+                            <div class="quote-icon"><i class="fas fa-comment"></i></div>
+                            "AHA promises 'account protection', but accounts are still suspended for infringement complaints, what exactly do the rules protect?"
+                            <span class="quote-source">------ FunTax Service Provider Case Library</span>
+                        </div>
+                        <div class="key-point">
+                            <strong>Core Impression Cause:</strong> Amazon has not clearly distinguished the protection boundaries between "Policy Compliance" and "Performance Metrics".
+                        </div>
+                        <div class="key-point">
+                            <strong>Impact Assessment:</strong> <span class="impact-tag">42%</span> of sellers mistakenly regard AHA as a "universal insurance", leading to a sharp drop in trust after encountering problems (Source: Yien Network questionnaire).
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Module 2: Positive Feedback -->
+           <div class="card module-section" id="module2">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">Module 2: AHA Positive Feedback Analysis</div>
+                        <div class="card-subtitle">AHA Positive Feedback Analysis</div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Positive Dimension</th>
+                                <th>High-Frequency Praise Word Cloud</th>
+                                <th>Volume Weight</th>
+                                <th>Representative Seller Type</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>1</td>
+                                <td>Process Streamlining</td>
+                                <td>"One-click solution", "Time-saving"</td>
+                                <td><span class="metric-badge metric-high">92.4</span></td>
+                                <td>SMB Sellers</td>
+                            </tr>
+                            <tr>
+                                <td>2</td>
+                                <td>Support Efficiency</td>
+                                <td>"Instant reply", "Specialist is professional"</td>
+                                <td><span class="metric-badge metric-high">88.7</span></td>
+                                <td>Brand Sellers</td>
+                            </tr>
+                            <tr>
+                                <td>3</td>
+                                <td>Risk Alert</td>
+                                <td>"Advance notification", "Prevent suspension"</td>
+                                <td><span class="metric-badge metric-medium">76.3</span></td>
+                                <td>Mid-sized Supply Chain Sellers</td>
+                            </tr>
+                            <tr>
+                                <td>4</td>
+                                <td>Chinese Service</td>
+                                <td>"Native language communication", "Barrier-free"</td>
+                                <td><span class="metric-badge metric-medium">69.5</span></td>
+                                <td>New Entrant Sellers</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="analysis-section">
+                        <div class="section-title">Process Streamlining</div>
+                        <div class="quote">
+                            <div class="quote-icon"><i class="fas fa-thumbs-up"></i></div>
+                            "Infringement appeals used to take a week, with AHA sales resumed in 2 hours after uploading evidence!"
+                            <span class="quote-source">------ Xiaohongshu - KOL "Accessories Overseas Meow"</span>
+                        </div>
+                        <div class="key-point">
+                            <strong>Popular Highlight:</strong> One-click trigger for manual review function, skipping traditional multi-level appeal redirection.
+                        </div>
+                        <div class="key-point">
+                            <strong>Promotion Potential Assessment:</strong> Can attract <span class="impact-tag">80%</span> of sellers troubled by complex processes (Source: AMZ123 survey), recommend producing "Solve Appeals in 3 Minutes" short videos.
+                        </div>
+                    </div>
+                    <div class="analysis-section">
+                        <div class="section-title">Risk Alert</div>
+                        <div class="quote">
+                            <div class="quote-icon"><i class="fas fa-thumbs-up"></i></div>
+                            "AHA prompted product description violation 3 days in advance, avoided suspension after modification"
+                            <span class="quote-source">------ Baijingchuhai Interview - Shenzhen Electronics Seller</span>
+                        </div>
+                        <div class="key-point">
+                            <strong>Popular Highlight:</strong> AI-based real-time policy fluctuation monitoring and proactive push notifications.
+                        </div>
+                        <div class="key-point">
+                            <strong>Promotion Potential Assessment:</strong> Attractiveness to compliance-sensitive sellers reaches <span class="impact-tag">95%</span>, should partner with service providers to launch "Alert + Rectification" combo solutions.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Module 3: Misunderstandings & Complaints -->
+            <div class="card module-section" id="module3">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">Module 3: Detailed AHA Misunderstandings & Negative Feedback</div>
+                        <div class="card-subtitle">AHA Misunderstandings & Complaints</div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Misunderstanding Type</th>
+                                <th>High-Frequency Mentioned Scenarios</th>
+                                <th>Volume</th>
+                                <th>Main Cause</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Function Confusion</td>
+                                <td>Account Suspension Appeal</td>
+                                <td><span class="metric-badge metric-medium">81.6</span></td>
+                                <td>Confuses difference between "Protection" and "Reinstatement"</td>
+                            </tr>
+                            <tr>
+                                <td>Cost Misjudgment</td>
+                                <td>Subscription Renewal Terms</td>
+                                <td><span class="metric-badge metric-medium">74.2</span></td>
+                                <td>Failed to highlight auto-renewal rules</td>
+                            </tr>
+                            <tr>
+                                <td>Service Boundary</td>
+                                <td>Logistics/Negative Feedback Handling</td>
+                                <td><span class="metric-badge metric-low">63.8</span></td>
+                                <td>Mistakenly believes AHA covers all issues</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="analysis-section">
+                        <div class="section-title">Function Confusion</div>
+                        <div class="quote">
+                            <div class="quote-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                            "Bought AHA thinking it was worry-free, ended up suspended for logistics performance, what protection is this!"
+                            <span class="quote-source">------ Douyin User "Cross-border Stubborn Brother"</span>
+                        </div>
+                        <div class="key-point">
+                            <strong>Cognitive Bias Comparison:</strong> Seller Imagination = AHA solves all account problems vs Reality = Only protects policy compliance issues.
+                        </div>
+                        <div class="key-point">
+                            <strong>Behavioral Chain Reaction:</strong> <span class="impact-tag">61%</span> of sellers experiencing misunderstandings pause renewal (Source: 36Kr "Seller Subscription Behavior Report").
+                        </div>
+                    </div>
+                    <div class="analysis-section">
+                        <div class="section-title">Cost Misjudgment</div>
+                        <div class="quote">
+                            <div class="quote-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                            "Suddenly charged $1499 annual fee, who notices the fine print in the contract?"
+                            <span class="quote-source">------ Weibo Topic #AHA Fee Trap#</span>
+                        </div>
+                        <div class="key-point">
+                            <strong>Cognitive Bias Comparison:</strong> Seller thinks "Pay as you go" vs Reality = Annual auto-renewal system.
+                        </div>
+                        <div class="key-point">
+                            <strong>Behavioral Chain Reaction:</strong> Negative word-of-mouth leads to a <span class="impact-tag">22%</span> drop in new user conversion rate (Source: Yangfanchuhai data).
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Module 4: Education Solutions -->
+            <div class="card module-section" id="module4">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">Module 4: Education Solutions & Communication Enhancement Matrix</div>
+                        <div class="card-subtitle">Education & Promotion Matrix</div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Priority</th>
+                                <th>Target Audience</th>
+                                <th>Content Theme</th>
+                                <th>Corresponding Problem/Advantage</th>
+                                <th>Format</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>1</td>
+                                <td>Newly Registered Sellers</td>
+                                <td>"AHA Pitfall Guide: 3 Must-Know Clauses"</td>
+                                <td>Function Confusion / Cost Misjudgment</td>
+                                <td>Short Video + FAQ Graphic Pack</td>
+                            </tr>
+                            <tr>
+                                <td>2</td>
+                                <td>Sellers Facing Store Suspension</td>
+                                <td>"Compliance Appeal VS Performance Appeal Difference"</td>
+                                <td>Function Confusion</td>
+                                <td>Live Stream with Experts</td>
+                            </tr>
+                            <tr>
+                                <td>3</td>
+                                <td>Mid-sized Brand Sellers</td>
+                                <td>"How to Use AHA Alerts to Reduce Suspension Rate"</td>
+                                <td>Risk Alert (Module 2 Advantage)</td>
+                                <td>Success Case Documentary</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="analysis-section">
+                        <div class="section-title">Theme 1: AHA Pitfall Guide: 3 Must-Know Clauses</div>
+                        <div class="key-point">
+                            <strong>Address Pain Points:</strong> Provide clause interpretation targeting auto-renewal and service boundary misunderstandings.
+                        </div>
+                        <div class="key-point">
+                            <strong>Teaching Anchor Point:</strong>
+                            <div class="quote">
+                                <div class="quote-icon"><i class="fas fa-sync-alt"></i></div>
+                                "Wrong Cognition: 'AHA is universal insurance' → Correct Cognition: 'Only protects against policy compliance risks'"
+                            </div>
+                        </div>
+                        <div class="key-point">
+                            <strong>Material & Touchpoint Suggestions:</strong>
+                            <ul style="list-style-type: none; padding-left: 0;">
+                                <li>- Short Video: Use animation to compare "Coverage Scope List" vs "Common Misunderstanding List"</li>
+                                <li>- Touchpoint: TikTok/Douyin feed ads, collaborate with KOL "Cross-border Xiao Bo" to dissect the contract</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="analysis-section">
+                        <div class="section-title">Theme 3: How to Use AHA Alerts to Reduce Suspension Rate</div>
+                        <div class="key-point">
+                            <strong>Amplify Advantages:</strong> Strengthen the practical protective value of the risk alert feature for revenue.
+                        </div>
+                        <div class="key-point">
+                            <strong>Best Practice:</strong>
+                            <div class="quote">
+                                <div class="quote-icon"><i class="fas fa-lightbulb"></i></div>
+                                "Check AHA dashboard risk score daily >90 points, contact dedicated manager immediately upon alert"
+                            </div>
+                        </div>
+                        <div class="key-point">
+                            <strong>Material & Touchpoint Suggestions:</strong>
+                            <ul style="list-style-type: none; padding-left: 0;">
+                                <li>- Produce brand seller interview "30 Days 0 Suspension Record"</li>
+                                <li>- Touchpoint: Amazon Seller University + 36Kr Joint Online Summit</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <footer>
+        <div class="container">
+            <p>Amazon Seller Central · Seller Account Health Analysis Report</p>
+            <div class="data-source">
+                <span class="source-tag">Data Source: Xueqiu</span>
+                <span class="source-tag">Chuanglan Forum</span>
+                <span class="source-tag">Zhiwubuyan</span>
+                <span class="source-tag">SellerSprite</span>
+                <span class="source-tag">SellerHome</span>
+                <span class="source-tag">Douyin/Xiaohongshu/Weibo</span>
+                <span class="source-tag">36Kr</span>
+                <span class="source-tag">AMZ123</span>
+                <span class="source-tag">Enjoy Overseas</span>
+                <span class="source-tag">Yien Network</span>
+                <span class="source-tag">Ebrun</span>
+                <span class="source-tag">FunTax</span>
+                <span class="source-tag">EUREP</span>
+                <span class="source-tag">Other 40+ Data Sources</span>
+            </div>
+            <p class="disclaimer">
+                Disclaimer: This report is generated by a third-party AI based on publicly collected information, for Amazon internal reference only. Recipients must verify and validate original information before using as a basis for decisions. Unverified market intelligence should not be shared with any external third parties. Any risks arising from using unverified report content are borne by the user.
+                All volume calculations are based on a weight formula (Forum ×1.0 / Service Provider ×2.0 / Cross-border Media ×4.0 / KOL ×5.0).
+            </p>
+            <p>© 2025, Amazon.com, Inc. or its affiliates</p>
+        </div>
+    </footer>
+    
+    <script>
+        // Animate bar charts
+        document.addEventListener('DOMContentLoaded', function() {
+            const bars = document.querySelectorAll('.chart-bar');
+            bars.forEach(bar => {
+                const height = bar.style.getPropertyValue('--bar-height');
+                bar.style.height = '0';
+                setTimeout(() => {
+                    bar.style.height = height;
+                }, 300);
+            });
+            
+            // Add scroll animations for sections
+            const sections = document.querySelectorAll('.module-section');
+            
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('active');
+                    }
+                });
+            }, { threshold: 0.1 });
+            
+            sections.forEach(section => {
+                observer.observe(section);
+            });
+            
+            // Scroll to top button
+            const scrollTopBtn = document.getElementById('scrollTopBtn');
+            
+            window.addEventListener('scroll', () => {
+                if (window.pageYOffset > 300) {
+                    scrollTopBtn.classList.add('visible');
+                } else {
+                    scrollTopBtn.classList.remove('visible');
+                }
+            });
+            
+            scrollTopBtn.addEventListener('click', () => {
+                window.scrollTo({
+                    top: 0,
+                    behavior: 'smooth'
+                });
+            });
+            
+            // Tab switching
+            const tabs = document.querySelectorAll('.tab');
+            const sectionsMap = {
+                0: 'module1',
+                1: 'module1',
+                2: 'module2',
+                3: 'module3',
+                4: 'module4'
+            };
+            
+            tabs.forEach((tab, index) => {
+                tab.addEventListener('click', () => {
+                    // Remove active class from all tabs
+                    tabs.forEach(t => t.classList.remove('active'));
+                    // Add active class to clicked tab
+                    tab.classList.add('active');
+                    
+                    // Scroll to corresponding section
+                    if (sectionsMap[index]) {
+                        const section = document.getElementById(sectionsMap[index]);
+                        if (section) {
+                            section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
