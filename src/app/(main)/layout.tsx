@@ -5,12 +5,14 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { useRole } from '@/hooks/useRole';
 import { DomainProvider, useDomain } from '@/contexts/DomainContext';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import NotificationUI from '@/components/NotificationUI';
 
 function NavBar() {
   const { user, signOut } = useAuth();
+  const { isAdmin } = useRole();
   const { domains, currentDomain, switchDomain } = useDomain();
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -21,6 +23,7 @@ function NavBar() {
     { href: '/dashboard', label: 'Dashboard' },
     { href: '/reports', label: 'Reports' },
     { href: '/news', label: 'News' },
+    ...(isAdmin ? [{ href: '/admin', label: 'Admin' }] : []),
   ];
 
   const isActive = (href: string) =>

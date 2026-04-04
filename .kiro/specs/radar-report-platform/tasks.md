@@ -352,8 +352,8 @@
     - 使用 Tailwind CSS 响应式工具类（`sm:`, `md:`, `lg:`）
     - _需求: 7.1, 7.2, 7.3, 7.4_
 
-- [ ] 21. Vercel 部署配置
-  - [ ] 21.1 配置 Vercel 部署
+- [x] 21. Vercel 部署配置
+  - [x] 21.1 配置 Vercel 部署
     - 连接 Git 仓库到 Vercel，配置自动部署（`git push` 触发）
     - 在 Vercel 环境变量中配置 `NEXT_PUBLIC_SUPABASE_URL` 和 `NEXT_PUBLIC_SUPABASE_ANON_KEY`
     - 验证所有页面和 Supabase 连接在生产环境正常工作
@@ -361,7 +361,7 @@
     - 确保认证流程完整：登录 → session 存储 → 自动附加 → 过期重定向
     - _需求: 全局_
 
-- [ ] 22. 最终检查点 — 确保所有测试通过
+- [x] 22. 最终检查点 — 确保所有测试通过
   - 确保所有测试通过，如有问题请向用户确认。
 
 ## 备注
