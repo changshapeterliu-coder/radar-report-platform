@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 
 const SYSTEM_PROMPT = `You are a report formatting assistant. Your job is to parse raw report text (which may be in Chinese or English) and structure it into a specific JSON format called ReportContent.
 
