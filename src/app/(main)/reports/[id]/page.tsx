@@ -33,6 +33,9 @@ export default function ReportViewerPage({ params }: { params: Promise<{ id: str
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState(0);
   const [renderError, setRenderError] = useState(false);
+  const [translatedContent, setTranslatedContent] = useState<ReportContent | null>(null);
+  const [translating, setTranslating] = useState(false);
+  const [showTranslation, setShowTranslation] = useState(false);
 
   useEffect(() => {
     async function fetchReport() {
@@ -81,8 +84,26 @@ export default function ReportViewerPage({ params }: { params: Promise<{ id: str
   }
 
   const content = report.content as ReportContent;
-  const modules = content?.modules ?? [];
+  const displayContent = showTranslation && translatedContent ? translatedContent : content;
+  const modules = displayContent?.modules ?? [];
   const activeModule = modules[activeTab];
+
+  const handleTranslate = async (targetLang: 'zh' | 'en') => {
+    setTranslating(true);
+    try {
+      const res = await fetch('/api/ai/translate-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content, targetLang }),
+      });
+      if (res.ok) {
+        const translated = await res.json();
+        setTranslatedContent(translated);
+        setShowTranslation(true);
+      }
+    } catch { /* ignore */ }
+    setTranslating(false);
+  };
 
   const typeBadge =
     report.type === 'regular' ? (
@@ -108,8 +129,35 @@ export default function ReportViewerPage({ params }: { params: Promise<{ id: str
               <h1 className="text-white text-xl font-bold">{content.title ?? report.title}</h1>
               <div className="flex items-center gap-2 mt-1">{typeBadge}</div>
             </div>
-            <div className="bg-[#146eb4] text-white px-4 py-2 rounded text-sm font-medium whitespace-nowrap">
-              {content.dateRange ?? report.date_range}
+            <div className="flex items-center gap-2">
+              <div className="bg-[#146eb4] text-white px-4 py-2 rounded text-sm font-medium whitespace-nowrap">
+                {content.dateRange ?? report.date_range}
+              </div>
+              {showTranslation ? (
+                <button
+                  onClick={() => setShowTranslation(false)}
+                  className="rounded bg-white/20 px-3 py-2 text-xs text-white hover:bg-white/30"
+                >
+                  Original
+                </button>
+              ) : (
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => handleTranslate('zh')}
+                    disabled={translating}
+                    className="rounded bg-[#ff9900] px-3 py-2 text-xs text-white hover:bg-[#e88b00] disabled:opacity-50"
+                  >
+                    {translating ? '翻译中...' : '译中文'}
+                  </button>
+                  <button
+                    onClick={() => handleTranslate('en')}
+                    disabled={translating}
+                    className="rounded bg-[#ff9900] px-3 py-2 text-xs text-white hover:bg-[#e88b00] disabled:opacity-50"
+                  >
+                    {translating ? 'Translating...' : 'To EN'}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
