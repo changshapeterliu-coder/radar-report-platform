@@ -1,114 +1,52 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-const SYSTEM_PROMPT = `You are a report formatting assistant. Your job is to parse raw report text (which may be in Chinese or English) and structure it into a specific JSON format called ReportContent.
+const SYSTEM_PROMPT = `You are a report formatting assistant. Parse raw report text into a JSON structure called ReportContent.
 
-The JSON structure you MUST return is:
-
+Return ONLY valid JSON with this exact structure:
 {
-  "title": "string - the report title extracted from the text",
-  "dateRange": "string - the date range of the report, e.g. '2025-01-01 ~ 2025-01-15'",
+  "title": "report title",
+  "dateRange": "date range, e.g. 2025-03-03 ~ 2025-03-16",
   "modules": [
     {
-      "title": "string - module/section title",
-      "subtitle": "string (optional) - module subtitle",
+      "title": "module title",
+      "subtitle": "optional subtitle",
       "tables": [
         {
-          "headers": ["string", "string"],
+          "headers": ["Col1", "Col2"],
           "rows": [
-            {
-              "cells": [
-                {
-                  "text": "string - cell content",
-                  "badge": {
-                    "text": "string - badge label (optional)",
-                    "level": "high | medium | low"
-                  }
-                }
-              ]
-            }
+            { "cells": [{ "text": "value" }, { "text": "value", "badge": { "text": "High", "level": "high" } }] }
           ]
         }
       ],
       "analysisSections": [
         {
-          "title": "string - analysis section title",
-          "quotes": [
-            { "text": "string - quote text", "source": "string - quote source" }
-          ],
-          "keyPoints": [
-            {
-              "label": "string - short label",
-              "content": "string - detailed content",
-              "impactTags": ["string - tag1", "string - tag2"]
-            }
-          ]
+          "title": "section title",
+          "quotes": [{ "text": "quote", "source": "source" }],
+          "keyPoints": [{ "label": "label", "content": "detail", "impactTags": ["tag1"] }]
         }
       ],
-      "highlightBoxes": [
-        { "title": "string - highlight title", "content": "string - highlight content" }
-      ]
+      "highlightBoxes": [{ "title": "title", "content": "content" }]
     }
   ]
 }
 
 RULES:
-1. Extract the report title and date range from the text. If not found, use reasonable defaults.
-2. Group related content into modules. Each major section/topic should be its own module.
-3. If the text contains tabular data, format it into the tables array with appropriate headers and rows.
-4. Use badge levels: "high" for critical/severe items, "medium" for moderate items, "low" for minor items.
-5. Extract notable quotes or seller feedback into the quotes array.
-6. Summarize key findings into keyPoints with appropriate impactTags.
-7. Use highlightBoxes for important callouts, warnings, or summary boxes.
-8. Every module MUST have at least one table (even if minimal) and one analysisSections entry.
-9. If the text is in Chinese, keep the content in Chinese. If in English, keep in English.
-10. Return ONLY valid JSON matching the structure above. No markdown, no explanation.
-
-EXAMPLE OUTPUT:
-{
-  "title": "Account Health Radar Report",
-  "dateRange": "2025-03-03 ~ 2025-03-16",
-  "modules": [
-    {
-      "title": "Policy Violation Overview",
-      "subtitle": "Key metrics and trends",
-      "tables": [
-        {
-          "headers": ["Violation Type", "Count", "Severity"],
-          "rows": [
-            { "cells": [{ "text": "IP Complaint" }, { "text": "45" }, { "text": "High", "badge": { "text": "High", "level": "high" } }] },
-            { "cells": [{ "text": "Product Authenticity" }, { "text": "23" }, { "text": "Medium", "badge": { "text": "Medium", "level": "medium" } }] }
-          ]
-        }
-      ],
-      "analysisSections": [
-        {
-          "title": "Trend Analysis",
-          "quotes": [
-            { "text": "IP complaints increased 20% this period", "source": "Internal Data" }
-          ],
-          "keyPoints": [
-            {
-              "label": "Rising Trend",
-              "content": "IP-related violations show a consistent upward trend over the past 3 reporting periods.",
-              "impactTags": ["IP", "Compliance", "High Priority"]
-            }
-          ]
-        }
-      ],
-      "highlightBoxes": [
-        { "title": "Action Required", "content": "Review all pending IP complaints before next audit cycle." }
-      ]
-    }
-  ]
-}`;
+1. Extract title and date range from text.
+2. Group content into modules (each major section = one module).
+3. Format tabular data into tables with headers and rows.
+4. Badge levels: "high" for critical, "medium" for moderate, "low" for minor.
+5. Extract quotes into quotes array, key findings into keyPoints.
+6. Every module MUST have at least one table and one analysisSections entry.
+7. Keep original language (Chinese stays Chinese, English stays English).
+8. Return ONLY valid JSON. No markdown, no explanation, no code fences.`;
 
 export async function POST(request: NextRequest) {
   try {
-    if (!GEMINI_API_KEY) {
+    if (!OPENROUTER_API_KEY) {
       return NextResponse.json(
-        { error: 'GEMINI_API_KEY is not configured on the server.' },
+        { error: 'OPENROUTER_API_KEY is not configured on the server.' },
         { status: 500 }
       );
     }
@@ -123,58 +61,51 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Truncate very long text to avoid token limits (keep first 15000 chars)
-    const truncatedText = text.trim().length > 15000 ? text.trim().slice(0, 15000) + '\n\n[Text truncated for processing]' : text.trim();
-        { error: 'Missing or empty "text" field.' },
-        { status: 400 }
-      );
-    }
+    const truncatedText = text.trim().length > 20000
+      ? text.trim().slice(0, 20000) + '\n\n[Text truncated]'
+      : text.trim();
 
-    const reportTypeHint = reportType === 'topic'
-      ? 'This is a TOPIC/SPECIFIC report focusing on a single subject in depth.'
-      : 'This is a REGULAR periodic report covering multiple topics.';
+    const typeHint = reportType === 'topic'
+      ? 'This is a TOPIC report focusing on a single subject.'
+      : 'This is a REGULAR periodic report with multiple modules.';
 
-    const userPrompt = `${reportTypeHint}\n\nPlease parse the following raw report text into the ReportContent JSON structure:\n\n---\n${truncatedText}\n---`;
-
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${GEMINI_API_KEY}`;
-
-    const geminiRes = await fetch(geminiUrl, {
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+      },
       body: JSON.stringify({
-        contents: [
-          { parts: [{ text: SYSTEM_PROMPT + '\n\n' + userPrompt }] },
+        model: 'deepseek/deepseek-chat-v3-0324:free',
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: `${typeHint}\n\nParse this report text into ReportContent JSON:\n\n---\n${truncatedText}\n---` },
         ],
-        generationConfig: {
-          responseMimeType: 'application/json',
-        },
+        response_format: { type: 'json_object' },
       }),
     });
 
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text();
-      console.error('Gemini API error:', geminiRes.status, errText);
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error('OpenRouter error:', res.status, errText);
       return NextResponse.json(
-        { error: `Gemini API returned status ${geminiRes.status}` },
+        { error: `AI API returned status ${res.status}` },
         { status: 502 }
       );
     }
 
-    const geminiData = await geminiRes.json();
+    const data = await res.json();
+    const content = data?.choices?.[0]?.message?.content;
 
-    const candidate = geminiData?.candidates?.[0];
-    const rawJson = candidate?.content?.parts?.[0]?.text;
-
-    if (!rawJson) {
+    if (!content) {
       return NextResponse.json(
-        { error: 'No content returned from Gemini API.' },
+        { error: 'No content returned from AI.' },
         { status: 502 }
       );
     }
 
-    const parsed = JSON.parse(rawJson);
+    const parsed = JSON.parse(content);
 
-    // Basic validation
     if (!parsed.title || !Array.isArray(parsed.modules)) {
       return NextResponse.json(
         { error: 'AI returned invalid ReportContent structure.' },
