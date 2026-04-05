@@ -123,13 +123,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Truncate very long text to avoid token limits (keep first 15000 chars)
+    const truncatedText = text.trim().length > 15000 ? text.trim().slice(0, 15000) + '\n\n[Text truncated for processing]' : text.trim();
+        { error: 'Missing or empty "text" field.' },
+        { status: 400 }
+      );
+    }
+
     const reportTypeHint = reportType === 'topic'
       ? 'This is a TOPIC/SPECIFIC report focusing on a single subject in depth.'
       : 'This is a REGULAR periodic report covering multiple topics.';
 
-    const userPrompt = `${reportTypeHint}\n\nPlease parse the following raw report text into the ReportContent JSON structure:\n\n---\n${text.trim()}\n---`;
+    const userPrompt = `${reportTypeHint}\n\nPlease parse the following raw report text into the ReportContent JSON structure:\n\n---\n${truncatedText}\n---`;
 
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${GEMINI_API_KEY}`;
 
     const geminiRes = await fetch(geminiUrl, {
       method: 'POST',
