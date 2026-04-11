@@ -72,13 +72,14 @@ export async function POST(request: NextRequest) {
 
     if (admins && admins.length > 0) {
       // Get first domain for notification reference
-      const { data: domain, error: domainError } = await supabase
+      const { data: domains } = await supabase
         .from('domains')
         .select('id')
-        .limit(1)
-        .single();
+        .limit(1);
 
-      console.log('[Requests] Domain query result:', { domain, domainError });
+      const domain = domains?.[0];
+
+      console.log('[Requests] Domain query result:', { domain });
 
       if (domain) {
         const notifications = admins.map((admin) => ({
