@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Resend } from 'resend';
 import { createClient } from '@/lib/supabase/server';
-
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -29,11 +26,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { topic, description, requesterEmail, requesterName } = body as {
+  const { topic, description, marketplace, sellerOrigin } = body as {
     topic?: string;
     description?: string;
-    requesterEmail?: string;
-    requesterName?: string;
+    marketplace?: string;
+    sellerOrigin?: string;
   };
 
   if (!topic || typeof topic !== 'string' || topic.trim() === '') {
@@ -43,24 +40,103 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  try {
-    await resend.emails.send({
-      from: 'Radar Report Platform <onboarding@resend.dev>',
-      to: process.env.ADMIN_EMAIL || 'chenliua@amazon.com',
-      subject: `[Report Request] ${topic}`,
-      html: `<h2>New Report Topic Request</h2>
-        <p><strong>Topic:</strong> ${topic}</p>
-        <p><strong>Description:</strong> ${description || 'N/A'}</p>
-        <p><strong>Requested by:</strong> ${requesterName || 'Unknown'} (${requesterEmail || 'N/A'})</p>
-        <p><strong>Submitted at:</strong> ${new Date().toISOString()}</p>`,
-    });
+  // Save request to database
+  const { data: newRequest, error: insertError } = await supabase
+    .from('report_requests')
+    .insert({
+      user_id: user.id,
+      topic: topic.trim(),
+      description: description || null,
+      marketplace: marketplace || 'WW',
+      seller_origin: sellerOrigin || 'CN',
+    })
+    .select()
+    .single();
 
-    return NextResponse.json({ message: 'Request submitted successfully' });
-  } catch (error) {
-    console.error('Failed to send request email:', error);
+  if (insertError) {
+    console.error('[Requests] Insert error:', insertError);
     return NextResponse.json(
-      { code: 'EMAIL_ERROR', message: 'Failed to send request email', statusCode: 500 },
+      { code: 'INSERT_ERROR', message: insertError.message, statusCode: 500 },
       { status: 500 }
     );
   }
+
+  // Send notification to all admins
+  try {
+    const { data: admins } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('role', 'admin');
+
+    if (admins && admins.length > 0) {
+      // Get first domain for notification reference
+      const { data: domain } = await supabase
+        .from('domains')
+        .select('id')
+        .limit(1)
+        .single();
+
+      if (domain) {
+        const notifications = admins.map((admin) => ({
+          user_id: admin.id,
+          domain_id: domain.id,
+          type: 'news' as const,
+          title: `📋 New Report Request: ${topic.trim()}`,
+          summary: `${user.email || 'A user'} requested a report on "${topic.trim()}"`,
+          reference_id: newRequest.id,
+        }));
+
+        await supabase.from('notifications').insert(notifications);
+      }
+    }
+  } catch (e) {
+    console.error('[Requests] Failed to send notifications:', e);
+    // Don't fail the request if notification fails
+  }
+
+  return NextResponse.json({ message: 'Request submitted successfully', data: newRequest });
+}
+
+export async function GET() {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return NextResponse.json(
+      { code: 'UNAUTHORIZED', message: 'Authentication required', statusCode: 401 },
+      { status: 401 }
+    );
+  }
+
+  // Check if admin
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single();
+
+  // Admins see all requests, regular users see only their own
+  let query = supabase
+    .from('report_requests')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (profile?.role !== 'admin') {
+    query = query.eq('user_id', user.id);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    return NextResponse.json(
+      { code: 'QUERY_ERROR', message: error.message, statusCode: 500 },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({ data });
 }

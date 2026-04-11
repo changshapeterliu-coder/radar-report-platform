@@ -27,6 +27,20 @@ export default function AdminPage() {
   const [newsLoading, setNewsLoading] = useState(true);
   const [actioningNewsId, setActioningNewsId] = useState<string | null>(null);
 
+  // Report requests state
+  interface ReportRequest {
+    id: string;
+    user_id: string;
+    topic: string;
+    description: string | null;
+    marketplace: string;
+    seller_origin: string;
+    status: string;
+    created_at: string;
+  }
+  const [requests, setRequests] = useState<ReportRequest[]>([]);
+  const [requestsLoading, setRequestsLoading] = useState(true);
+
   const fetchDrafts = useCallback(async () => {
     if (!currentDomainId) return;
     setLoading(true);
@@ -67,7 +81,19 @@ export default function AdminPage() {
     setNewsLoading(false);
   }, [supabase, currentDomainId]);
 
-  useEffect(() => { fetchDrafts(); fetchPublished(); fetchNews(); }, [fetchDrafts, fetchPublished, fetchNews]);
+  const fetchRequests = useCallback(async () => {
+    setRequestsLoading(true);
+    try {
+      const res = await fetch('/api/requests');
+      if (res.ok) {
+        const { data } = await res.json();
+        setRequests(data ?? []);
+      }
+    } catch { /* ignore */ }
+    setRequestsLoading(false);
+  }, []);
+
+  useEffect(() => { fetchDrafts(); fetchPublished(); fetchNews(); fetchRequests(); }, [fetchDrafts, fetchPublished, fetchNews, fetchRequests]);
 
   const handlePublish = async (id: string) => {
     await fetch(`/api/reports/${id}/publish`, { method: 'PUT' });
@@ -182,6 +208,77 @@ export default function AdminPage() {
                   <button onClick={() => handleDelete(report.id)} className="rounded border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50">
                     {t('admin.delete')}
                   </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Report Requests Section */}
+        <h2 className="text-lg font-bold text-[#232f3e] mt-10 mb-3">📋 Report Requests</h2>
+        {requestsLoading ? (
+          <div className="flex justify-center py-8">
+            <div className="inline-block h-6 w-6 animate-spin rounded-full border-4 border-purple-500 border-r-transparent" />
+          </div>
+        ) : requests.length === 0 ? (
+          <p className="text-gray-500 text-sm py-4">No report requests yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {requests.map((req) => (
+              <div key={req.id} className="bg-white rounded-lg border border-gray-200 p-4">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-medium text-[#232f3e]">{req.topic}</h3>
+                      <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-bold ${
+                        req.status === 'pending' ? 'bg-yellow-100 text-yellow-700 border border-yellow-300' :
+                        req.status === 'in_progress' ? 'bg-blue-100 text-blue-700 border border-blue-300' :
+                        req.status === 'completed' ? 'bg-green-100 text-green-700 border border-green-300' :
+                        'bg-red-100 text-red-700 border border-red-300'
+                      }`}>
+                        {req.status}
+                      </span>
+                    </div>
+                    {req.description && (
+                      <p className="text-sm text-gray-600 mt-1">{req.description}</p>
+                    )}
+                    <p className="text-xs text-gray-400 mt-1">
+                      🌍 {req.marketplace} · 🏪 {req.seller_origin} · {new Date(req.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  {req.status === 'pending' && (
+                    <div className="flex gap-2 flex-shrink-0">
+                      <button
+                        onClick={async () => {
+                          await supabase.from('report_requests').update({ status: 'in_progress' }).eq('id', req.id);
+                          fetchRequests();
+                        }}
+                        className="rounded border border-[#146eb4] px-3 py-1.5 text-xs font-medium text-[#146eb4] hover:bg-blue-50"
+                      >
+                        ▶️ Start
+                      </button>
+                      <button
+                        onClick={async () => {
+                          await supabase.from('report_requests').update({ status: 'completed' }).eq('id', req.id);
+                          fetchRequests();
+                        }}
+                        className="rounded border border-green-500 px-3 py-1.5 text-xs font-medium text-green-600 hover:bg-green-50"
+                      >
+                        ✅ Done
+                      </button>
+                    </div>
+                  )}
+                  {req.status === 'in_progress' && (
+                    <button
+                      onClick={async () => {
+                        await supabase.from('report_requests').update({ status: 'completed' }).eq('id', req.id);
+                        fetchRequests();
+                      }}
+                      className="rounded border border-green-500 px-3 py-1.5 text-xs font-medium text-green-600 hover:bg-green-50"
+                    >
+                      ✅ Done
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
