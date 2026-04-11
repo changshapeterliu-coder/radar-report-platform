@@ -63,18 +63,22 @@ export async function POST(request: NextRequest) {
 
   // Send notification to all admins
   try {
-    const { data: admins } = await supabase
+    const { data: admins, error: adminError } = await supabase
       .from('profiles')
       .select('id')
       .eq('role', 'admin');
 
+    console.log('[Requests] Admin query result:', { admins, adminError });
+
     if (admins && admins.length > 0) {
       // Get first domain for notification reference
-      const { data: domain } = await supabase
+      const { data: domain, error: domainError } = await supabase
         .from('domains')
         .select('id')
         .limit(1)
         .single();
+
+      console.log('[Requests] Domain query result:', { domain, domainError });
 
       if (domain) {
         const notifications = admins.map((admin) => ({
@@ -86,12 +90,12 @@ export async function POST(request: NextRequest) {
           reference_id: newRequest.id,
         }));
 
-        await supabase.from('notifications').insert(notifications);
+        const { error: notifError } = await supabase.from('notifications').insert(notifications);
+        console.log('[Requests] Notification insert result:', { notifError, count: notifications.length });
       }
     }
   } catch (e) {
     console.error('[Requests] Failed to send notifications:', e);
-    // Don't fail the request if notification fails
   }
 
   return NextResponse.json({ message: 'Request submitted successfully', data: newRequest });
