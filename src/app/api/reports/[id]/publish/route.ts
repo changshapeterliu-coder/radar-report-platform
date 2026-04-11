@@ -217,6 +217,88 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     // Topic extraction failure should NOT block publish
   }
 
+  // AI-generated Hitting News based on topic ranking changes
+  try {
+    const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
+    if (OPENROUTER_KEY) {
+      // Fetch current + historical topic rankings for this domain
+      const { data: allRankings } = await supabase
+        .from('topic_rankings')
+        .select('*')
+        .eq('domain_id', report.domain_id)
+        .eq('module_index', 0)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (allRankings && allRankings.length > 0) {
+        // Group by week
+        const byWeek = new Map<string, Array<{ topic_label: string; rank: number }>>();
+        allRankings.forEach((r: { week_label: string | null; topic_label: string; rank: number }) => {
+          const w = r.week_label || 'Unknown';
+          if (!byWeek.has(w)) byWeek.set(w, []);
+          byWeek.get(w)!.push({ topic_label: r.topic_label, rank: r.rank });
+        });
+
+        const weeksData = Array.from(byWeek.entries()).map(([week, topics]) => ({ week, topics }));
+
+        const newsPrompt = `You are a professional news editor for an Amazon seller account health intelligence platform. Analyze the topic ranking changes across weeks and generate newsworthy items.
+
+Topic rankings by week (most recent first):
+${JSON.stringify(weeksData.slice(0, 5), null, 2)}
+
+Generate 1-3 news items about noteworthy changes. Focus on:
+- New topics entering the rankings
+- Topics with significant rank increases
+- Topics that have stayed at #1 for multiple weeks
+
+Write each news item in a professional but engaging news style. Each item should have a compelling headline and a 1-2 sentence summary.
+
+Return JSON: { "news": [{ "title": "headline", "summary": "1-2 sentence summary", "content": "fuller 2-3 paragraph news article" }] }
+
+If there are no noteworthy changes (e.g., only 1 week of data), return { "news": [] }.
+Return ONLY valid JSON.`;
+
+        const newsRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${OPENROUTER_KEY}`,
+          },
+          body: JSON.stringify({
+            model: 'qwen/qwen3.6-plus:free',
+            messages: [
+              { role: 'system', content: 'You are a news editor. Return only valid JSON.' },
+              { role: 'user', content: newsPrompt },
+            ],
+            response_format: { type: 'json_object' },
+          }),
+        });
+
+        if (newsRes.ok) {
+          const newsData = await newsRes.json();
+          const parsed = JSON.parse(newsData?.choices?.[0]?.message?.content || '{}');
+          const newsItems = parsed.news || [];
+
+          for (const item of newsItems) {
+            if (item.title && item.content) {
+              await supabase.from('news').insert({
+                domain_id: report.domain_id,
+                created_by: user.id,
+                title: item.title,
+                summary: item.summary || null,
+                content: item.content,
+                source_channel: 'AI Insight',
+                is_pinned: false,
+              });
+            }
+          }
+        }
+      }
+    }
+  } catch {
+    // AI news generation failure should NOT block publish
+  }
+
   // Create notifications for all team_members in this domain
   const { data: teamMembers, error: membersError } = await supabase
     .from('profiles')
