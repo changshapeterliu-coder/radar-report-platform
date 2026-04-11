@@ -53,6 +53,7 @@ export interface Database {
           date_range: string;
           status: 'draft' | 'published';
           content: ReportContent;
+          content_translated: ReportContent | null;
           published_at: string | null;
           created_at: string;
           updated_at: string;
@@ -66,6 +67,7 @@ export interface Database {
           date_range: string;
           status?: 'draft' | 'published';
           content: ReportContent;
+          content_translated?: ReportContent | null;
           published_at?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -79,6 +81,7 @@ export interface Database {
           date_range?: string;
           status?: 'draft' | 'published';
           content?: ReportContent;
+          content_translated?: ReportContent | null;
           published_at?: string | null;
           created_at?: string;
           updated_at?: string;

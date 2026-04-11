@@ -84,11 +84,18 @@ export default function ReportViewerPage({ params }: { params: Promise<{ id: str
   }
 
   const content = report.content as ReportContent;
-  const displayContent = showTranslation && translatedContent ? translatedContent : content;
+  const preTranslated = (report as Record<string, unknown>).content_translated as ReportContent | null;
+  const displayContent = showTranslation && (translatedContent || preTranslated) ? (translatedContent || preTranslated) : content;
   const modules = displayContent?.modules ?? [];
   const activeModule = modules[activeTab];
 
   const handleTranslate = async (targetLang: 'zh' | 'en') => {
+    // If pre-translated version exists, use it instantly
+    if (preTranslated && !translatedContent) {
+      setTranslatedContent(preTranslated);
+      setShowTranslation(true);
+      return;
+    }
     setTranslating(true);
     try {
       const res = await fetch('/api/ai/translate-report', {
