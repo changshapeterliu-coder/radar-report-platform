@@ -18,7 +18,9 @@ export default function AdminPage() {
   const { currentDomainId } = useDomain();
   const supabase = useMemo(() => createClient(), []);
   const [drafts, setDrafts] = useState<ReportRow[]>([]);
+  const [published, setPublished] = useState<ReportRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [publishedLoading, setPublishedLoading] = useState(true);
 
   // News management state
   const [newsItems, setNewsItems] = useState<NewsRow[]>([]);
@@ -38,6 +40,20 @@ export default function AdminPage() {
     setLoading(false);
   }, [supabase, currentDomainId]);
 
+  const fetchPublished = useCallback(async () => {
+    if (!currentDomainId) return;
+    setPublishedLoading(true);
+    const { data } = await supabase
+      .from('reports')
+      .select('*')
+      .eq('domain_id', currentDomainId)
+      .eq('status', 'published')
+      .order('published_at', { ascending: false })
+      .limit(20);
+    setPublished((data ?? []) as ReportRow[]);
+    setPublishedLoading(false);
+  }, [supabase, currentDomainId]);
+
   const fetchNews = useCallback(async () => {
     if (!currentDomainId) return;
     setNewsLoading(true);
@@ -51,16 +67,18 @@ export default function AdminPage() {
     setNewsLoading(false);
   }, [supabase, currentDomainId]);
 
-  useEffect(() => { fetchDrafts(); fetchNews(); }, [fetchDrafts, fetchNews]);
+  useEffect(() => { fetchDrafts(); fetchPublished(); fetchNews(); }, [fetchDrafts, fetchPublished, fetchNews]);
 
   const handlePublish = async (id: string) => {
     await fetch(`/api/reports/${id}/publish`, { method: 'PUT' });
     fetchDrafts();
+    fetchPublished();
   };
 
   const handleDelete = async (id: string) => {
     await supabase.from('reports').delete().eq('id', id);
     fetchDrafts();
+    fetchPublished();
   };
 
   const handleDeleteNews = async (id: string) => {
@@ -123,10 +141,45 @@ export default function AdminPage() {
                   </p>
                 </div>
                 <div className="flex gap-2">
+                  <button onClick={() => router.push(`/admin/reports/${draft.id}/edit`)} className="rounded border border-[#146eb4] px-3 py-1.5 text-xs font-medium text-[#146eb4] hover:bg-blue-50">
+                    ✏️ {t('common.edit', 'Edit')}
+                  </button>
                   <button onClick={() => handlePublish(draft.id)} className="rounded bg-[#ff9900] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#e88b00]">
                     {t('admin.publish')}
                   </button>
                   <button onClick={() => handleDelete(draft.id)} className="rounded border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50">
+                    {t('admin.delete')}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Published Reports Section */}
+        <h2 className="text-lg font-bold text-[#232f3e] mt-10 mb-3">📋 Published Reports</h2>
+        {publishedLoading ? (
+          <div className="flex justify-center py-8">
+            <div className="inline-block h-6 w-6 animate-spin rounded-full border-4 border-[#146eb4] border-r-transparent" />
+          </div>
+        ) : published.length === 0 ? (
+          <p className="text-gray-500 text-sm py-4">{t('common.noData')}</p>
+        ) : (
+          <div className="space-y-2">
+            {published.map((report) => (
+              <div key={report.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-white rounded-lg border border-gray-200 p-4">
+                <div>
+                  <h3 className="font-medium text-[#232f3e]">{report.title}</h3>
+                  <p className="text-xs text-gray-400">
+                    {report.type === 'regular' ? t('reports.filterRegular') : t('reports.filterTopic')} · {report.date_range}
+                    {report.published_at && ` · Published ${new Date(report.published_at).toLocaleDateString()}`}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => router.push(`/admin/reports/${report.id}/edit`)} className="rounded border border-[#146eb4] px-3 py-1.5 text-xs font-medium text-[#146eb4] hover:bg-blue-50">
+                    ✏️ {t('common.edit', 'Edit')}
+                  </button>
+                  <button onClick={() => handleDelete(report.id)} className="rounded border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50">
                     {t('admin.delete')}
                   </button>
                 </div>
