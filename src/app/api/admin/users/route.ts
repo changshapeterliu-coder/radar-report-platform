@@ -36,7 +36,8 @@ export async function GET() {
     );
   }
 
-  const { data, error } = await supabase
+  // Get profiles
+  const { data: profiles, error } = await supabase
     .from('profiles')
     .select('*')
     .order('created_at', { ascending: false });
@@ -48,7 +49,33 @@ export async function GET() {
     );
   }
 
-  return NextResponse.json({ data });
+  // Try to enrich with email from auth.users via admin API
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (serviceRoleKey && profiles) {
+    try {
+      const adminSupabase = createAdminClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        serviceRoleKey
+      );
+      const { data: authUsers } = await adminSupabase.auth.admin.listUsers();
+      if (authUsers?.users) {
+        const emailMap = new Map(authUsers.users.map(u => [u.id, {
+          email: u.email,
+          email_confirmed_at: u.email_confirmed_at,
+        }]));
+        const enriched = profiles.map(p => ({
+          ...p,
+          email: emailMap.get(p.id)?.email ?? null,
+          email_confirmed: !!emailMap.get(p.id)?.email_confirmed_at,
+        }));
+        return NextResponse.json({ data: enriched });
+      }
+    } catch (e) {
+      console.error('[Admin Users] Failed to fetch auth users:', e);
+    }
+  }
+
+  return NextResponse.json({ data: profiles });
 }
 
 export async function POST(request: NextRequest) {
@@ -108,21 +135,44 @@ export async function POST(request: NextRequest) {
   });
 
   if (createError) {
+    console.error('[Admin Users] createUser error:', createError.message, createError);
     return NextResponse.json(
       { code: 'CREATE_ERROR', message: createError.message, statusCode: 500 },
       { status: 500 }
     );
   }
 
+  if (!newUser?.user) {
+    return NextResponse.json(
+      { code: 'CREATE_ERROR', message: 'User creation returned no user object', statusCode: 500 },
+      { status: 500 }
+    );
+  }
+
+  // Double-check: if email_confirmed_at is not set, force-confirm it
+  if (!newUser.user.email_confirmed_at) {
+    console.warn('[Admin Users] email_confirmed_at not set after creation, forcing confirmation...');
+    const { error: updateError } = await adminSupabase.auth.admin.updateUser(
+      newUser.user.id,
+      { email_confirm: true }
+    );
+    if (updateError) {
+      console.error('[Admin Users] Failed to force-confirm email:', updateError.message);
+    }
+  }
+
   // Update the profile role (the trigger should have created a default profile)
-  if (newUser?.user && userRole !== 'team_member') {
+  if (userRole !== 'team_member') {
     await adminSupabase
       .from('profiles')
       .update({ role: userRole })
       .eq('id', newUser.user.id);
   }
 
-  return NextResponse.json({ data: newUser.user }, { status: 201 });
+  return NextResponse.json({
+    data: newUser.user,
+    emailConfirmed: !!newUser.user.email_confirmed_at,
+  }, { status: 201 });
 }
 
 export async function PUT(request: NextRequest) {

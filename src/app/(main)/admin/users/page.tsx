@@ -6,6 +6,8 @@ import Link from 'next/link';
 
 interface UserProfile {
   id: string;
+  email?: string | null;
+  email_confirmed?: boolean;
   role: 'team_member' | 'admin';
   language_preference: 'zh' | 'en';
   created_at: string;
@@ -67,7 +69,11 @@ export default function AdminUsersPage() {
         body: JSON.stringify({ email: email.trim(), password, role }),
       });
       if (res.ok) {
-        setFormSuccess(`User ${email} created successfully.`);
+        const result = await res.json();
+        const confirmNote = result.emailConfirmed
+          ? '(email confirmed ✓)'
+          : '(⚠️ email may need manual confirmation)';
+        setFormSuccess(`User ${email} created successfully. ${confirmNote}`);
         setEmail('');
         setPassword('');
         setRole('team_member');
@@ -161,7 +167,18 @@ export default function AdminUsersPage() {
             {users.map((u) => (
               <div key={u.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-white rounded-lg border border-gray-200 p-4">
                 <div>
-                  <p className="font-mono text-sm text-[#232f3e]">{u.id}</p>
+                  <p className="font-medium text-sm text-[#232f3e]">
+                    {u.email ?? u.id}
+                    {u.email_confirmed === false && (
+                      <span className="ml-2 text-xs text-red-500 font-normal">⚠️ email not confirmed</span>
+                    )}
+                    {u.email_confirmed === true && (
+                      <span className="ml-2 text-xs text-green-500 font-normal">✓ confirmed</span>
+                    )}
+                  </p>
+                  {u.email && (
+                    <p className="font-mono text-xs text-gray-400 mt-0.5">{u.id}</p>
+                  )}
                   <div className="flex items-center gap-2 mt-1">
                     <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-bold ${
                       u.role === 'admin'
