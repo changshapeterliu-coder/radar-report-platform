@@ -131,6 +131,8 @@ export async function POST(request: NextRequest) {
     content?: unknown;
   };
 
+  const week_label = (body as { week_label?: string }).week_label || null;
+
   // Validate required metadata fields
   const missingFields: string[] = [];
   if (!title || typeof title !== 'string' || title.trim() === '') missingFields.push('title');
@@ -176,6 +178,7 @@ export async function POST(request: NextRequest) {
       title: title!,
       type: type as 'regular' | 'topic',
       date_range: date_range!,
+      week_label,
       domain_id: domain_id!,
       content: content as ReportContent,
       created_by: user.id,

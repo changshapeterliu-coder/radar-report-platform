@@ -51,6 +51,7 @@ export interface Database {
           title: string;
           type: 'regular' | 'topic';
           date_range: string;
+          week_label: string | null;
           status: 'draft' | 'published';
           content: ReportContent;
           content_translated: ReportContent | null;
@@ -65,6 +66,7 @@ export interface Database {
           title: string;
           type: 'regular' | 'topic';
           date_range: string;
+          week_label?: string | null;
           status?: 'draft' | 'published';
           content: ReportContent;
           content_translated?: ReportContent | null;
@@ -79,6 +81,7 @@ export interface Database {
           title?: string;
           type?: 'regular' | 'topic';
           date_range?: string;
+          week_label?: string | null;
           status?: 'draft' | 'published';
           content?: ReportContent;
           content_translated?: ReportContent | null;

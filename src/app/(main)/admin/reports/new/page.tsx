@@ -32,6 +32,7 @@ export default function CreateReportPage() {
   const [title, setTitle] = useState('');
   const [type, setType] = useState<'regular' | 'topic'>('regular');
   const [dateRange, setDateRange] = useState('');
+  const [weekLabel, setWeekLabel] = useState('');
   const [domainId, setDomainId] = useState(currentDomainId ?? '');
   const [content, setContent] = useState<ReportContent>(defaultContent);
   const [saving, setSaving] = useState(false);
@@ -98,6 +99,7 @@ export default function CreateReportPage() {
           title: title.trim(),
           type,
           date_range: dateRange.trim(),
+          week_label: weekLabel.trim() || null,
           domain_id: domainId,
           content: finalContent,
         }),
@@ -189,6 +191,15 @@ export default function CreateReportPage() {
               value={dateRange}
               onChange={(e) => setDateRange(e.target.value)}
               placeholder="e.g. 2025-01-01 ~ 2025-01-15"
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-[#ff9900] focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Week Label</label>
+            <input
+              value={weekLabel}
+              onChange={(e) => setWeekLabel(e.target.value)}
+              placeholder="e.g. W12, W12-W13, 2026-W15"
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-[#ff9900] focus:outline-none"
             />
           </div>

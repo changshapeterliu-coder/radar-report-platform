@@ -78,7 +78,7 @@ export default function DashboardPage() {
       const mod1 = content?.modules?.[0];
       const table = mod1?.tables?.[0];
       const point: Record<string, string | number> = {
-        name: r.date_range.length > 20 ? r.date_range.slice(0, 20) + '…' : r.date_range,
+        name: r.week_label || (r.date_range.length > 20 ? r.date_range.slice(0, 20) + '…' : r.date_range),
       };
 
       if (table?.rows) {
@@ -140,7 +140,14 @@ export default function DashboardPage() {
                     className="text-left bg-white rounded-lg border border-gray-200 p-4 hover:border-[#ff9900] hover:shadow transition-all"
                   >
                     <h3 className="font-medium text-[#232f3e] text-sm truncate">{r.title}</h3>
-                    <p className="text-xs text-gray-500 mt-1">{r.date_range}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      {r.week_label && (
+                        <span className="inline-block rounded bg-[#ff9900]/10 text-[#ff9900] px-1.5 py-0.5 text-[10px] font-bold">
+                          {r.week_label}
+                        </span>
+                      )}
+                      <p className="text-xs text-gray-500">{r.date_range}</p>
+                    </div>
                     <p className="text-xs text-gray-400 mt-0.5">
                       {r.published_at ? new Date(r.published_at).toLocaleDateString() : ''}
                     </p>
