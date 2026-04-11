@@ -23,6 +23,7 @@ function NavBar() {
     { href: '/dashboard', label: 'Dashboard' },
     { href: '/reports', label: 'Reports' },
     { href: '/news', label: 'News' },
+    { href: '/requests', label: 'Request' },
     ...(isAdmin ? [{ href: '/admin', label: 'Admin' }] : []),
   ];
 
