@@ -21,6 +21,7 @@ import {
 
 type ReportRow = Database['public']['Tables']['reports']['Row'];
 type NewsRow = Database['public']['Tables']['news']['Row'];
+type TopicRankingRow = Database['public']['Tables']['topic_rankings']['Row'];
 
 export default function DashboardPage() {
   const { t } = useTranslation();
@@ -30,13 +31,15 @@ export default function DashboardPage() {
 
   const [reports, setReports] = useState<ReportRow[]>([]);
   const [latestNews, setLatestNews] = useState<NewsRow[]>([]);
+  const [topicRankings, setTopicRankings] = useState<TopicRankingRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [trendModuleIndex, setTrendModuleIndex] = useState(0);
 
   const fetchData = useCallback(async () => {
     if (!currentDomainId) return;
     setLoading(true);
 
-    const [reportsRes, newsRes] = await Promise.all([
+    const [reportsRes, newsRes, topicRes] = await Promise.all([
       supabase
         .from('reports')
         .select('*')
@@ -52,10 +55,16 @@ export default function DashboardPage() {
         .order('is_pinned', { ascending: false })
         .order('published_at', { ascending: false })
         .limit(5),
+      supabase
+        .from('topic_rankings')
+        .select('*')
+        .eq('domain_id', currentDomainId)
+        .order('created_at', { ascending: true }),
     ]);
 
     if (reportsRes.data) setReports(reportsRes.data as ReportRow[]);
     if (newsRes.data) setLatestNews(newsRes.data as NewsRow[]);
+    if (topicRes.data) setTopicRankings(topicRes.data as TopicRankingRow[]);
     setLoading(false);
   }, [supabase, currentDomainId]);
 
@@ -71,29 +80,28 @@ export default function DashboardPage() {
   const module2Table: ReportTable | null =
     latestContent?.modules?.[1]?.tables?.[0] ?? null;
 
-  // Build rank-based trend data: each topic's rank across weeks
-  const trendData = useMemo(() => {
-    return [...reports].reverse().map((r) => {
-      const content = r.content as ReportContent;
-      const mod1 = content?.modules?.[0];
-      const table = mod1?.tables?.[0];
-      const point: Record<string, string | number> = {
-        name: r.week_label || (r.date_range.length > 20 ? r.date_range.slice(0, 20) + '…' : r.date_range),
-      };
+  // Build trend data from topic_rankings table
+  const filteredRankings = useMemo(
+    () => topicRankings.filter((r) => r.module_index === trendModuleIndex),
+    [topicRankings, trendModuleIndex]
+  );
 
-      if (table?.rows) {
-        table.rows.forEach((row, ri) => {
-          // Build topic label from Reason + Keywords (first two cells typically)
-          const reason = row.cells[1]?.text || row.cells[0]?.text || `Topic ${ri + 1}`;
-          const keywords = row.cells[2]?.text || '';
-          const topicLabel = keywords ? `${reason} / ${keywords.slice(0, 30)}` : reason;
-          // Rank is row index + 1 (first row = rank 1)
-          point[topicLabel] = ri + 1;
-        });
+  const trendData = useMemo(() => {
+    // Group by week_label, each topic_label becomes a line
+    const weekMap = new Map<string, Record<string, string | number>>();
+    const weekOrder: string[] = [];
+
+    filteredRankings.forEach((r) => {
+      const week = r.week_label || 'Unknown';
+      if (!weekMap.has(week)) {
+        weekMap.set(week, { name: week });
+        weekOrder.push(week);
       }
-      return point;
+      weekMap.get(week)![r.topic_label] = r.rank;
     });
-  }, [reports]);
+
+    return weekOrder.map((w) => weekMap.get(w)!);
+  }, [filteredRankings]);
 
   const trendKeys = useMemo(() => {
     const keys = new Set<string>();
@@ -173,10 +181,34 @@ export default function DashboardPage() {
             </section>
           )}
 
-          {/* Trend Chart */}
+          {/* Trend Chart with Module Toggle */}
           {trendData.length > 1 && trendKeys.length > 0 && (
             <section>
-              <h2 className="text-lg font-bold text-[#232f3e] mb-3">{t('dashboard.trendView')}</h2>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-bold text-[#232f3e]">{t('dashboard.trendView')}</h2>
+                <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+                  <button
+                    onClick={() => setTrendModuleIndex(0)}
+                    className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                      trendModuleIndex === 0
+                        ? 'bg-[#232f3e] text-white'
+                        : 'bg-white text-[#232f3e] hover:bg-gray-50'
+                    }`}
+                  >
+                    {t('dashboard.suspensionTrends', 'Suspension Trends')}
+                  </button>
+                  <button
+                    onClick={() => setTrendModuleIndex(1)}
+                    className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                      trendModuleIndex === 1
+                        ? 'bg-[#232f3e] text-white'
+                        : 'bg-white text-[#232f3e] hover:bg-gray-50'
+                    }`}
+                  >
+                    {t('dashboard.listingTakedowns', 'Listing Takedowns')}
+                  </button>
+                </div>
+              </div>
               <div className="bg-white rounded-lg border border-gray-200 p-4">
                 <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={trendData}>

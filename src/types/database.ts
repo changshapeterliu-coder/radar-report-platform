@@ -166,6 +166,44 @@ export interface Database {
           created_at?: string;
         };
       };
+      topic_rankings: {
+        Row: {
+          id: string;
+          report_id: string;
+          domain_id: string;
+          module_index: number;
+          topic_label: string;
+          rank: number;
+          week_label: string | null;
+          raw_reason: string | null;
+          raw_keywords: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          report_id: string;
+          domain_id: string;
+          module_index?: number;
+          topic_label: string;
+          rank: number;
+          week_label?: string | null;
+          raw_reason?: string | null;
+          raw_keywords?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          report_id?: string;
+          domain_id?: string;
+          module_index?: number;
+          topic_label?: string;
+          rank?: number;
+          week_label?: string | null;
+          raw_reason?: string | null;
+          raw_keywords?: string | null;
+          created_at?: string;
+        };
+      };
     };
     Functions: {
       search_reports: {
