@@ -71,7 +71,7 @@ export default function DashboardPage() {
   const module2Table: ReportTable | null =
     latestContent?.modules?.[1]?.tables?.[0] ?? null;
 
-  // Build trend data from reports (extract first numeric-like values from module 1 tables)
+  // Build rank-based trend data: each topic's rank across weeks
   const trendData = useMemo(() => {
     return [...reports].reverse().map((r) => {
       const content = r.content as ReportContent;
@@ -82,17 +82,13 @@ export default function DashboardPage() {
       };
 
       if (table?.rows) {
-        // Use first 3 rows as trend lines
-        table.rows.slice(0, 3).forEach((row, ri) => {
-          const label = row.cells[0]?.text || `Item ${ri + 1}`;
-          // Try to find a numeric cell
-          for (let ci = 1; ci < row.cells.length; ci++) {
-            const num = parseFloat(row.cells[ci]?.text?.replace(/[^0-9.-]/g, '') ?? '');
-            if (!isNaN(num)) {
-              point[label] = num;
-              break;
-            }
-          }
+        table.rows.forEach((row, ri) => {
+          // Build topic label from Reason + Keywords (first two cells typically)
+          const reason = row.cells[1]?.text || row.cells[0]?.text || `Topic ${ri + 1}`;
+          const keywords = row.cells[2]?.text || '';
+          const topicLabel = keywords ? `${reason} / ${keywords.slice(0, 30)}` : reason;
+          // Rank is row index + 1 (first row = rank 1)
+          point[topicLabel] = ri + 1;
         });
       }
       return point;
@@ -106,10 +102,10 @@ export default function DashboardPage() {
         if (k !== 'name') keys.add(k);
       });
     });
-    return Array.from(keys).slice(0, 5);
+    return Array.from(keys).slice(0, 7);
   }, [trendData]);
 
-  const COLORS = ['#ff9900', '#146eb4', '#232f3e', '#e74c3c', '#27ae60'];
+  const COLORS = ['#ff9900', '#146eb4', '#232f3e', '#e74c3c', '#27ae60', '#8b5cf6', '#06b6d4'];
 
   if (loading) {
     return (
@@ -186,9 +182,9 @@ export default function DashboardPage() {
                   <LineChart data={trendData}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} />
+                    <YAxis reversed domain={[1, 'auto']} tick={{ fontSize: 11 }} label={{ value: 'Rank', angle: -90, position: 'insideLeft', style: { fontSize: 11 } }} allowDecimals={false} />
                     <Tooltip />
-                    <Legend />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
                     {trendKeys.map((key, i) => (
                       <Line
                         key={key}
