@@ -122,17 +122,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Double-check: if email_confirmed_at is not set, force-confirm it
-  if (!newUser.user.email_confirmed_at) {
-    console.warn('[Admin Users] email_confirmed_at not set after creation, forcing confirmation...');
-    const { error: updateError } = await adminSupabase.auth.admin.updateUser(
-      newUser.user.id,
-      { email_confirm: true }
-    );
-    if (updateError) {
-      console.error('[Admin Users] Failed to force-confirm email:', updateError.message);
-    }
-  }
+  // Double-check: if email_confirmed_at is not set, it should be fine since
+  // email_confirm: true was passed. The trigger will create the profile.
 
   // Update the profile with role and email (the trigger creates a default profile)
   await adminSupabase
