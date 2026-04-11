@@ -7,7 +7,6 @@ import Link from 'next/link';
 interface UserProfile {
   id: string;
   email?: string | null;
-  email_confirmed?: boolean;
   role: 'team_member' | 'admin';
   language_preference: 'zh' | 'en';
   created_at: string;
@@ -169,16 +168,8 @@ export default function AdminUsersPage() {
                 <div>
                   <p className="font-medium text-sm text-[#232f3e]">
                     {u.email ?? u.id}
-                    {u.email_confirmed === false && (
-                      <span className="ml-2 text-xs text-red-500 font-normal">⚠️ email not confirmed</span>
-                    )}
-                    {u.email_confirmed === true && (
-                      <span className="ml-2 text-xs text-green-500 font-normal">✓ confirmed</span>
-                    )}
                   </p>
-                  {u.email && (
-                    <p className="font-mono text-xs text-gray-400 mt-0.5">{u.id}</p>
-                  )}
+                  <p className="font-mono text-xs text-gray-400 mt-0.5">{u.id}</p>
                   <div className="flex items-center gap-2 mt-1">
                     <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-bold ${
                       u.role === 'admin'

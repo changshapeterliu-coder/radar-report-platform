@@ -36,7 +36,6 @@ export async function GET() {
     );
   }
 
-  // Get profiles
   const { data: profiles, error } = await supabase
     .from('profiles')
     .select('*')
@@ -47,32 +46,6 @@ export async function GET() {
       { code: 'QUERY_ERROR', message: error.message, statusCode: 500 },
       { status: 500 }
     );
-  }
-
-  // Try to enrich with email from auth.users via admin API
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (serviceRoleKey && profiles) {
-    try {
-      const adminSupabase = createAdminClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        serviceRoleKey
-      );
-      const { data: authUsers } = await adminSupabase.auth.admin.listUsers();
-      if (authUsers?.users) {
-        const emailMap = new Map(authUsers.users.map(u => [u.id, {
-          email: u.email,
-          email_confirmed_at: u.email_confirmed_at,
-        }]));
-        const enriched = profiles.map(p => ({
-          ...p,
-          email: emailMap.get(p.id)?.email ?? null,
-          email_confirmed: !!emailMap.get(p.id)?.email_confirmed_at,
-        }));
-        return NextResponse.json({ data: enriched });
-      }
-    } catch (e) {
-      console.error('[Admin Users] Failed to fetch auth users:', e);
-    }
   }
 
   return NextResponse.json({ data: profiles });
@@ -161,13 +134,11 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Update the profile role (the trigger should have created a default profile)
-  if (userRole !== 'team_member') {
-    await adminSupabase
-      .from('profiles')
-      .update({ role: userRole })
-      .eq('id', newUser.user.id);
-  }
+  // Update the profile with role and email (the trigger creates a default profile)
+  await adminSupabase
+    .from('profiles')
+    .update({ role: userRole, email })
+    .eq('id', newUser.user.id);
 
   return NextResponse.json({
     data: newUser.user,
