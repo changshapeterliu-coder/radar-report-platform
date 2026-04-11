@@ -1,13 +1,18 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+
+const MARKETPLACES = ['WW (Worldwide)', 'US', 'CA', 'MX', 'BR', 'UK', 'DE', 'FR', 'IT', 'ES', 'NL', 'SE', 'PL', 'JP', 'AU', 'SG', 'IN', 'AE', 'SA', 'TR'];
+const SELLER_ORIGINS = ['CN (China)', 'US', 'UK', 'DE', 'JP', 'IN', 'KR', 'WW (All Origins)', 'Other'];
 
 export default function RequestPage() {
   const { user } = useAuth();
 
   const [topic, setTopic] = useState('');
   const [description, setDescription] = useState('');
+  const [marketplace, setMarketplace] = useState('WW (Worldwide)');
+  const [sellerOrigin, setSellerOrigin] = useState('CN (China)');
   const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -20,12 +25,18 @@ export default function RequestPage() {
     setErrorMessage('');
 
     try {
+      const descriptionParts = [
+        description.trim(),
+        `Marketplace: ${marketplace}`,
+        `Seller Origin: ${sellerOrigin}`,
+      ].filter(Boolean).join('\n');
+
       const res = await fetch('/api/requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           topic: topic.trim(),
-          description: description.trim() || undefined,
+          description: descriptionParts || undefined,
           requesterEmail: user?.email || '',
           requesterName: user?.user_metadata?.full_name || user?.email || '',
         }),
@@ -39,6 +50,8 @@ export default function RequestPage() {
       setStatus('success');
       setTopic('');
       setDescription('');
+      setMarketplace('WW (Worldwide)');
+      setSellerOrigin('CN (China)');
     } catch (err) {
       setStatus('error');
       setErrorMessage(err instanceof Error ? err.message : 'Something went wrong');
@@ -103,8 +116,41 @@ export default function RequestPage() {
             />
           </div>
 
+          <div className="mb-5 grid grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="marketplace" className="mb-1.5 block text-sm font-medium text-gray-700">
+                Marketplace
+              </label>
+              <select
+                id="marketplace"
+                value={marketplace}
+                onChange={(e) => setMarketplace(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-[#ff9900] focus:outline-none focus:ring-1 focus:ring-[#ff9900]"
+              >
+                {MARKETPLACES.map((mp) => (
+                  <option key={mp} value={mp}>{mp}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="sellerOrigin" className="mb-1.5 block text-sm font-medium text-gray-700">
+                Seller Origin
+              </label>
+              <select
+                id="sellerOrigin"
+                value={sellerOrigin}
+                onChange={(e) => setSellerOrigin(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-[#ff9900] focus:outline-none focus:ring-1 focus:ring-[#ff9900]"
+              >
+                {SELLER_ORIGINS.map((so) => (
+                  <option key={so} value={so}>{so}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
           <div className="mb-5 rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-600">
-            Submitting as <span className="font-medium text-gray-900">{user?.email || '—'}</span>
+            Submitting as <span className="font-medium text-gray-900">{user?.email || '\u2014'}</span>
           </div>
 
           <button
