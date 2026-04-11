@@ -140,6 +140,12 @@ export default function ReportViewerPage({ params }: { params: Promise<{ id: str
               <div className="bg-[#146eb4] text-white px-4 py-2 rounded text-sm font-medium whitespace-nowrap">
                 {content.dateRange ?? report.date_range}
               </div>
+              <button
+                onClick={() => window.print()}
+                className="no-print rounded bg-white/20 px-3 py-2 text-xs text-white hover:bg-white/30"
+              >
+                📄 Export PDF
+              </button>
               {showTranslation ? (
                 <button
                   onClick={() => setShowTranslation(false)}
