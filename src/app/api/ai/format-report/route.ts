@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
         'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'qwen/qwen3.6-plus:free',
+        model: 'deepseek/deepseek-chat-v3-0324:free',
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: `${typeHint}\n\nParse this report text into ReportContent JSON:\n\n---\n${truncatedText}\n---` },
