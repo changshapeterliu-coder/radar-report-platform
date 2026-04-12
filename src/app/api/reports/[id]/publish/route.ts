@@ -46,7 +46,7 @@ Return ONLY a JSON array: [{ "rank": 1, "topic_label": "Account Association", "r
       'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: 'deepseek/deepseek-chat-v3-0324:free',
+      model: 'openrouter/auto',
       messages: [
         { role: 'system', content: 'You are a topic classification assistant. Return only valid JSON.' },
         { role: 'user', content: prompt },
@@ -135,7 +135,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
             'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
           },
           body: JSON.stringify({
-            model: 'deepseek/deepseek-chat-v3-0324:free',
+            model: 'openrouter/auto',
             messages: [
               {
                 role: 'system',
@@ -265,7 +265,7 @@ Return ONLY valid JSON.`;
             'Authorization': `Bearer ${OPENROUTER_KEY}`,
           },
           body: JSON.stringify({
-            model: 'deepseek/deepseek-chat-v3-0324:free',
+            model: 'openrouter/auto',
             messages: [
               { role: 'system', content: 'You are a news editor. Return only valid JSON.' },
               { role: 'user', content: newsPrompt },
