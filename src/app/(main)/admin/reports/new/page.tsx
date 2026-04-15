@@ -114,11 +114,12 @@ export default function CreateReportPage() {
 
       if (!res.ok) {
         const data = await res.json();
-        setErrors([data.error || 'Failed to save report']);
+        setErrors([data.message || data.error || 'Failed to save report']);
         return;
       }
 
-      const { id } = await res.json();
+      const result = await res.json();
+      const id = result.data?.id;
 
       if (publish && id) {
         await fetch(`/api/reports/${id}/publish`, { method: 'PUT' });
