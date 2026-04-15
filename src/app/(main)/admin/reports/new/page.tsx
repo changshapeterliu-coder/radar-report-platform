@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import { AdminGuard } from '@/components/AdminGuard';
@@ -34,6 +34,13 @@ export default function CreateReportPage() {
   const [dateRange, setDateRange] = useState('');
   const [weekLabel, setWeekLabel] = useState('');
   const [domainId, setDomainId] = useState(currentDomainId ?? '');
+
+  // Sync domainId when currentDomainId loads
+  useEffect(() => {
+    if (currentDomainId && !domainId) {
+      setDomainId(currentDomainId);
+    }
+  }, [currentDomainId, domainId]);
   const [content, setContent] = useState<ReportContent>(defaultContent);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
