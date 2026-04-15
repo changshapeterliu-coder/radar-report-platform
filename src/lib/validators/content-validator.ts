@@ -53,11 +53,11 @@ export function validateReportContent(
   // Validate module count based on report type
   const modules = c.modules as unknown[];
 
-  if (reportType === 'regular' && modules.length !== 4) {
+  if (reportType === 'regular' && modules.length < 1) {
     errors.push({
       field: 'modules',
       path: 'content.modules',
-      message: `Regular report must contain exactly 4 modules, got ${modules.length}`,
+      message: 'Regular report must contain at least 1 module',
     });
   }
 
