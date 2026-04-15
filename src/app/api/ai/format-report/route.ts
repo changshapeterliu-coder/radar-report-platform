@@ -79,9 +79,8 @@ export async function POST(request: NextRequest) {
         model: 'openrouter/auto',
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: `${typeHint}\n\nParse this report text into ReportContent JSON:\n\n---\n${truncatedText}\n---` },
+          { role: 'user', content: `${typeHint}\n\nParse this report text into ReportContent JSON. Return ONLY the JSON object, no markdown fences, no explanation:\n\n---\n${truncatedText}\n---` },
         ],
-        response_format: { type: 'json_object' },
       }),
     });
 
@@ -95,13 +94,20 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await res.json();
-    const content = data?.choices?.[0]?.message?.content;
+    let content = data?.choices?.[0]?.message?.content;
 
     if (!content) {
+      console.error('OpenRouter empty response:', JSON.stringify(data));
       return NextResponse.json(
         { error: 'No content returned from AI.' },
         { status: 502 }
       );
+    }
+
+    // Strip markdown code fences if present
+    content = content.trim();
+    if (content.startsWith('```')) {
+      content = content.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
     }
 
     const parsed = JSON.parse(content);
