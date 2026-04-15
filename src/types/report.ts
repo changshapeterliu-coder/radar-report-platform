@@ -7,6 +7,7 @@ export interface ReportContent {
 export interface ReportModule {
   title: string;
   subtitle?: string;
+  paragraphs?: string[];
   tables: ReportTable[];
   analysisSections: AnalysisSection[];
   highlightBoxes: HighlightBox[];

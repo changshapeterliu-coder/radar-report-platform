@@ -12,6 +12,7 @@ Return ONLY valid JSON with this exact structure:
     {
       "title": "module title",
       "subtitle": "optional subtitle",
+      "paragraphs": ["paragraph 1 text", "paragraph 2 text"],
       "tables": [
         {
           "headers": ["Col1", "Col2"],
@@ -38,9 +39,10 @@ RULES:
 3. Format tabular data into tables with headers and rows.
 4. Badge levels: "high" for critical, "medium" for moderate, "low" for minor.
 5. Extract quotes into quotes array, key findings into keyPoints.
-6. Every module MUST have at least one table and one analysisSections entry.
-7. Keep original language (Chinese stays Chinese, English stays English).
-8. Return ONLY valid JSON. No markdown, no explanation, no code fences.`;
+6. IMPORTANT: Put ALL descriptive text, introductions, background explanations, deep analysis paragraphs, expert commentary, action guides, and any prose content into the "paragraphs" array. Do NOT discard any text content.
+7. Tables and analysisSections are optional per module. If a section has no tabular data, use empty arrays.
+8. Keep original language (Chinese stays Chinese, English stays English).
+9. Return ONLY valid JSON. No markdown, no explanation, no code fences.`;
 
 export async function POST(request: NextRequest) {
   try {
@@ -61,8 +63,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const truncatedText = text.trim().length > 20000
-      ? text.trim().slice(0, 20000) + '\n\n[Text truncated]'
+    const truncatedText = text.trim().length > 50000
+      ? text.trim().slice(0, 50000) + '\n\n[Text truncated]'
       : text.trim();
 
     const typeHint = reportType === 'topic'

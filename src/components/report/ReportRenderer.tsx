@@ -165,6 +165,15 @@ function ModuleCard({ module }: { module: ReportModule }) {
 
       {/* Body */}
       <div className="p-5">
+        {/* Paragraphs */}
+        {module.paragraphs && module.paragraphs.length > 0 && (
+          <div className="mb-4 space-y-3">
+            {module.paragraphs.map((p, i) => (
+              <p key={i} className="text-sm leading-relaxed text-gray-700">{p}</p>
+            ))}
+          </div>
+        )}
+
         {/* Tables */}
         {module.tables.map((t, i) => (
           <TableRenderer key={i} table={t} />
