@@ -24,7 +24,7 @@ type NewsRow = Database['public']['Tables']['news']['Row'];
 type TopicRankingRow = Database['public']['Tables']['topic_rankings']['Row'];
 
 export default function DashboardPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const router = useRouter();
   const { currentDomainId } = useDomain();
   const supabase = useMemo(() => createClient(), []);
@@ -124,6 +124,13 @@ export default function DashboardPage() {
     if (channel === 'Policy') return { icon: '📋', color: 'bg-blue-100 text-[#146eb4] border-blue-300' };
     if (channel === 'Alert') return { icon: '⚠️', color: 'bg-red-100 text-red-700 border-red-300' };
     return { icon: '📰', color: 'bg-gray-100 text-gray-700 border-gray-300' };
+  };
+
+  // Follow global language for news title/summary
+  const getNewsTitle = (item: NewsRow) => {
+    const translated = (item as Record<string, unknown>).content_translated as { title?: string } | null;
+    if (i18n.language === 'en' && translated?.title) return translated.title;
+    return item.title;
   };
 
   if (loading) {
@@ -296,7 +303,7 @@ export default function DashboardPage() {
                               {item.source_channel}
                             </span>
                           </div>
-                          <h3 className="font-semibold text-[#232f3e] text-sm mt-1 line-clamp-2">{item.title}</h3>
+                          <h3 className="font-semibold text-[#232f3e] text-sm mt-1 line-clamp-2">{getNewsTitle(item)}</h3>
                           <p className="text-xs text-gray-400 mt-1">
                             {new Date(item.published_at).toLocaleDateString()}
                           </p>
@@ -330,7 +337,7 @@ export default function DashboardPage() {
                               {item.source_channel}
                             </span>
                           </div>
-                          <h3 className="font-medium text-[#232f3e] text-sm mt-1 line-clamp-2">{item.title}</h3>
+                          <h3 className="font-medium text-[#232f3e] text-sm mt-1 line-clamp-2">{getNewsTitle(item)}</h3>
                           <p className="text-xs text-gray-400 mt-1">
                             {new Date(item.published_at).toLocaleDateString()}
                           </p>

@@ -10,7 +10,7 @@ import type { Database } from '@/types/database';
 type NewsRow = Database['public']['Tables']['news']['Row'];
 
 export default function NewsPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const router = useRouter();
   const { currentDomainId } = useDomain();
   const supabase = useMemo(() => createClient(), []);
@@ -39,6 +39,16 @@ export default function NewsPage() {
     fetchNews();
   }, [supabase, currentDomainId]);
 
+  // Helper to get display title/summary based on global lang
+  const getDisplay = (item: NewsRow) => {
+    const translated = (item as Record<string, unknown>).content_translated as { title?: string; summary?: string } | null;
+    const useTranslated = i18n.language === 'en' && translated;
+    return {
+      title: useTranslated && translated.title ? translated.title : item.title,
+      summary: useTranslated && translated.summary ? translated.summary : item.summary,
+    };
+  };
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-[#232f3e] mb-6">{t('news.title')}</h1>
@@ -51,7 +61,9 @@ export default function NewsPage() {
         <p className="text-center text-gray-500 py-12">{t('news.noNews')}</p>
       ) : (
         <div className="space-y-3">
-          {news.map((item) => (
+          {news.map((item) => {
+            const display = getDisplay(item);
+            return (
             <button
               key={item.id}
               onClick={() => router.push(`/news/${item.id}`)}
@@ -60,7 +72,7 @@ export default function NewsPage() {
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-semibold text-[#232f3e]">{item.title}</h3>
+                    <h3 className="font-semibold text-[#232f3e]">{display.title}</h3>
                     {item.is_pinned && (
                       <span className="inline-block rounded-full bg-red-100 text-red-700 border border-red-300 px-2 py-0.5 text-xs font-bold">
                         {t('news.pinned')}
@@ -70,8 +82,8 @@ export default function NewsPage() {
                       {item.source_channel}
                     </span>
                   </div>
-                  {item.summary && (
-                    <p className="text-sm text-gray-600 mt-1 line-clamp-2">{item.summary}</p>
+                  {display.summary && (
+                    <p className="text-sm text-gray-600 mt-1 line-clamp-2">{display.summary}</p>
                   )}
                 </div>
                 <p className="text-xs text-gray-400 whitespace-nowrap">
@@ -79,7 +91,8 @@ export default function NewsPage() {
                 </p>
               </div>
             </button>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

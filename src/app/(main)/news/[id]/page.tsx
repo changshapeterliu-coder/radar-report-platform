@@ -10,7 +10,7 @@ type NewsRow = Database['public']['Tables']['news']['Row'];
 
 export default function NewsDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
 
@@ -54,6 +54,12 @@ export default function NewsDetailPage({ params }: { params: Promise<{ id: strin
     );
   }
 
+  // Follow global language: use translated version if available and lang is EN
+  // Assumption: original news written in ZH, translated to EN
+  const translated = (news as Record<string, unknown>).content_translated as { title?: string; summary?: string; content?: string } | null;
+  const displayTitle = i18n.language === 'en' && translated?.title ? translated.title : news.title;
+  const displayContent = i18n.language === 'en' && translated?.content ? translated.content : news.content;
+
   return (
     <div>
       <button
@@ -75,14 +81,14 @@ export default function NewsDetailPage({ params }: { params: Promise<{ id: strin
           </span>
         </div>
 
-        <h1 className="text-2xl font-bold text-[#232f3e] mb-2">{news.title}</h1>
+        <h1 className="text-2xl font-bold text-[#232f3e] mb-2">{displayTitle}</h1>
 
         <p className="text-sm text-gray-400 mb-6">
           {new Date(news.published_at).toLocaleDateString()}
         </p>
 
         <div className="prose max-w-none text-gray-700 whitespace-pre-wrap">
-          {news.content}
+          {displayContent}
         </div>
       </article>
     </div>

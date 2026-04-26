@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, use, Component, type ReactNode, type ErrorInfo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createClient } from '@/lib/supabase/client';
 import type { ReportContent } from '@/types/report';
 import type { Database } from '@/types/database';
@@ -28,14 +29,12 @@ class ErrorBoundary extends Component<EBProps, EBState> {
 
 export default function ReportViewerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const { i18n } = useTranslation();
   const [report, setReport] = useState<ReportRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState(0);
   const [renderError, setRenderError] = useState(false);
-  const [translatedContent, setTranslatedContent] = useState<ReportContent | null>(null);
-  const [translating, setTranslating] = useState(false);
-  const [showTranslation, setShowTranslation] = useState(false);
 
   useEffect(() => {
     async function fetchReport() {
@@ -83,34 +82,17 @@ export default function ReportViewerPage({ params }: { params: Promise<{ id: str
     );
   }
 
-  const content = report.content as ReportContent;
-  const preTranslated = (report as Record<string, unknown>).content_translated as ReportContent | null;
-  const displayContent = showTranslation && (translatedContent || preTranslated) ? (translatedContent || preTranslated) : content;
+  const originalContent = report.content as ReportContent;
+  const translatedContent = (report as Record<string, unknown>).content_translated as ReportContent | null;
+
+  // Determine target language based on global setting + available translation
+  // Assumption: original reports are uploaded in ZH, translated to EN
+  const currentLang = i18n.language;
+  const displayContent = currentLang === 'en' && translatedContent ? translatedContent : originalContent;
+
+  const content = originalContent; // For title/dateRange fallback when no translation
   const modules = displayContent?.modules ?? [];
   const activeModule = modules[activeTab];
-
-  const handleTranslate = async (targetLang: 'zh' | 'en') => {
-    // If pre-translated version exists, use it instantly
-    if (preTranslated && !translatedContent) {
-      setTranslatedContent(preTranslated);
-      setShowTranslation(true);
-      return;
-    }
-    setTranslating(true);
-    try {
-      const res = await fetch('/api/ai/translate-report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, targetLang }),
-      });
-      if (res.ok) {
-        const translated = await res.json();
-        setTranslatedContent(translated);
-        setShowTranslation(true);
-      }
-    } catch { /* ignore */ }
-    setTranslating(false);
-  };
 
   const typeBadge =
     report.type === 'regular' ? (
@@ -133,12 +115,12 @@ export default function ReportViewerPage({ params }: { params: Promise<{ id: str
         <div className="max-w-[1200px] mx-auto">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-3 border-b border-white/10">
             <div>
-              <h1 className="text-white text-xl font-bold">{content.title ?? report.title}</h1>
+              <h1 className="text-white text-xl font-bold">{displayContent?.title ?? content.title ?? report.title}</h1>
               <div className="flex items-center gap-2 mt-1">{typeBadge}</div>
             </div>
             <div className="flex items-center gap-2">
               <div className="bg-[#146eb4] text-white px-4 py-2 rounded text-sm font-medium whitespace-nowrap">
-                {content.dateRange ?? report.date_range}
+                {displayContent?.dateRange ?? content.dateRange ?? report.date_range}
               </div>
               <button
                 onClick={() => window.print()}
@@ -146,31 +128,6 @@ export default function ReportViewerPage({ params }: { params: Promise<{ id: str
               >
                 📄 Export PDF
               </button>
-              {showTranslation ? (
-                <button
-                  onClick={() => setShowTranslation(false)}
-                  className="rounded bg-white/20 px-3 py-2 text-xs text-white hover:bg-white/30"
-                >
-                  Original
-                </button>
-              ) : (
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => handleTranslate('zh')}
-                    disabled={translating}
-                    className="rounded bg-[#ff9900] px-3 py-2 text-xs text-white hover:bg-[#e88b00] disabled:opacity-50"
-                  >
-                    {translating ? '翻译中...' : '译中文'}
-                  </button>
-                  <button
-                    onClick={() => handleTranslate('en')}
-                    disabled={translating}
-                    className="rounded bg-[#ff9900] px-3 py-2 text-xs text-white hover:bg-[#e88b00] disabled:opacity-50"
-                  >
-                    {translating ? 'Translating...' : 'To EN'}
-                  </button>
-                </div>
-              )}
             </div>
           </div>
 
@@ -187,7 +144,7 @@ export default function ReportViewerPage({ params }: { params: Promise<{ id: str
         {renderError ? (
           <div className="bg-white rounded-lg shadow p-6 overflow-x-auto">
             <p className="text-sm text-gray-500 mb-2">Rendering failed — showing raw data:</p>
-            <pre className="text-xs whitespace-pre-wrap break-words">{JSON.stringify(content, null, 2)}</pre>
+            <pre className="text-xs whitespace-pre-wrap break-words">{JSON.stringify(displayContent, null, 2)}</pre>
           </div>
         ) : activeModule ? (
           <ErrorBoundary onError={() => setRenderError(true)}>
@@ -196,7 +153,7 @@ export default function ReportViewerPage({ params }: { params: Promise<{ id: str
         ) : (
           <div className="bg-white rounded-lg shadow p-6 overflow-x-auto">
             <p className="text-sm text-gray-500 mb-2">No module content available — showing raw data:</p>
-            <pre className="text-xs whitespace-pre-wrap break-words">{JSON.stringify(content, null, 2)}</pre>
+            <pre className="text-xs whitespace-pre-wrap break-words">{JSON.stringify(displayContent, null, 2)}</pre>
           </div>
         )}
       </main>

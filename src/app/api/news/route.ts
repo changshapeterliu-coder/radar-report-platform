@@ -148,5 +148,55 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Auto-translate news (non-blocking: don't fail the request if translation fails)
+  try {
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (apiKey && data) {
+      const originalText = JSON.stringify({ title: data.title, summary: data.summary, content: data.content });
+      const isChinese = /[\u4e00-\u9fa5]/.test(originalText);
+      const targetLang = isChinese ? 'English' : 'Chinese (Simplified)';
+
+      const translateRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'openrouter/auto',
+          messages: [
+            {
+              role: 'system',
+              content: `You are a translator. Translate the JSON object's "title", "summary", and "content" fields to ${targetLang}. Keep structure identical. Return ONLY the JSON object, no markdown fences.`,
+            },
+            { role: 'user', content: originalText },
+          ],
+        }),
+      });
+
+      if (translateRes.ok) {
+        const translateData = await translateRes.json();
+        let translatedStr = translateData?.choices?.[0]?.message?.content;
+        if (translatedStr) {
+          translatedStr = translatedStr.trim();
+          if (translatedStr.startsWith('```')) {
+            translatedStr = translatedStr.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
+          }
+          try {
+            const translated = JSON.parse(translatedStr);
+            await supabase
+              .from('news')
+              .update({ content_translated: translated })
+              .eq('id', data.id);
+          } catch (e) {
+            console.error('[News] Translation parse error:', e);
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[News] Translation failed (non-blocking):', e);
+  }
+
   return NextResponse.json({ data }, { status: 201 });
 }
