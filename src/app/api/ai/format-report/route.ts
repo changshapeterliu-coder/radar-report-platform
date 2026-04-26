@@ -2,57 +2,73 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-const SYSTEM_PROMPT = `You are a report formatting assistant. Parse raw report text into a JSON structure called ReportContent.
+const SYSTEM_PROMPT = `You are a report formatting assistant. Parse raw report text into a JSON structure called ReportContent. Your job is classification & light restructuring — NOT rewriting.
 
 Return ONLY valid JSON with this exact structure:
 {
   "title": "report title",
-  "dateRange": "date range, e.g. 2025-03-03 ~ 2025-03-16",
+  "dateRange": "standardized date range",
   "modules": [
     {
       "title": "module title",
-      "subtitle": "optional subtitle",
-      "paragraphs": ["paragraph 1 text", "paragraph 2 text"],
-      "tables": [
-        {
-          "headers": ["Col1", "Col2"],
-          "rows": [
-            { "cells": [{ "text": "value" }, { "text": "value", "badge": { "text": "High", "level": "high" } }] }
-          ]
-        }
+      "subtitle": "optional",
+      "blocks": [
+        { "type": "heading", "text": "subsection heading" },
+        { "type": "narrative", "text": "a prose paragraph, verbatim from source" },
+        { "type": "insight", "label": "Key Insight", "text": "a key takeaway or synthesis" },
+        { "type": "quote", "quote": "verbatim seller voice", "source": "channel · author · date" },
+        { "type": "stat", "stats": [{ "value": "5.2", "label": "avg calls per case" }, { "value": "¥500-3K", "label": "service price" }] },
+        { "type": "warning", "label": "Policy Conflict", "text": "warning content" },
+        { "type": "recommendation", "label": "For AHS", "text": "actionable recommendation" },
+        { "type": "list", "items": [{ "title": "optional bold lead", "content": "main text", "meta": "optional metadata like volume score" }] }
       ],
-      "analysisSections": [
-        {
-          "title": "section title",
-          "quotes": [{ "text": "quote", "source": "source" }],
-          "keyPoints": [{ "label": "label", "content": "detail", "impactTags": ["tag1"] }]
-        }
-      ],
-      "highlightBoxes": [{ "title": "title", "content": "content" }]
+      "tables": [{"headers": ["Col1","Col2"], "rows": [{"cells": [{"text":"v"},{"text":"v","badge":{"text":"High","level":"high"}}]}]}],
+      "analysisSections": [],
+      "highlightBoxes": []
     }
   ]
 }
 
-RULES:
-1. Extract title and date range from text.
-2. Group content into modules (each major section = one module).
-3. Format tabular data into tables with headers and rows.
-4. Badge levels: "high" for critical, "medium" for moderate, "low" for minor.
-5. Extract quotes into quotes array, key findings into keyPoints.
-6. CONTENT DECOMPOSITION (very important for readability):
-   - Long content should be BROKEN DOWN into small structured units, not dumped as one paragraph
-   - For each piece of content, prefer in this order:
-     a) Seller quotes / direct speech → quotes array (with source)
-     b) Short key insights / callouts / definitions → highlightBoxes (title + content)
-     c) Bullet-point style findings → keyPoints (label + content + impactTags)
-     d) Tabular data → tables
-     e) ONLY use paragraphs for narrative flow (intros, backgrounds, transitions)
-   - Each paragraph in "paragraphs" should be ≤ 150 characters when possible
-   - If a paragraph is > 300 chars, try to split it into 2-3 shorter paragraphs OR convert parts to keyPoints/highlightBoxes
-   - Numbered lists (1., 2., 3.) inside text → break into separate paragraphs starting with the number
-7. Tables and analysisSections are optional per module. If a section has no tabular data, use empty arrays.
-8. Keep original language (Chinese stays Chinese, English stays English).
-9. Return ONLY valid JSON. No markdown, no explanation, no code fences.`;
+CRITICAL RULES:
+
+1. **Do NOT rewrite, summarize, paraphrase, or shorten any content.** Keep original wording verbatim. Your job is to classify & structure, not to edit.
+
+2. **Preserve all information.** Nothing from the source text should be lost. If unsure where a piece fits, put it in "narrative".
+
+3. **Block type classification**:
+   - heading: subsection titles (e.g., "2.1 KOL 话术 Top 5")
+   - narrative: prose paragraphs, intros, backgrounds, transitions
+   - insight: key takeaways, synthesis statements, important conclusions
+   - quote: direct speaker voice, seller verbatim (must have quote + source)
+   - stat: numeric data points — GROUP related stats into a single "stat" block with multiple items in "stats" array
+   - warning: risks, policy conflicts, red flags
+   - recommendation: action items, suggestions, next steps
+   - list: ordered or unordered lists of related items (e.g., top 5 findings)
+
+4. **Time range standardization** — Edit the dateRange field to match one of these formats:
+   - If source has full dates: "YYYY-MM-DD ~ YYYY-MM-DD" (e.g., "2025-10-01 ~ 2026-04-15")
+   - If source has only month: "YYYY-MM ~ YYYY-MM" (e.g., "2025-10 ~ 2026-04")
+   - If source has only quarter: "YYYY Q3 ~ YYYY Q4"
+   - Normalize 中文日期 / slash-dates / natural language into standard format
+   - This is the ONLY edit you make to content — everything else stays verbatim
+
+5. **Reorder blocks for better readability** — You may reorder blocks within a module to improve visual rhythm:
+   - Start with a narrative intro if available
+   - Put headings before related blocks
+   - Group related stats together
+   - Place insights near their supporting evidence
+   - End with recommendations when relevant
+   - Do NOT reorder across modules — only within a module
+   - Do NOT create blocks that don't exist in source — only reorder what's there
+
+6. **Tables, analysisSections, highlightBoxes**:
+   - If source has tabular data, put in tables (not as list block)
+   - analysisSections & highlightBoxes can remain empty if not naturally present
+   - Do NOT force these structures — prefer blocks for most content
+
+7. **Keep original language** — Chinese stays Chinese, English stays English. Do not translate.
+
+8. Return ONLY valid JSON. No markdown fences, no explanation.`;
 
 export async function POST(request: NextRequest) {
   try {
@@ -91,7 +107,7 @@ export async function POST(request: NextRequest) {
         model: 'openrouter/auto',
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: `${typeHint}\n\nParse this report text into ReportContent JSON. Return ONLY the JSON object, no markdown fences, no explanation:\n\n---\n${truncatedText}\n---` },
+          { role: 'user', content: `${typeHint}\n\nParse this report text into ReportContent JSON. Classify content into blocks, keep all original wording verbatim, standardize only the dateRange field. Return ONLY the JSON object:\n\n---\n${truncatedText}\n---` },
         ],
       }),
     });
