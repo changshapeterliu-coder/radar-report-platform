@@ -51,7 +51,7 @@ function SmartParagraph({ text, index }: { text: string; index: number }) {
   );
 
   // Detect if it starts with a number/bullet pattern
-  const numberedMatch = trimmed.match(/^(\d+)[\.\、\）\)]\s*(.+)/s);
+  const numberedMatch = trimmed.match(/^(\d+)[\.\、\）\)]\s*([\s\S]+)/);
 
   if (isQuote) {
     return (
