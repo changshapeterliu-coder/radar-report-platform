@@ -39,7 +39,17 @@ RULES:
 3. Format tabular data into tables with headers and rows.
 4. Badge levels: "high" for critical, "medium" for moderate, "low" for minor.
 5. Extract quotes into quotes array, key findings into keyPoints.
-6. IMPORTANT: Put ALL descriptive text, introductions, background explanations, deep analysis paragraphs, expert commentary, action guides, and any prose content into the "paragraphs" array. Do NOT discard any text content.
+6. CONTENT DECOMPOSITION (very important for readability):
+   - Long content should be BROKEN DOWN into small structured units, not dumped as one paragraph
+   - For each piece of content, prefer in this order:
+     a) Seller quotes / direct speech → quotes array (with source)
+     b) Short key insights / callouts / definitions → highlightBoxes (title + content)
+     c) Bullet-point style findings → keyPoints (label + content + impactTags)
+     d) Tabular data → tables
+     e) ONLY use paragraphs for narrative flow (intros, backgrounds, transitions)
+   - Each paragraph in "paragraphs" should be ≤ 150 characters when possible
+   - If a paragraph is > 300 chars, try to split it into 2-3 shorter paragraphs OR convert parts to keyPoints/highlightBoxes
+   - Numbered lists (1., 2., 3.) inside text → break into separate paragraphs starting with the number
 7. Tables and analysisSections are optional per module. If a section has no tabular data, use empty arrays.
 8. Keep original language (Chinese stays Chinese, English stays English).
 9. Return ONLY valid JSON. No markdown, no explanation, no code fences.`;
