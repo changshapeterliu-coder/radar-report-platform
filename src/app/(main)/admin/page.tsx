@@ -129,6 +129,26 @@ export default function AdminPage() {
     <AdminGuard>
       <div>
         <h1 className="text-2xl font-bold text-[#232f3e] mb-6">{t('admin.title')}</h1>
+
+        {/* Automation Section */}
+        <h2 className="text-lg font-bold text-[#232f3e] mb-3">Automation</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+          <Link
+            href="/admin/schedule-settings"
+            className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-4 hover:border-[#ff9900] hover:shadow transition-all"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#ff9900]/10 text-[#ff9900]">⏱</div>
+            <span className="font-medium text-[#232f3e]">Schedule Settings</span>
+          </Link>
+          <Link
+            href="/admin/scheduled-runs"
+            className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-4 hover:border-[#ff9900] hover:shadow transition-all"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#146eb4]/10 text-[#146eb4]">▶</div>
+            <span className="font-medium text-[#232f3e]">Scheduled Runs</span>
+          </Link>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
           <Link href="/admin/reports/new" className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-4 hover:border-[#ff9900] hover:shadow transition-all">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#ff9900]/10 text-[#ff9900]">📄</div>

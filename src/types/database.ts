@@ -204,6 +204,123 @@ export interface Database {
           created_at?: string;
         };
       };
+      schedule_configs: {
+        Row: {
+          id: string;
+          domain_id: string;
+          enabled: boolean;
+          cadence: 'weekly' | 'biweekly';
+          day_of_week: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+          time_of_day: string;
+          timezone: string;
+          report_type: 'regular' | 'topic';
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          domain_id: string;
+          enabled?: boolean;
+          cadence?: 'weekly' | 'biweekly';
+          day_of_week?: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+          time_of_day?: string;
+          timezone?: string;
+          report_type?: 'regular' | 'topic';
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          domain_id?: string;
+          enabled?: boolean;
+          cadence?: 'weekly' | 'biweekly';
+          day_of_week?: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+          time_of_day?: string;
+          timezone?: string;
+          report_type?: 'regular' | 'topic';
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      prompt_templates: {
+        Row: {
+          id: string;
+          domain_id: string;
+          prompt_type: 'gemini_prompt' | 'kimi_prompt' | 'synthesizer_prompt';
+          template_text: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          domain_id: string;
+          prompt_type: 'gemini_prompt' | 'kimi_prompt' | 'synthesizer_prompt';
+          template_text: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          domain_id?: string;
+          prompt_type?: 'gemini_prompt' | 'kimi_prompt' | 'synthesizer_prompt';
+          template_text?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      scheduled_runs: {
+        Row: {
+          id: string;
+          domain_id: string;
+          trigger_type: 'scheduled' | 'manual';
+          status: 'queued' | 'running' | 'succeeded' | 'failed' | 'partial';
+          coverage_window_start: string;
+          coverage_window_end: string;
+          week_label: string;
+          draft_report_id: string | null;
+          failure_reason: string | null;
+          gemini_output: unknown | null;
+          kimi_output: unknown | null;
+          synthesizer_output: unknown | null;
+          duration_ms: number | null;
+          triggered_at: string;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          domain_id: string;
+          trigger_type: 'scheduled' | 'manual';
+          status?: 'queued' | 'running' | 'succeeded' | 'failed' | 'partial';
+          coverage_window_start: string;
+          coverage_window_end: string;
+          week_label: string;
+          draft_report_id?: string | null;
+          failure_reason?: string | null;
+          gemini_output?: unknown | null;
+          kimi_output?: unknown | null;
+          synthesizer_output?: unknown | null;
+          duration_ms?: number | null;
+          triggered_at?: string;
+          completed_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          domain_id?: string;
+          trigger_type?: 'scheduled' | 'manual';
+          status?: 'queued' | 'running' | 'succeeded' | 'failed' | 'partial';
+          coverage_window_start?: string;
+          coverage_window_end?: string;
+          week_label?: string;
+          draft_report_id?: string | null;
+          failure_reason?: string | null;
+          gemini_output?: unknown | null;
+          kimi_output?: unknown | null;
+          synthesizer_output?: unknown | null;
+          duration_ms?: number | null;
+          triggered_at?: string;
+          completed_at?: string | null;
+        };
+      };
     };
     Functions: {
       search_reports: {
