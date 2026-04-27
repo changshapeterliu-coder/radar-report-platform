@@ -19,7 +19,7 @@
 -- ============================================================
 
 -- Resolve the Account Health domain id at run time so we don't hard-code UUIDs.
-DO $
+DO $do$
 DECLARE
   v_domain_id UUID;
   v_shared_researcher_prompt TEXT;
@@ -167,4 +167,4 @@ Block 类型（每个 block 选一种）：
      SET template_text = v_synthesizer_prompt, updated_at = NOW()
    WHERE domain_id = v_domain_id AND prompt_type = 'synthesizer_prompt';
 
-END $;
+END $do$;
