@@ -42,7 +42,11 @@ export const generateReport = inngest.createFunction(
   {
     id: 'generate-report',
     retries: 0,
-    idempotency: 'event.data.domainId + "-" + event.data.coverageWindowStart',
+    // NOTE: function-level idempotency intentionally omitted. Uniqueness per
+    // (domain, coverage_window) is enforced by the DB partial unique index
+    // on scheduled_runs (status IN 'queued','running','succeeded') + the
+    // activeRuns check in trigger/retry API routes. A function-level
+    // idempotency key here would block legitimate retries after failure.
     concurrency: { limit: 5 },
     triggers: [{ event: 'report/generate.requested' }],
   },
