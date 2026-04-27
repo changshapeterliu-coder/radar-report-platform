@@ -4,12 +4,11 @@ import type { CoverageWindow, EngineError } from './types';
 import { callOpenRouter, type ChatMessage } from './engines/openrouter-client';
 
 /**
- * Synthesizer model — chosen for long context (1M tokens fits both engine
- * traces without trimming), structured JSON output reliability, and not
- * being blocked by the account's region restrictions on
- * OpenAI/Anthropic/Google providers.
+ * Synthesizer model — DeepSeek V3.2 for stable, widely-provisioned
+ * structured JSON output that clears the account's privacy guardrails.
+ * V3.2 has 128k context which comfortably fits both engine traces.
  */
-const DEFAULT_MODEL = 'deepseek/deepseek-v4-pro';
+const DEFAULT_MODEL = 'deepseek/deepseek-v3.2';
 
 export const REQUIRED_MODULE_TITLES = [
   'Account Suspension Trends',

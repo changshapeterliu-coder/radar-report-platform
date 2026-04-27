@@ -7,23 +7,23 @@ import {
 } from './loop';
 
 /**
- * Engine A — DeepSeek V4 Pro.
+ * Engine A — DeepSeek V3.2.
  *
  * File name / function name kept as "gemini" to preserve DB column mapping
  * (scheduled_runs.gemini_output) and avoid ripple-refactoring
  * generate-report.ts, RLS policies, and retention scripts. The model running
- * inside is whatever DEFAULT_MODEL points to — currently DeepSeek V4 Pro,
- * chosen because (1) 1M context fits the synthesizer trace comfortably,
- * (2) strong Chinese synthesis + structured JSON output, (3) not blocked by
- * the account's region restrictions on OpenAI/Anthropic/Google providers.
+ * inside is whatever DEFAULT_MODEL points to — currently DeepSeek V3.2,
+ * a stable, widely-provisioned endpoint that clears the account's privacy
+ * and data-policy guardrails. V4 Pro was attempted first but its early
+ * provider roster was filtered to zero by account privacy settings.
  */
-const DEFAULT_MODEL = 'deepseek/deepseek-v4-pro';
+const DEFAULT_MODEL = 'deepseek/deepseek-v3.2';
 /**
  * `:online` suffix routes through OpenRouter's Exa web-search wrapper so the
  * researcher stages get real-time results instead of training-data answers.
  * See https://openrouter.ai/docs/features/web-search — $0.004/request + model price.
  */
-const DEFAULT_RESEARCHER_MODEL = 'deepseek/deepseek-v4-pro:online';
+const DEFAULT_RESEARCHER_MODEL = 'deepseek/deepseek-v3.2:online';
 
 export interface GeminiLoopInput {
   coverageWindow: CoverageWindow;

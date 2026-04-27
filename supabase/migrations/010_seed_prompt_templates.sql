@@ -83,7 +83,7 @@ BEGIN
 
 覆盖时间窗口：{start_date} 至 {end_date}（周标签：{week_label}）。
 
-Engine A 产出（DeepSeek V4 Pro 视角，相同渠道）：
+Engine A 产出（DeepSeek V3.2 视角，相同渠道）：
 {gemini_output}
 
 Engine B 产出（Kimi K2 视角，相同渠道）：
