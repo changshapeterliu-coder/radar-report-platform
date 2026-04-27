@@ -3,15 +3,28 @@ import { createMiddlewareClient } from '@/lib/supabase/middleware';
 
 const PUBLIC_ROUTES = ['/login'];
 
+/**
+ * Routes that should be completely unauthenticated — they handle their own
+ * auth (signature verification for Inngest, etc.) and must be reachable by
+ * external servers with no user session.
+ */
+const UNAUTHENTICATED_API_ROUTES = ['/api/inngest'];
+
 export async function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // Let Inngest (and any future external-webhook routes) through untouched.
+  // These routes handle their own signature verification via the Inngest SDK.
+  if (UNAUTHENTICATED_API_ROUTES.some((route) => pathname.startsWith(route))) {
+    return NextResponse.next();
+  }
+
   const { supabase, response } = createMiddlewareClient(request);
 
   // Refresh session — this keeps the session alive
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  const { pathname } = request.nextUrl;
 
   // Allow unauthenticated users to access public routes
   if (PUBLIC_ROUTES.some((route) => pathname.startsWith(route))) {
