@@ -11,6 +11,7 @@ import type {
   InngestGenerateReportEvent,
 } from '@/types/scheduled-runs';
 import { determineStatus, buildFailureReason } from './determine-status';
+import { formatDateRange } from '@/lib/inngest/coverage-window';
 
 const MODULE_TITLES = [
   'Account Suspension Trends',
@@ -234,17 +235,22 @@ export const generateReport = inngest.createFunction(
         );
       }
 
+      const humanDateRange = formatDateRange(
+        new Date(coverageWindowStart),
+        new Date(coverageWindowEnd)
+      );
+
       const finalContent: ReportContent =
-        content ?? buildSkeletonDraft(weekLabel, coverageWindowStart, coverageWindowEnd);
+        content ?? buildSkeletonDraft(weekLabel, humanDateRange);
 
       const { data, error } = await supabase
         .from('reports')
         .insert({
           domain_id: domainId,
           created_by: admins[0].id as string,
-          title: `Account Health Radar Report - ${weekLabel}`,
+          title: `Account Health Radar Report · ${weekLabel}`,
           type: 'regular',
-          date_range: `${coverageWindowStart} ~ ${coverageWindowEnd}`,
+          date_range: humanDateRange,
           week_label: weekLabel,
           status: 'draft',
           content: finalContent,
@@ -343,12 +349,11 @@ export const generateReport = inngest.createFunction(
  */
 function buildSkeletonDraft(
   weekLabel: string,
-  startIso: string,
-  endIso: string
+  humanDateRange: string
 ): ReportContent {
   return {
-    title: `Account Health Radar Report - ${weekLabel}`,
-    dateRange: `${startIso} ~ ${endIso}`,
+    title: `Account Health Radar Report · ${weekLabel}`,
+    dateRange: humanDateRange,
     modules: MODULE_TITLES.map((title) => ({
       title,
       blocks: [],

@@ -2,6 +2,7 @@ import type { ReportContent } from '@/types/report';
 import { substitute } from './substitute';
 import type { CoverageWindow, EngineError } from './types';
 import { callOpenRouter, type ChatMessage } from './engines/openrouter-client';
+import { formatDateRange } from '@/lib/inngest/coverage-window';
 
 /**
  * Synthesizer model — DeepSeek V3.2 for stable, widely-provisioned
@@ -55,9 +56,22 @@ export async function synthesize(
     };
   }
 
+  // Human-readable YYYY-MM-DD ~ YYYY-MM-DD (Asia/Shanghai wall-clock).
+  // Synthesizer uses this for the report's `dateRange` field AND as the
+  // {start_date}/{end_date} substitution inside the synthesizer prompt —
+  // historical ISO timestamps like "2026-04-12T16:00:00Z" were ugly.
+  const startShanghai = formatDateRange(
+    new Date(input.coverageWindow.startIso),
+    new Date(input.coverageWindow.startIso)
+  ).split(' ~ ')[0];
+  const endShanghai = formatDateRange(
+    new Date(input.coverageWindow.endIso),
+    new Date(input.coverageWindow.endIso)
+  ).split(' ~ ')[0];
+
   const resolvedPrompt = substitute(input.synthesizerPrompt, {
-    start_date: input.coverageWindow.startIso,
-    end_date: input.coverageWindow.endIso,
+    start_date: startShanghai,
+    end_date: endShanghai,
     week_label: input.coverageWindow.weekLabel,
     gemini_output:
       input.geminiSummary !== null

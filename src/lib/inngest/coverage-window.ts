@@ -130,6 +130,39 @@ function pad2(n: number): string {
 }
 
 /**
+ * ISO 8601 week number for an Asia/Shanghai calendar date.
+ *
+ * ISO rules: week 1 = the week containing the year's first Thursday. Week
+ * boundaries are Monday-Sunday. A year can have 52 or 53 weeks.
+ *
+ * We compute on Shanghai wall-clock so that a date like 2026-01-01 Shanghai
+ * gets its correct week number regardless of UTC offset.
+ */
+function isoWeekNumberShanghai(utc: Date): number {
+  const p = toShanghaiParts(utc);
+  // Algorithm: make a UTC Date from the Shanghai Y-M-D, then apply the
+  // classic "Thursday of ISO week" trick.
+  const d = new Date(Date.UTC(p.year, p.month - 1, p.day));
+  // ISO day-of-week: Mon=1..Sun=7
+  const dayNum = d.getUTCDay() === 0 ? 7 : d.getUTCDay();
+  // Shift to the Thursday of this week (ISO week = Thursday's week).
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNum = Math.ceil(
+    ((d.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7
+  );
+  return weekNum;
+}
+
+/**
+ * Formats a Shanghai-local ISO date as `YYYY-MM-DD`.
+ */
+function formatShanghaiDate(utc: Date): string {
+  const p = toShanghaiParts(utc);
+  return `${p.year}-${pad2(p.month)}-${pad2(p.day)}`;
+}
+
+/**
  * Computes the Coverage_Window given a trigger instant and cadence.
  *
  * Weekly: start = previous Monday 00:00 Shanghai, end = previous Sunday 23:59:59 Shanghai.
@@ -152,7 +185,6 @@ export function computeCoverageWindow(
     0,
     -1
   );
-  const endParts = toShanghaiParts(endUtc);
   // Start = previous Monday 00:00 Shanghai (weekly) OR 14 days earlier (biweekly).
   const startOffsetDays = cadence === 'weekly' ? 7 : 14;
   const startUtc = shanghaiWallClockToUtc(
@@ -163,8 +195,7 @@ export function computeCoverageWindow(
     0,
     0
   );
-  const startParts = toShanghaiParts(startUtc);
-  const weekLabel = `${pad2(startParts.month)}${pad2(startParts.day)} to ${pad2(endParts.month)}${pad2(endParts.day)}`;
+  const weekLabel = computeWeekLabel(startUtc, endUtc);
   return {
     startIso: startUtc.toISOString(),
     endIso: endUtc.toISOString(),
@@ -174,11 +205,27 @@ export function computeCoverageWindow(
 
 /**
  * Standalone week-label formatter (exposed for tests).
+ *
+ * Returns ISO week number(s) without year:
+ *   - Single week: `W16`
+ *   - Multi week:  `W16-W17`
+ * Used for display in titles and as a stable key for dashboard trend grouping.
  */
 export function computeWeekLabel(startUtc: Date, endUtc: Date): string {
-  const s = toShanghaiParts(startUtc);
-  const e = toShanghaiParts(endUtc);
-  return `${pad2(s.month)}${pad2(s.day)} to ${pad2(e.month)}${pad2(e.day)}`;
+  const startWeek = isoWeekNumberShanghai(startUtc);
+  const endWeek = isoWeekNumberShanghai(endUtc);
+  return startWeek === endWeek
+    ? `W${pad2(startWeek)}`
+    : `W${pad2(startWeek)}-W${pad2(endWeek)}`;
+}
+
+/**
+ * Human-readable Shanghai-local date range: `YYYY-MM-DD ~ YYYY-MM-DD`.
+ * Exposed for the synthesizer prompt so the generated report carries a
+ * clean date string rather than the raw UTC ISO timestamps.
+ */
+export function formatDateRange(startUtc: Date, endUtc: Date): string {
+  return `${formatShanghaiDate(startUtc)} ~ ${formatShanghaiDate(endUtc)}`;
 }
 
 /**

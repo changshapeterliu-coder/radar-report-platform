@@ -112,7 +112,12 @@ Block 类型（每个 block 选一种）：
 
 4. 每个 module 内 block 序列化为可读顺序：narrative 铺垫 → stats → warnings → key insights → recommendations。
 
-5. 保留 engine 产出里所有 citation URL。在相关 block 的 text 末尾追加 "Source: <url>"，不要丢 URL。
+5. 来源标注规则：
+   - **正文里不要贴 URL**。
+   - 在每个 block 的 text 末尾用中文简写注明渠道类别，例如 "（来源：小红书 / 知无不言）"、"（来源：抖音卖家视频）"、"（来源：微信公众号 · 卖家之家）"。
+   - 如果同一 block 的信号来自多个渠道，合并列出（如 "（来源：小红书、抖音、雨果网）"）。
+   - quote block 的 source 字段保持 "渠道 · 作者 · 日期"格式，但同样**不要放 URL**。
+   - URL 保留在 engine 产出里作为 audit trail，但不要暴露给最终读者。
 
 6. **输出语言用中文**。narrative / insight / recommendation / warning 全部用中文撰写。quote 保留原文语言（中文原话保持中文，英文原话保持英文）。Module 标题保持现有英文（系统固定）。
 

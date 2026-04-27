@@ -10,6 +10,7 @@ import type {
   EngineLoopTrace,
 } from '../types';
 import { callOpenRouter, type ChatMessage } from './openrouter-client';
+import { formatDateRange } from '@/lib/inngest/coverage-window';
 
 /** Caller-injected step runner. Default impl = direct call. Inngest injects step.run. */
 export type StageRunner = <T>(stageName: string, fn: () => Promise<T>) => Promise<T>;
@@ -98,9 +99,16 @@ export async function runEngineLoop(
   };
   const errors: EngineError[] = [];
 
+  // Format dates as Asia/Shanghai YYYY-MM-DD so researcher prompts get a
+  // clean human-readable window rather than UTC ISO timestamps.
+  const humanRange = formatDateRange(
+    new Date(config.coverageWindow.startIso),
+    new Date(config.coverageWindow.endIso)
+  ).split(' ~ ');
+
   const commonVars = {
-    start_date: config.coverageWindow.startIso,
-    end_date: config.coverageWindow.endIso,
+    start_date: humanRange[0] ?? config.coverageWindow.startIso,
+    end_date: humanRange[1] ?? config.coverageWindow.endIso,
     week_label: config.coverageWindow.weekLabel,
     domain_name: config.domainName,
     channel_profile: config.channelProfile,
