@@ -3,7 +3,7 @@ import { substitute } from './substitute';
 import type { CoverageWindow, EngineError } from './types';
 import { callOpenRouter, type ChatMessage } from './engines/openrouter-client';
 
-const DEFAULT_MODEL = 'anthropic/claude-sonnet-4';
+const DEFAULT_MODEL = 'anthropic/claude-sonnet-4.5';
 
 export const REQUIRED_MODULE_TITLES = [
   'Account Suspension Trends',

@@ -6,7 +6,7 @@ import {
   type StageRunner,
 } from './loop';
 
-const DEFAULT_MODEL = 'moonshotai/kimi-k2';
+const DEFAULT_MODEL = 'moonshotai/kimi-k2-0905';
 
 export interface KimiLoopInput {
   coverageWindow: CoverageWindow;
