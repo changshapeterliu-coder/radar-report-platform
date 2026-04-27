@@ -83,9 +83,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Fresh Inngest event id each time — Inngest does event-level dedup in a
+  // 24h window, so reusing the deterministic key would silently drop manual
+  // re-triggers. DB-layer uniqueness is still guarded by the partial unique
+  // index on scheduled_runs and the activeRuns conflict check above.
+  const triggerEventId = `${buildIdempotencyKey(domain_id, coverageWindow.startIso)}:manual:${Date.now()}`;
+
   await inngest.send({
     name: 'report/generate.requested',
-    id: buildIdempotencyKey(domain_id, coverageWindow.startIso),
+    id: triggerEventId,
     data: {
       domainId: domain_id,
       triggerType: 'manual',

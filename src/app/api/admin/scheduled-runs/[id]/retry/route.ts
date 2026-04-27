@@ -85,9 +85,15 @@ export async function POST(
     );
   }
 
+  // Retry must produce a FRESH Inngest event id — reusing the original
+  // idempotency key would hit Inngest's 24h event-level dedup and the event
+  // would be silently dropped. DB-layer uniqueness is still guarded by the
+  // partial unique index (and the activeRuns check above).
+  const retryEventId = `${buildIdempotencyKey(original.domain_id, original.coverage_window_start)}:retry:${Date.now()}`;
+
   await inngest.send({
     name: 'report/generate.requested',
-    id: buildIdempotencyKey(original.domain_id, original.coverage_window_start),
+    id: retryEventId,
     data: {
       domainId: original.domain_id,
       triggerType: 'manual',
