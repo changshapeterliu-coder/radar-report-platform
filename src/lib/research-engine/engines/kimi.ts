@@ -6,12 +6,13 @@ import {
   type StageRunner,
 } from './loop';
 
-const DEFAULT_MODEL = 'moonshotai/kimi-k2-0905';
 /**
- * `:online` suffix routes through OpenRouter's Exa web-search wrapper so the
- * researcher stages get real-time results instead of training-data answers.
- * See https://openrouter.ai/docs/features/web-search — $0.004/request + model price.
+ * Engine B — Moonshot Kimi K2.
+ *
+ * File name kept as "kimi" to preserve DB column mapping
+ * (scheduled_runs.kimi_output).
  */
+const DEFAULT_MODEL = 'moonshotai/kimi-k2-0905';
 const DEFAULT_RESEARCHER_MODEL = 'moonshotai/kimi-k2-0905:online';
 
 export interface KimiLoopInput {
@@ -20,7 +21,8 @@ export interface KimiLoopInput {
   kimiPrompt: string;
   openRouterApiKey: string;
   maxSubquestionsPerRound: number;
-  maxGapSubquestions: number;
+  /** How many top topics per module to deep-dive (typically 3). */
+  deepDivePerModule: number;
 }
 
 export async function runKimiLoop(
@@ -38,10 +40,11 @@ export async function runKimiLoop(
       domainName: input.domainName,
       openRouterApiKey: input.openRouterApiKey,
       maxSubquestionsPerRound: input.maxSubquestionsPerRound,
-      maxGapSubquestions: input.maxGapSubquestions,
+      deepDivePerModule: input.deepDivePerModule,
       plannerTimeoutMs: 2 * 60_000,
-      researcherTimeoutMs: 4 * 60_000,
-      gapAnalyzerTimeoutMs: 2 * 60_000,
+      broadResearcherTimeoutMs: 4 * 60_000,
+      top5RankerTimeoutMs: 2 * 60_000,
+      deepResearcherTimeoutMs: 4 * 60_000,
       engineSummarizerTimeoutMs: 3 * 60_000,
     },
     stageRunner

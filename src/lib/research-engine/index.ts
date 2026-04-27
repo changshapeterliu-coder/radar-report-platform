@@ -10,8 +10,8 @@ import { synthesize } from './synthesizer';
 
 const DEFAULT_ENGINE_TIMEOUT_MS = 5 * 60_000;
 const DEFAULT_SYNTH_TIMEOUT_MS = 3 * 60_000;
-const DEFAULT_MAX_SUBQUESTIONS = 8;
-const DEFAULT_MAX_GAP_SUBQUESTIONS = 4;
+const DEFAULT_MAX_SUBQUESTIONS = 12;
+const DEFAULT_DEEP_DIVE_PER_MODULE = 3;
 
 export type { StageRunner } from './engines/loop';
 export type {
@@ -53,8 +53,8 @@ export async function run(
   const stageRunner = options.stageRunner ?? DEFAULT_STAGE_RUNNER;
   const maxSubquestionsPerRound =
     input.maxSubquestionsPerRound ?? DEFAULT_MAX_SUBQUESTIONS;
-  const maxGapSubquestions =
-    input.maxGapSubquestions ?? DEFAULT_MAX_GAP_SUBQUESTIONS;
+  const deepDivePerModule =
+    input.deepDivePerModule ?? DEFAULT_DEEP_DIVE_PER_MODULE;
   const synthTimeoutMs = input.synthTimeoutMs ?? DEFAULT_SYNTH_TIMEOUT_MS;
   // engineTimeoutMs is advisory; stage-level timeouts in loop.ts are the source of truth.
   void (input.engineTimeoutMs ?? DEFAULT_ENGINE_TIMEOUT_MS);
@@ -70,7 +70,7 @@ export async function run(
         geminiPrompt: input.geminiPrompt,
         openRouterApiKey: input.openRouterApiKey,
         maxSubquestionsPerRound,
-        maxGapSubquestions,
+        deepDivePerModule,
       },
       stageRunner
     ),
@@ -81,7 +81,7 @@ export async function run(
         kimiPrompt: input.kimiPrompt,
         openRouterApiKey: input.openRouterApiKey,
         maxSubquestionsPerRound,
-        maxGapSubquestions,
+        deepDivePerModule,
       },
       stageRunner
     ),

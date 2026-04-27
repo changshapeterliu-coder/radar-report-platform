@@ -177,8 +177,8 @@ export const generateReport = inngest.createFunction(
           domainName: config.domainName,
           geminiPrompt: config.geminiPrompt,
           openRouterApiKey: config.openRouterApiKey,
-          maxSubquestionsPerRound: 8,
-          maxGapSubquestions: 4,
+          maxSubquestionsPerRound: 12,
+          deepDivePerModule: 3,
         },
         geminiStageRunner
       ),
@@ -188,8 +188,8 @@ export const generateReport = inngest.createFunction(
           domainName: config.domainName,
           kimiPrompt: config.kimiPrompt,
           openRouterApiKey: config.openRouterApiKey,
-          maxSubquestionsPerRound: 8,
-          maxGapSubquestions: 4,
+          maxSubquestionsPerRound: 12,
+          deepDivePerModule: 3,
         },
         kimiStageRunner
       ),

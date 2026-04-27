@@ -18,6 +18,10 @@ export const ALLOWED_KEYS = [
   'kimi_output',
   'subquestion',
   'channel_profile',
+  // Deep-researcher specific (Stage 4):
+  'topic',
+  'module',
+  'keywords',
 ] as const;
 
 export type AllowedKey = (typeof ALLOWED_KEYS)[number];

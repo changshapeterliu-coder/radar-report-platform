@@ -3,22 +3,21 @@
 -- Seed default prompt templates + default schedule_config for the
 -- Account Health domain.
 --
--- Architecture note (v2):
---   Both engines now share an IDENTICAL researcher prompt and channel
---   profile. Differentiation comes from the models themselves
---   (DeepSeek V4 Pro vs Kimi K2) — their distinct retrieval tendencies
---   produce naturally complementary findings on identical prompts.
---   The synthesizer merges on signal overlap to compute confidence.
+-- Architecture (v3 — Top 5 driven):
+--   Both engines share an IDENTICAL broad-researcher prompt. Model
+--   differentiation (DeepSeek V3.2 vs Kimi K2) drives natural signal
+--   complementarity. Loop stages: Planner → Broad Researcher →
+--   Top5 Ranker → Deep Researcher (Top-3) → Engine Summarizer.
+--   Outer Synthesizer merges two engines' outputs into final
+--   ReportContent JSON (per-module: one Top-5 table + Top-3 deep blocks).
 --
--- Re-running notes:
+-- Re-run notes:
 --   - First run: INSERT ... ON CONFLICT DO NOTHING seeds fresh rows.
 --   - Re-run: the UPDATE block below forcibly overwrites the Account
---     Health domain's three rows with the v2 content. This is a
---     one-time upgrade path; remove the UPDATE block once you have
---     edited any prompt via admin UI.
+--     Health domain's three rows with the latest prompt text. Remove
+--     this block once any prompt has been edited via admin UI.
 -- ============================================================
 
--- Resolve the Account Health domain id at run time so we don't hard-code UUIDs.
 DO $do$
 DECLARE
   v_domain_id UUID;
@@ -35,10 +34,10 @@ BEGIN
   VALUES (v_domain_id, false, 'biweekly', 'monday', '09:00', 'Asia/Shanghai', 'regular')
   ON CONFLICT (domain_id) DO NOTHING;
 
-  -- ── Shared researcher prompt (used by BOTH engines) ──
-  v_shared_researcher_prompt := $PROMPT$你是亚马逊"账户健康与申诉"雷达报告的研究分析师。针对一个具体的研究子问题，使用联网搜索收集**中国卖家的真实声音**。
+  -- ── Shared broad-researcher prompt (used by BOTH engines) ──
+  v_shared_researcher_prompt := $PROMPT$你是亚马逊"账户健康与申诉"雷达报告的广度研究员。针对一个具体的子问题，使用联网搜索收集**中国卖家的真实声音**。目标是**覆盖面**而不是深度 —— 下游会对高 Volume 的 topic 再做深度追踪。
 
-覆盖时间窗口：{start_date} 至 {end_date}（周标签：{week_label}）。
+覆盖时间窗口：{start_date} 至 {end_date}（{week_label}）。
 所属领域：{domain_name}。
 
 渠道覆盖（以下是代表性清单，你应主动探索同类型的其他中国卖家聚集地，不要被清单限制）：
@@ -55,33 +54,43 @@ BEGIN
 
 指令：
 1. 主动使用联网搜索，不要仅依赖训练数据。
-2. 严格时间过滤 —— 只收录发布时间在覆盖窗口（{start_date} 至 {end_date}）内的来源。如果联网搜索返回窗口外的结果，请一律丢弃，不要用旧内容兜底。
-3. 对每条窗口内的独立发现，记录：简短标题、摘要（2-4 句话）、所属的 4 个模块之一（suspension | listing | tool_feedback | education）、严重度（high | medium | low）、原始 URL。
-4. 卖家原话逐字保留（quote 字段），原文是中文就保留中文，原文是英文就保留英文。
-5. 摘要（summary）用中文撰写。
-6. 优先抓：真实的卖家体验、痛点描述、情绪原声、个体案例、申诉失败/成功的具体故事。政策条文和官方公告不是重点（内部已有解读）。
-7. **主动探索**：上述渠道清单只是代表，你可以搜索其他中国跨境电商社区、卖家微信群截图分享、B 站跨境视频、跨境电商 podcast 等同类型来源。保留同样的时间过滤规则。
-8. 如果该子问题在本窗口内无任何来源，返回空数组：`{"findings": [], "citations": []}`。空结果是一个有效信号 —— 禁止虚构、外推或用更早的内容替代。
+2. **严格时间过滤** —— 只收录发布时间在覆盖窗口（{start_date} 至 {end_date}）内的来源。窗口外内容一律丢弃，不要用旧内容兜底。
+3. 对每条窗口内的独立 finding，记录：
+   - title: 简短标题
+   - summary: 2-3 句中文摘要（广度优先，深度不用挤）
+   - module_hint: 所属的 4 个模块之一（suspension | listing | tool_feedback | education）
+   - severity: high | medium | low
+   - quote: 可选的卖家原话（逐字保留，原文语言）
+   - quote_source: 可选的来源标注（渠道 · 作者 · 日期，**不要 URL**）
+   - **source_channel_type**: 必填，按来源渠道类型打标（下游排名器要用）：
+     - "forum"    → 论坛帖、社区问答、社交媒体评论区（小红书/抖音/微信评论、知无不言论坛帖、Reddit、卖家之家论坛区）
+     - "provider" → 服务商文章、代运营公号稿、工具商文档
+     - "media"    → 跨境电商新闻媒体（雨果网、亿恩网、Marketplace Pulse、Seller Sessions）
+     - "kol"      → KOL / 个人大号（小红书/抖音/微信卖家个人号、B 站跨境博主）
+4. 尽量一次返回 **5-10 条 findings**，覆盖该子问题周围的不同 topic（同 topic 多个来源分别列出，下游会聚类并计 Volume）。
+5. 摘要用中文。原话保留原文语言。
+6. 如果该子问题在本窗口内无任何来源，返回空数组：`{"findings": [], "citations": []}`。空结果是合法信号 —— 禁止虚构、外推或用更早的内容替代。
 
-仅返回合法 JSON，不要 markdown 代码围栏：
+仅返回合法 JSON，不要 markdown 围栏：
 {
   "findings": [
     {
       "title": "简短标题",
-      "summary": "2-4 句中文摘要",
+      "summary": "2-3 句中文摘要",
       "module_hint": "suspension | listing | tool_feedback | education",
       "severity": "high | medium | low",
-      "quote": "可选的卖家原话（逐字，保留原语言）",
-      "quote_source": "渠道 · 作者 · 日期（可选）"
+      "source_channel_type": "forum | provider | media | kol",
+      "quote": "可选的卖家原话（逐字）",
+      "quote_source": "渠道 · 作者 · 日期（可选，不要 URL）"
     }
   ],
   "citations": ["https://...", "https://..."]
 }$PROMPT$;
 
   -- ── Synthesizer prompt ──
-  v_synthesizer_prompt := $PROMPT$你是亚马逊"账户健康与申诉"雷达报告的合成器。两个研究引擎在相同渠道上并行运行，产出结构化 findings。你的任务：合并、去重、分类到平台 8 种 block 格式，给每个 block 打置信标签。
+  v_synthesizer_prompt := $PROMPT$你是亚马逊"账户健康与申诉"雷达报告的最终合成器。两个研究引擎各自跑完 5 个阶段后，把 per-module 的 Top 5 排名 + Top 3 深度追踪送到你这里。你的任务：**把两路输出合并成最终的 ReportContent JSON，每个模块包含一个 Top 5 表格 + Top 3 深度 blocks**。
 
-覆盖时间窗口：{start_date} 至 {end_date}（周标签：{week_label}）。
+覆盖时间窗口：{start_date} 至 {end_date}（{week_label}）。
 
 Engine A 产出（DeepSeek V3.2 视角，相同渠道）：
 {gemini_output}
@@ -89,16 +98,58 @@ Engine A 产出（DeepSeek V3.2 视角，相同渠道）：
 Engine B 产出（Kimi K2 视角，相同渠道）：
 {kimi_output}
 
-仅返回合法 JSON，严格按以下结构（modules 必须是 4 个，按此顺序）：
+合并规则：
+
+1. **Topic 合并与重算 Voice Volume**：
+   - 如果两路都报告了同一 topic（语义相似即可，不需措辞一致）→ 合并为一行，Voice Volume 相加。
+   - 只有一路报告 → 保留，Voice Volume 沿用该路数字。
+   - 每个模块内按合并后 voice_volume 降序重新排 Top 5。
+
+2. **模块跳过规则**：
+   - 如果合并后某模块 Top 5 少于 3 个 topic → 该模块只输出一个 heading block + 一个 narrative block（text："本期该模块无显著信号"），blocks 其他留空，tables 留空。
+
+3. **Top 5 Table（tables 字段）**：
+   - 每个活跃模块必须包含一个 table，结构如下：
+     - headers（按此顺序）：["Rank", "Topic", "Voice Volume", "Keywords", "卖家核心讨论", "严重度"]
+     - rows: Top 5 条目（不足 5 条有多少写多少），每行 6 个 cells
+       - cell 1 = Rank 数字字符串（"1"/"2"/...）
+       - cell 2 = topic 名
+       - cell 3 = voice_volume 数字字符串（例 "48.0"）
+       - cell 4 = keywords 用中文顿号合并（例 "电费单被拒、72 小时超时"）
+       - cell 5 = seller_discussion（1-2 句话）
+       - cell 6 = severity，用 badge.level + badge.text 显示（level = high/medium/low，text = 对应中文"高 / 中 / 低"）。示例：`{"text": "高", "badge": {"text": "高", "level": "high"}}`。
+
+4. **Top 3 深度 blocks（blocks 字段）**：按 Top 3 的 rank 顺序展开，每个 topic 产出一组连续 blocks：
+   a. heading block：text = "深度追踪 · {rank}. {topic}"
+   b. narrative block：合并两路 narrative 的精华（2-4 句中文）；如果只一路有内容就用那一路
+   c. insight block（Painpoint）：label = "Painpoint"，text = 合并两路 painpoints 后去重（3-5 条，用顿号合并成一句话）
+   d. quote blocks × 2-3：合并两路 quotes 去重（保留 quote + source 字段）。选最有代表性、跨渠道覆盖的 2-3 条
+   e. list block（卖家案例）：items 字段是 cases 合并去重，每条 { title?, content, meta? }
+   f. recommendation block（可选）：如果两路都提到 recommendation，合并输出；否则省略此 block
+
+5. **置信标签（blocks 的 label 字段 — 除 insight 已用 "Painpoint" 外，其他 block 用置信标）**：
+   - 两路都报告了该信号 → label: "High Confidence · 2/2 sources"
+   - 只一路报告 → label: "Needs Verification · 1/2 sources"
+   - 某路为 null（失败）→ 所有 block 一律 "Needs Verification · 1/2 sources"
+
+6. **来源标注**：block 正文末尾用中文简写注明渠道类型（例 "（来源：小红书、知无不言）"），**不要 URL**。quote block 的 source 字段保持"渠道 · 作者 · 日期"。
+
+7. **Top 4-5 不做深度 blocks**，只在 table 里显示。
+
+8. **输出语言**：全部用中文。Module 标题保持固定英文（系统要求）。quote 保留原文语言。
+
+9. **4 个模块顺序固定**，即使某模块无信号也必须出现：suspension → listing → tool_feedback → education。
+
+返回严格 JSON 结构（不要 markdown 围栏）：
 {
-  "title": "Account Health Radar Report - {week_label}",
+  "title": "Account Health Radar Report · {week_label}",
   "dateRange": "{start_date} ~ {end_date}",
   "modules": [
     {
       "title": "Account Suspension Trends",
       "subtitle": "",
-      "blocks": [],
-      "tables": [],
+      "blocks": [ /* 按 4a-4f 展开的 Top 3 blocks */ ],
+      "tables": [ /* 一个 Top 5 table */ ],
       "analysisSections": [],
       "highlightBoxes": []
     },
@@ -106,47 +157,7 @@ Engine B 产出（Kimi K2 视角，相同渠道）：
     { "title": "Account Health Tool Feedback", "subtitle": "", "blocks": [], "tables": [], "analysisSections": [], "highlightBoxes": [] },
     { "title": "Education Opportunities", "subtitle": "", "blocks": [], "tables": [], "analysisSections": [], "highlightBoxes": [] }
   ]
-}
-
-Block 类型（每个 block 选一种）：
-- heading: 子标题
-- narrative: 叙述段落
-- insight: 关键洞察、综合判断
-- quote: 卖家原话（必须带 quote + source）
-- stat: 数字数据，放在 stats 数组里
-- warning: 风险、政策冲突
-- recommendation: AHS / Policy / PM 的行动建议
-- list: 条目列表
-
-关键规则：
-
-1. 去重：如果 Engine A 和 Engine B 都报告了同一信号，合并成一个 block。判断依据：语义相似（同一根因、同一政策、同一痛点），不要求措辞完全一致。
-
-2. 置信标签（每个 block 的 `label` 字段必填）：
-   - 两个引擎都独立报告了该信号 → label: "High Confidence · 2/2 sources"
-   - 只有一个引擎报告 → label: "Needs Verification · 1/2 sources"
-   - 某个引擎为 null（失败）→ 所有 block 必须标 "Needs Verification · 1/2 sources"
-
-3. 按 module_hint 分配到正确模块：
-   - suspension → module index 0 (Account Suspension Trends)
-   - listing → module index 1 (Listing Takedown Trends)
-   - tool_feedback → module index 2 (Account Health Tool Feedback)
-   - education → module index 3 (Education Opportunities)
-
-4. 每个 module 内 block 序列化为可读顺序：narrative 铺垫 → stats → warnings → key insights → recommendations。
-
-5. 来源标注规则：
-   - **正文里不要贴 URL**。
-   - 在每个 block 的 text 末尾用中文简写注明渠道类别，例如 "（来源：小红书 / 知无不言）"、"（来源：抖音卖家视频）"、"（来源：微信公众号 · 卖家之家）"。
-   - 如果同一 block 的信号来自多个渠道，合并列出（如 "（来源：小红书、抖音、雨果网）"）。
-   - quote block 的 source 字段保持 "渠道 · 作者 · 日期"格式，但同样**不要放 URL**。
-   - URL 保留在 engine 产出里作为 audit trail，但不要暴露给最终读者。
-
-6. **输出语言用中文**。narrative / insight / recommendation / warning 全部用中文撰写。quote 保留原文语言（中文原话保持中文，英文原话保持英文）。Module 标题保持现有英文（系统固定）。
-
-7. 如果某个 module 去重后没有 finding，仍然包含该 module，blocks 数组为空 —— 不要跳过 module。
-
-8. 仅返回合法 JSON，不要 markdown 围栏，不要解释。$PROMPT$;
+}$PROMPT$;
 
   -- ── INSERT on first run ──
   INSERT INTO prompt_templates (domain_id, prompt_type, template_text)
@@ -161,9 +172,7 @@ Block 类型（每个 block 选一种）：
   VALUES (v_domain_id, 'synthesizer_prompt', v_synthesizer_prompt)
   ON CONFLICT (domain_id, prompt_type) DO NOTHING;
 
-  -- ── Forced UPDATE: one-time upgrade path to v2 prompts ──
-  -- Safe because no successful runs exist against v1 prompts yet.
-  -- Remove this block once any prompt has been edited via admin UI.
+  -- ── Forced UPDATE: one-time upgrade path to latest prompts ──
   UPDATE prompt_templates
      SET template_text = v_shared_researcher_prompt, updated_at = NOW()
    WHERE domain_id = v_domain_id AND prompt_type IN ('gemini_prompt', 'kimi_prompt');
