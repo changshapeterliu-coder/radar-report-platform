@@ -18,7 +18,15 @@ export const DEFAULT_STAGE_RUNNER: StageRunner = (_name, fn) => fn();
 
 export interface EngineLoopConfig {
   engineLabel: 'gemini' | 'kimi';
+  /** Base model used for planner / gap-analyzer / engine-summarizer stages (no web search needed). */
   model: string;
+  /**
+   * Model used for researcher stages (stage 2 + stage 4) that need real-time web search.
+   * OpenRouter's `:online` suffix auto-adds Exa web search to any model:
+   * the service runs a search, injects results into context, then calls the model.
+   * See https://openrouter.ai/docs/features/web-search for pricing (+$0.004/request).
+   */
+  researcherModel: string;
   channelProfile: string;
   /** Admin-editable researcher prompt (contains {subquestion} placeholder). */
   researcherPrompt: string;
@@ -238,7 +246,7 @@ async function runResearchBatch(
         { role: 'user', content: `Research this subquestion: ${sq.text}` },
       ];
       const result = await callOpenRouter<ResearcherOutput>({
-        model: config.model,
+        model: config.researcherModel,
         messages,
         apiKey: config.openRouterApiKey,
         timeoutMs: config.researcherTimeoutMs,

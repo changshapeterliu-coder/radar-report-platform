@@ -7,6 +7,12 @@ import {
 } from './loop';
 
 const DEFAULT_MODEL = 'moonshotai/kimi-k2-0905';
+/**
+ * `:online` suffix routes through OpenRouter's Exa web-search wrapper so the
+ * researcher stages get real-time results instead of training-data answers.
+ * See https://openrouter.ai/docs/features/web-search — $0.004/request + model price.
+ */
+const DEFAULT_RESEARCHER_MODEL = 'moonshotai/kimi-k2-0905:online';
 
 export interface KimiLoopInput {
   coverageWindow: CoverageWindow;
@@ -25,6 +31,7 @@ export async function runKimiLoop(
     {
       engineLabel: 'kimi',
       model: DEFAULT_MODEL,
+      researcherModel: DEFAULT_RESEARCHER_MODEL,
       channelProfile: KIMI_CHANNEL_PROFILE,
       researcherPrompt: input.kimiPrompt,
       coverageWindow: input.coverageWindow,

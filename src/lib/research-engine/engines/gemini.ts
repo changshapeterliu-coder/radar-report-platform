@@ -7,6 +7,12 @@ import {
 } from './loop';
 
 const DEFAULT_MODEL = 'google/gemini-2.5-pro';
+/**
+ * `:online` suffix routes through OpenRouter's Exa web-search wrapper so the
+ * researcher stages get real-time results instead of training-data answers.
+ * See https://openrouter.ai/docs/features/web-search — $0.004/request + model price.
+ */
+const DEFAULT_RESEARCHER_MODEL = 'google/gemini-2.5-pro:online';
 
 export interface GeminiLoopInput {
   coverageWindow: CoverageWindow;
@@ -25,6 +31,7 @@ export async function runGeminiLoop(
     {
       engineLabel: 'gemini',
       model: DEFAULT_MODEL,
+      researcherModel: DEFAULT_RESEARCHER_MODEL,
       channelProfile: GEMINI_CHANNEL_PROFILE,
       researcherPrompt: input.geminiPrompt,
       coverageWindow: input.coverageWindow,
