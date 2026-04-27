@@ -18,6 +18,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
+import DisclaimerBanner from '@/components/DisclaimerBanner';
 
 type ReportRow = Database['public']['Tables']['reports']['Row'];
 type NewsRow = Database['public']['Tables']['news']['Row'];
@@ -351,6 +352,9 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Footer disclaimer */}
+      <DisclaimerBanner className="mt-10" />
     </div>
   );
 }

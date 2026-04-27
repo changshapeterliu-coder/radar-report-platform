@@ -7,6 +7,7 @@ import type { ReportContent } from '@/types/report';
 import type { Database } from '@/types/database';
 import ReportRenderer from '@/components/report/ReportRenderer';
 import ModuleTabs from '@/components/report/ModuleTabs';
+import DisclaimerBanner from '@/components/DisclaimerBanner';
 
 type ReportRow = Database['public']['Tables']['reports']['Row'];
 
@@ -141,6 +142,7 @@ export default function ReportViewerPage({ params }: { params: Promise<{ id: str
 
       {/* Body */}
       <main className="max-w-[1200px] mx-auto px-4 py-8">
+        <DisclaimerBanner className="mb-6" />
         {renderError ? (
           <div className="bg-white rounded-lg shadow p-6 overflow-x-auto">
             <p className="text-sm text-gray-500 mb-2">Rendering failed — showing raw data:</p>

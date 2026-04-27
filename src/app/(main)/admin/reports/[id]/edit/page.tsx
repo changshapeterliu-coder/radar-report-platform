@@ -7,6 +7,7 @@ import { AdminGuard } from '@/components/AdminGuard';
 import { createClient } from '@/lib/supabase/client';
 import { useDomain } from '@/contexts/DomainContext';
 import ContentEditor from '@/components/admin/ContentEditor';
+import DisclaimerBanner from '@/components/DisclaimerBanner';
 import { validateReportContent } from '@/lib/validators/content-validator';
 import type { ReportContent } from '@/types/report';
 import type { Database } from '@/types/database';
@@ -147,6 +148,8 @@ export default function EditReportPage({ params }: { params: Promise<{ id: strin
           ← {t('common.back')}
         </button>
         <h1 className="text-2xl font-bold text-[#232f3e] mb-6">✏️ Edit Report</h1>
+
+        <DisclaimerBanner className="mb-6" />
 
         {errors.length > 0 && (
           <div className="mb-4 rounded border border-red-300 bg-red-50 p-3">
