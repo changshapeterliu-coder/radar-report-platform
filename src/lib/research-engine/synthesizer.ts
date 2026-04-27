@@ -3,7 +3,13 @@ import { substitute } from './substitute';
 import type { CoverageWindow, EngineError } from './types';
 import { callOpenRouter, type ChatMessage } from './engines/openrouter-client';
 
-const DEFAULT_MODEL = 'anthropic/claude-sonnet-4.5';
+/**
+ * Synthesizer model — chosen for long context (1M tokens fits both engine
+ * traces without trimming), structured JSON output reliability, and not
+ * being blocked by the account's region restrictions on
+ * OpenAI/Anthropic/Google providers.
+ */
+const DEFAULT_MODEL = 'deepseek/deepseek-v4-pro';
 
 export const REQUIRED_MODULE_TITLES = [
   'Account Suspension Trends',

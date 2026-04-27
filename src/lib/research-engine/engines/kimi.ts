@@ -1,4 +1,4 @@
-import { KIMI_CHANNEL_PROFILE } from '../system-prompts';
+import { SHARED_CHANNEL_PROFILE } from '../system-prompts';
 import type { CoverageWindow } from '../types';
 import {
   runEngineLoop,
@@ -32,7 +32,7 @@ export async function runKimiLoop(
       engineLabel: 'kimi',
       model: DEFAULT_MODEL,
       researcherModel: DEFAULT_RESEARCHER_MODEL,
-      channelProfile: KIMI_CHANNEL_PROFILE,
+      channelProfile: SHARED_CHANNEL_PROFILE,
       researcherPrompt: input.kimiPrompt,
       coverageWindow: input.coverageWindow,
       domainName: input.domainName,

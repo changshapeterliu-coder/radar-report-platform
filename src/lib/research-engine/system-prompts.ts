@@ -116,6 +116,27 @@ Return ONLY valid JSON, no markdown fences:
   "all_citations": ["https://...", "https://..."]
 }`;
 
-export const GEMINI_CHANNEL_PROFILE = `Reddit (r/FulfillmentByAmazon, r/AmazonSellerCentral, r/AmazonSeller), English cross-border media (Seller Sessions, Marketplace Pulse, JungleScout blog, eComcrew, Helium10 blog), Google-indexed Chinese seller forums visible via English search, Amazon Seller Central official announcements and policy pages.`;
+/**
+ * Shared channel profile used by BOTH engines.
+ *
+ * Design decision: both engines query the same channels. Differentiation
+ * comes from the models themselves (DeepSeek V4 Pro vs Kimi K2) — their
+ * distinct training data and retrieval tendencies produce naturally
+ * complementary findings on identical prompts. High-confidence signals
+ * are those independently surfaced by both.
+ *
+ * The list below is REPRESENTATIVE, not exhaustive. Researchers are
+ * explicitly told to discover equivalent Chinese-seller-facing channels
+ * they may know of (see the shared researcher prompt, rule #7).
+ */
+export const SHARED_CHANNEL_PROFILE = `中国卖家的市场声音主要出现在以下渠道，这是代表性清单，不是穷尽列表 —— 研究员应主动探索同类型的其他中国卖家聚集地：
 
-export const KIMI_CHANNEL_PROFILE = `小红书 (xiaohongshu) 亚马逊卖家笔记与申诉经验；抖音 (douyin) 跨境卖家短视频与直播；知无不言 (zwbz.net) 亚马逊卖家论坛深度帖；卖家之家 (maijiazhijia.com) 案例与政策解读；微信公众号 跨境电商媒体号、服务商号、卖家个人号。`;
+- 小红书 (xiaohongshu)：亚马逊卖家笔记、账号申诉经验、选品与运营分享
+- 抖音 (douyin)：跨境卖家短视频、直播回放、卖家个人号
+- 知无不言 (zwbz.net)：亚马逊卖家论坛深度帖、案例分析
+- 卖家之家 (maijiazhijia.com)：案例与政策解读、运营经验
+- 微信公众号：跨境电商媒体号、服务商号、卖家个人号
+- 亿恩网 (enet.com.cn)、雨果网 (cifnews.com)：跨境电商媒体的卖家声音报道
+- Reddit r/FulfillmentByAmazon、r/AmazonSeller 上中国卖家的讨论
+
+注意：Amazon Seller Central 官方公告和政策页面不是首选来源（内部已有解读），重点放在卖家的真实体验、痛点、原话和讨论。`;
