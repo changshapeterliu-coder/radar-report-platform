@@ -47,12 +47,19 @@ export function buildFailureReason(errors: EngineError[]): string | null {
     for (const err of engineErrors) {
       const label = engine.charAt(0).toUpperCase() + engine.slice(1);
       let segment = `${label}: ${err.errorClass}`;
+      if (typeof err.httpStatus === 'number') {
+        segment += ` [${err.httpStatus}]`;
+      }
       if (err.stage) {
         const subqSuffix =
           typeof err.subquestionIndex === 'number'
             ? ` subq #${err.subquestionIndex}`
             : '';
         segment += ` (stage: ${err.stage}${subqSuffix})`;
+      }
+      if (err.message) {
+        const snippet = err.message.length > 160 ? `${err.message.slice(0, 160)}…` : err.message;
+        segment += ` — ${snippet}`;
       }
       segments.push(segment);
     }

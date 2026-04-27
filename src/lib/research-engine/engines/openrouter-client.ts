@@ -63,6 +63,10 @@ export async function callOpenRouter<T = unknown>(
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
+        // OpenRouter recommends these for server-side calls; some provider
+        // routes (notably Gemini) return 4xx without them.
+        'HTTP-Referer': 'https://radar-report-platform.vercel.app',
+        'X-Title': 'Radar Report Platform',
       },
       body: JSON.stringify({
         model,
