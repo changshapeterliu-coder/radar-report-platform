@@ -206,6 +206,11 @@ function ModuleCard({ module }: { module: ReportModule }) {
       {/* Body — max-width constrained for readability */}
       <div className="px-6 sm:px-10 py-8">
         <div className="max-w-[680px] mx-auto space-y-5">
+          {/* Tables first — overview at top */}
+          {(module.tables ?? []).map((t, i) => (
+            <TableRenderer key={i} table={t} />
+          ))}
+
           {/* New: blocks */}
           {hasBlocks && module.blocks!.map((block, i) => (
             <BlockRenderer key={i} block={block} />
@@ -214,11 +219,6 @@ function ModuleCard({ module }: { module: ReportModule }) {
           {/* Legacy: paragraphs fallback (for old reports) */}
           {!hasBlocks && hasLegacyParagraphs && module.paragraphs!.map((p, i) => (
             <p key={i} className="text-[15px] leading-[1.85] text-gray-800">{p}</p>
-          ))}
-
-          {/* Tables — optional, render only if present */}
-          {(module.tables ?? []).map((t, i) => (
-            <TableRenderer key={i} table={t} />
           ))}
 
           {/* Legacy analysis sections — optional */}
