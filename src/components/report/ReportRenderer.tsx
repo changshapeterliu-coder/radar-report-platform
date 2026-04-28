@@ -181,20 +181,31 @@ function ModuleCard({ module }: { module: ReportModule }) {
             <p key={i} className="text-[15px] leading-[1.85] text-gray-800">{p}</p>
           ))}
 
-          {/* Tables */}
-          {module.tables.map((t, i) => (
+          {/* Tables — optional, render only if present */}
+          {(module.tables ?? []).map((t, i) => (
             <TableRenderer key={i} table={t} />
           ))}
 
-          {/* Legacy analysis sections */}
-          {module.analysisSections.map((s, i) => (
+          {/* Legacy analysis sections — optional */}
+          {(module.analysisSections ?? []).map((s, i) => (
             <AnalysisSectionRenderer key={i} section={s} />
           ))}
 
-          {/* Legacy highlight boxes */}
-          {module.highlightBoxes.map((h, i) => (
+          {/* Legacy highlight boxes — optional */}
+          {(module.highlightBoxes ?? []).map((h, i) => (
             <HighlightBoxRenderer key={i} box={h} />
           ))}
+
+          {/* Empty module friendly message */}
+          {!hasBlocks &&
+            !hasLegacyParagraphs &&
+            (module.tables ?? []).length === 0 &&
+            (module.analysisSections ?? []).length === 0 &&
+            (module.highlightBoxes ?? []).length === 0 && (
+              <p className="text-sm text-gray-400 italic text-center py-8">
+                本周该模块暂无显著发现 / No notable findings this period
+              </p>
+            )}
         </div>
       </div>
     </div>
