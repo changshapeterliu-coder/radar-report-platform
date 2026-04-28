@@ -48,16 +48,51 @@ function CellContent({ cell }: { cell: TableCell }) {
   );
 }
 
+/* ─── Row normalization (accept array-of-arrays OR { cells: [...] }) ─── */
+
+function normalizeCell(raw: unknown): TableCell {
+  if (raw == null) return { text: '' };
+  if (typeof raw === 'object') {
+    const obj = raw as Record<string, unknown>;
+    if (typeof obj.text === 'string') {
+      const badge = obj.badge as TableCell['badge'];
+      return badge ? { text: obj.text, badge } : { text: obj.text };
+    }
+    return { text: JSON.stringify(raw) };
+  }
+  return { text: String(raw) };
+}
+
+function normalizeRow(raw: unknown): { cells: TableCell[] } {
+  // Already in canonical shape: { cells: [...] }
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const obj = raw as Record<string, unknown>;
+    if (Array.isArray(obj.cells)) {
+      return { cells: obj.cells.map(normalizeCell) };
+    }
+  }
+  // Legacy / AI-produced shape: plain array of values
+  if (Array.isArray(raw)) {
+    return { cells: raw.map(normalizeCell) };
+  }
+  return { cells: [] };
+}
+
 /* ─── Table ─── */
 
 function TableRenderer({ table }: { table: ReportTable }) {
+  const headers = Array.isArray(table.headers) ? table.headers : [];
+  const normalizedRows = (Array.isArray(table.rows) ? table.rows : []).map(normalizeRow);
+
+  if (headers.length === 0 && normalizedRows.length === 0) return null;
+
   return (
     <div className="my-5 rounded-lg overflow-hidden border border-gray-200">
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="bg-gray-50">
-              {table.headers.map((header, i) => (
+              {headers.map((header, i) => (
                 <th
                   key={i}
                   className="text-left px-4 py-3 font-semibold text-[#232f3e] border-b border-gray-200"
@@ -68,7 +103,7 @@ function TableRenderer({ table }: { table: ReportTable }) {
             </tr>
           </thead>
           <tbody>
-            {table.rows.map((row, ri) => (
+            {normalizedRows.map((row, ri) => (
               <tr key={ri} className="hover:bg-gray-50/50">
                 {row.cells.map((cell, ci) => (
                   <td key={ci} className="px-4 py-3 border-b border-gray-100 text-gray-800">
