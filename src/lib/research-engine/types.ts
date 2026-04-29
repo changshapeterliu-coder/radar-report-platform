@@ -8,15 +8,19 @@ export type {
   ChannelType,
   CoverageWindow,
   DeepDiveOutput,
+  EducationOpportunity,
+  EngineAssembledContent,
   EngineError,
   EngineErrorClass,
   EngineLoopTrace,
+  HotRadarModuleKey,
+  HotRadarOutput,
+  HotRadarTopic,
   LoopStage,
-  ModuleKey,
+  PromptKey,
   ResearchEngineInput,
   ResearchEngineOutput,
-  Top5Entry,
-  Top5RankerOutput,
+  ToolFeedbackItem,
 } from '@/types/scheduled-runs';
 
-export { CHANNEL_WEIGHT, MODULE_KEYS } from '@/types/scheduled-runs';
+export { CHANNEL_WEIGHT, HOT_RADAR_MODULE_KEYS } from '@/types/scheduled-runs';

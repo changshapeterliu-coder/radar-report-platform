@@ -51,11 +51,11 @@ export function buildFailureReason(errors: EngineError[]): string | null {
         segment += ` [${err.httpStatus}]`;
       }
       if (err.stage) {
-        const subqSuffix =
-          typeof err.subquestionIndex === 'number'
-            ? ` subq #${err.subquestionIndex}`
+        const topicSuffix =
+          typeof err.topicIndex === 'number'
+            ? ` topic #${err.topicIndex}`
             : '';
-        segment += ` (stage: ${err.stage}${subqSuffix})`;
+        segment += ` (stage: ${err.stage}${topicSuffix})`;
       }
       if (err.message) {
         const snippet = err.message.length > 160 ? `${err.message.slice(0, 160)}…` : err.message;

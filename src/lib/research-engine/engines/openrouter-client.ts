@@ -20,7 +20,7 @@ export interface OpenRouterCallParams {
   errorContext: {
     engine: 'gemini' | 'kimi' | 'synthesizer';
     stage?: LoopStage;
-    subquestionIndex?: number;
+    topicIndex?: number;
   };
 }
 

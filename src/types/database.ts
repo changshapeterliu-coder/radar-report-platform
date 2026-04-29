@@ -246,7 +246,7 @@ export interface Database {
         Row: {
           id: string;
           domain_id: string;
-          prompt_type: 'gemini_prompt' | 'kimi_prompt' | 'synthesizer_prompt';
+          prompt_type: 'engine_a_hot_radar' | 'engine_b_hot_radar' | 'shared_deep_dive' | 'synthesizer_prompt';
           template_text: string;
           created_at: string;
           updated_at: string;
@@ -254,7 +254,7 @@ export interface Database {
         Insert: {
           id?: string;
           domain_id: string;
-          prompt_type: 'gemini_prompt' | 'kimi_prompt' | 'synthesizer_prompt';
+          prompt_type: 'engine_a_hot_radar' | 'engine_b_hot_radar' | 'shared_deep_dive' | 'synthesizer_prompt';
           template_text: string;
           created_at?: string;
           updated_at?: string;
@@ -262,7 +262,7 @@ export interface Database {
         Update: {
           id?: string;
           domain_id?: string;
-          prompt_type?: 'gemini_prompt' | 'kimi_prompt' | 'synthesizer_prompt';
+          prompt_type?: 'engine_a_hot_radar' | 'engine_b_hot_radar' | 'shared_deep_dive' | 'synthesizer_prompt';
           template_text?: string;
           created_at?: string;
           updated_at?: string;

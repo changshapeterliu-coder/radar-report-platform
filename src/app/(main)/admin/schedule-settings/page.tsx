@@ -38,8 +38,9 @@ export default function ScheduleSettingsPage() {
                 Prompt Templates
               </h2>
               <div className="space-y-10">
-                <PromptTemplateEditor domainId={currentDomainId} promptType="gemini_prompt" />
-                <PromptTemplateEditor domainId={currentDomainId} promptType="kimi_prompt" />
+                <PromptTemplateEditor domainId={currentDomainId} promptType="engine_a_hot_radar" />
+                <PromptTemplateEditor domainId={currentDomainId} promptType="engine_b_hot_radar" />
+                <PromptTemplateEditor domainId={currentDomainId} promptType="shared_deep_dive" />
                 <PromptTemplateEditor domainId={currentDomainId} promptType="synthesizer_prompt" />
               </div>
             </section>

@@ -134,12 +134,13 @@ export const generateReport = inngest.createFunction(
       for (const row of promptsRes.data ?? []) {
         byType[row.prompt_type] = row.template_text;
       }
-      const geminiPrompt = byType['gemini_prompt'];
-      const kimiPrompt = byType['kimi_prompt'];
+      const engineAHotRadar = byType['engine_a_hot_radar'];
+      const engineBHotRadar = byType['engine_b_hot_radar'];
+      const sharedDeepDive = byType['shared_deep_dive'];
       const synthesizerPrompt = byType['synthesizer_prompt'];
-      if (!geminiPrompt || !kimiPrompt || !synthesizerPrompt) {
+      if (!engineAHotRadar || !engineBHotRadar || !sharedDeepDive || !synthesizerPrompt) {
         throw new Error(
-          `Missing prompt_templates for domain ${domainId}: need gemini_prompt, kimi_prompt, synthesizer_prompt`
+          `Missing prompt_templates for domain ${domainId}: need engine_a_hot_radar, engine_b_hot_radar, shared_deep_dive, synthesizer_prompt`
         );
       }
 
@@ -150,17 +151,17 @@ export const generateReport = inngest.createFunction(
 
       return {
         domainName: domainRes.data[0].name as string,
-        geminiPrompt,
-        kimiPrompt,
+        engineAHotRadar,
+        engineBHotRadar,
+        sharedDeepDive,
         synthesizerPrompt,
         openRouterApiKey,
       };
     });
 
     // ── Steps 3 & 4: Run both engine loops in parallel. ──
-    // Each loop internally dispatches 5 stages as independent Inngest steps
-    // via the injected stageRunner. Keeping this shape keeps the
-    // research-engine module free of inngest imports (Property 13).
+    // Each loop internally dispatches 4 stages as independent Inngest steps
+    // via the injected stageRunner.
     const geminiStageRunner: StageRunner = <T>(
       stage: string,
       fn: () => Promise<T>
@@ -175,9 +176,9 @@ export const generateReport = inngest.createFunction(
         {
           coverageWindow,
           domainName: config.domainName,
-          geminiPrompt: config.geminiPrompt,
+          engineAHotRadarPrompt: config.engineAHotRadar,
+          sharedDeepDivePrompt: config.sharedDeepDive,
           openRouterApiKey: config.openRouterApiKey,
-          maxSubquestionsPerRound: 12,
           deepDivePerModule: 3,
         },
         geminiStageRunner
@@ -186,23 +187,23 @@ export const generateReport = inngest.createFunction(
         {
           coverageWindow,
           domainName: config.domainName,
-          kimiPrompt: config.kimiPrompt,
+          engineBHotRadarPrompt: config.engineBHotRadar,
+          sharedDeepDivePrompt: config.sharedDeepDive,
           openRouterApiKey: config.openRouterApiKey,
-          maxSubquestionsPerRound: 12,
           deepDivePerModule: 3,
         },
         kimiStageRunner
       ),
     ]);
 
-    // ── Step 5: Synthesize (only if ≥1 engine produced a non-null summary) ──
+    // ── Step 5: Synthesize (only if ≥1 engine produced an assembled content) ──
     let content: ReportContent | null = null;
     let synthError: EngineError | null = null;
-    if (geminiLoop.summary !== null || kimiLoop.summary !== null) {
+    if (geminiLoop.assembled !== null || kimiLoop.assembled !== null) {
       const synthResult = await step.run('synthesize', async () =>
         synthesize({
-          geminiSummary: geminiLoop.summary,
-          kimiSummary: kimiLoop.summary,
+          geminiAssembled: geminiLoop.assembled,
+          kimiAssembled: kimiLoop.assembled,
           synthesizerPrompt: config.synthesizerPrompt,
           coverageWindow,
           openRouterApiKey: config.openRouterApiKey,
@@ -273,8 +274,8 @@ export const generateReport = inngest.createFunction(
       ...(synthError ? [synthError] : []),
     ];
     const finalStatus = determineStatus(
-      geminiLoop.summary !== null,
-      kimiLoop.summary !== null,
+      geminiLoop.assembled !== null,
+      kimiLoop.assembled !== null,
       content !== null
     );
     const failureReason = buildFailureReason(allErrors);

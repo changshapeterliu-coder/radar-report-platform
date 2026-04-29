@@ -14,14 +14,18 @@ export const ALLOWED_KEYS = [
   'end_date',
   'week_label',
   'domain_name',
+  // Synthesizer inputs — name kept as gemini/kimi to mirror DB columns
   'gemini_output',
   'kimi_output',
-  'subquestion',
-  'channel_profile',
-  // Deep-researcher specific (Stage 4):
+  // Stage 2 deep-dive context:
   'topic',
   'module',
   'keywords',
+  'topic_input',
+  // Stage 3 (education mapper) & Stage 4 (assembler) inputs:
+  'stage1_input',
+  'stage2_input',
+  'stage3_input',
 ] as const;
 
 export type AllowedKey = (typeof ALLOWED_KEYS)[number];

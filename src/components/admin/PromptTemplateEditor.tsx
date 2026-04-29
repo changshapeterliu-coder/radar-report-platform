@@ -4,17 +4,26 @@ import { useEffect, useState } from 'react';
 import { DEFAULT_PROMPTS, type PromptType } from './default-prompts';
 
 const LABELS: Record<PromptType, string> = {
-  gemini_prompt: 'Gemini Prompt (English)',
-  kimi_prompt: 'Kimi Prompt (Chinese)',
-  synthesizer_prompt: 'Synthesizer Prompt (Meta)',
+  engine_a_hot_radar: 'Engine A · Stage 1 Hot Radar (DeepSeek V3.2)',
+  engine_b_hot_radar: 'Engine B · Stage 1 Hot Radar (Kimi K2)',
+  shared_deep_dive: 'Stage 2 · Deep Dive (Shared)',
+  synthesizer_prompt: 'Synthesizer · Outer Merge',
 };
 
-const RESEARCHER_PLACEHOLDERS = [
+const HOT_RADAR_PLACEHOLDERS = [
   '{start_date}',
   '{end_date}',
   '{week_label}',
   '{domain_name}',
-  '{subquestion}',
+];
+
+const DEEP_DIVE_PLACEHOLDERS = [
+  '{start_date}',
+  '{end_date}',
+  '{week_label}',
+  '{topic_input}',
+  '{topic}',
+  '{keywords}',
 ];
 
 const SYNTHESIZER_REQUIRED_PLACEHOLDERS = ['{gemini_output}', '{kimi_output}'];
@@ -140,13 +149,23 @@ export function PromptTemplateEditor({ domainId, promptType }: PromptTemplateEdi
           Required placeholders: <code className="font-mono">{'{gemini_output}'}</code>{' '}
           <code className="font-mono">{'{kimi_output}'}</code>
         </p>
+      ) : promptType === 'shared_deep_dive' ? (
+        <p className="text-xs text-gray-500">
+          Supported placeholders:{' '}
+          {DEEP_DIVE_PLACEHOLDERS.map((ph, i) => (
+            <span key={ph}>
+              <code className="font-mono">{ph}</code>
+              {i < DEEP_DIVE_PLACEHOLDERS.length - 1 ? ' ' : ''}
+            </span>
+          ))}
+        </p>
       ) : (
         <p className="text-xs text-gray-500">
           Supported placeholders:{' '}
-          {RESEARCHER_PLACEHOLDERS.map((ph, i) => (
+          {HOT_RADAR_PLACEHOLDERS.map((ph, i) => (
             <span key={ph}>
               <code className="font-mono">{ph}</code>
-              {i < RESEARCHER_PLACEHOLDERS.length - 1 ? ' ' : ''}
+              {i < HOT_RADAR_PLACEHOLDERS.length - 1 ? ' ' : ''}
             </span>
           ))}
         </p>

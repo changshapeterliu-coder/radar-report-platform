@@ -10,7 +10,12 @@ import { verifyAdmin } from '../_utils/verify-admin';
  * for easy client consumption. POST upserts a single template.
  */
 
-const VALID_PROMPT_TYPES = ['gemini_prompt', 'kimi_prompt', 'synthesizer_prompt'] as const;
+const VALID_PROMPT_TYPES = [
+  'engine_a_hot_radar',
+  'engine_b_hot_radar',
+  'shared_deep_dive',
+  'synthesizer_prompt',
+] as const;
 type PromptType = (typeof VALID_PROMPT_TYPES)[number];
 
 interface PromptTemplateRow {
@@ -49,8 +54,9 @@ export async function GET(request: NextRequest) {
   }
 
   const shaped: Record<PromptType, string | null> = {
-    gemini_prompt: null,
-    kimi_prompt: null,
+    engine_a_hot_radar: null,
+    engine_b_hot_radar: null,
+    shared_deep_dive: null,
     synthesizer_prompt: null,
   };
   for (const row of (data ?? []) as PromptTemplateRow[]) {

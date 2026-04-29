@@ -1,233 +1,309 @@
 /**
- * System-owned prompts for the research engine's agentic loop.
+ * System-owned prompts for the research engine's v3 hot-radar-driven loop.
  *
- * Architecture (v3 — Top 5 driven):
- *   Stage 1 — Planner:           8-12 broad subquestions across 4 modules
- *   Stage 2 — Broad Researcher:  parallel web-search calls per subquestion
- *                                (researcher prompt lives in DB, admin-editable)
- *   Stage 3 — Top5 Ranker:       aggregate → cluster topics → Voice Volume →
- *                                Top 5 per module (skip module if <3 topics)
- *   Stage 4 — Deep Researcher:   per Top-3 topic, web-search for verbatim
- *                                quotes / cases / painpoints
- *   Stage 5 — Engine Summarizer: combine table + deep dives per module
+ * Architecture:
+ *   Stage 1 — Hot Radar Scan (per engine, DB-editable: engine_a_hot_radar / engine_b_hot_radar)
+ *   Stage 2 — Deep Dive (shared across engines, DB-editable: shared_deep_dive)
+ *   Stage 3 — Education Mapper (code-fixed, system-owned — this file)
+ *   Stage 4 — Assembler (code-fixed, system-owned — this file)
+ *   Synthesizer — outer merge of two engines (DB-editable: synthesizer_prompt)
  *
- * These templates are hardcoded here (NOT in DB) to protect structural
- * contracts. Admin controls only the researcher and synthesizer prompts.
+ * Stage 3 and Stage 4 are code-fixed because they are structural translations
+ * of Stage 1/2 data into the final ReportContent shape. Admin-editable prompts
+ * at these positions would risk breaking the schema contract with the renderer.
  */
 
 // ------------------------------------------------------------
-// Stage 1 — Planner
+// Stage 3 — Education Opportunity Mapper
+// Input: Stage 1 hot radar + Stage 2 deep dives (same engine)
+// Output: 0-3 education opportunities reverse-inferred from misconceptions
+// No web search — pure LLM reasoning over structured input.
 // ------------------------------------------------------------
 
-export const PLANNER_PROMPT = `你是亚马逊"账户健康与申诉"雷达报告的研究规划师。你的任务是把本期（{start_date} 至 {end_date}，{week_label}）的研究目标拆成 8-12 个广度子问题，供下游 researcher 并行联网检索。
+export const EDUCATION_MAPPER_PROMPT = `# 角色
+你是亚马逊"账户健康与申诉"雷达报告的**教育机会分析员**。
+你不做 web search。你的唯一任务：基于 Stage 1 和 Stage 2 已经
+整理好的本周市场观察数据，反推出最值得被教育的卖家机会点。
 
-覆盖时间窗口：{start_date} 至 {end_date}（{week_label}）。
-所属领域：{domain_name}。
+# 反幻觉总则（最高优先级）
+1. 所有 education opportunity 必须能追溯到 Stage 1/2 输入里的
+   具体 topic / misconception / painpoints / quantified_observations。
+   禁止凭空想象"卖家普遍需要学习的主题"。
+2. 若某教育机会无法被输入数据支撑，直接省略。
+3. 若本周输入中所有话题都是技术争议或无明显误区，可以只返回
+   1-2 条，甚至空数组 []。
+4. 绝不强行凑够 Top 3。
+5. target_audience 必须具体，不能是"所有卖家"这种空话。
 
-报告有 4 个必须覆盖的模块：
-  - suspension: 账户暂停趋势（Top 5 暂停类别、频率、严重度、卖家痛点）
-  - listing: Listing 下架趋势（Top 5 下架原因、品类影响、申诉恢复率）
-  - tool_feedback: AHS 工具反馈（卖家对 AHA、Seller Assistant、申诉面板的使用感受）
-  - education: 教育机会（知识盲区、误解纠正、内容格式偏好）
+# 时间窗口
+覆盖时段：{start_date} 至 {end_date}（{week_label}）。
 
-目标渠道：
-{channel_profile}
+# 输入
+- Stage 1 全部输出: {stage1_input}
+- Stage 2 全部 deep_dives: {stage2_input}
 
-指令：
-1. 每个模块生成 2-3 个子问题，总数控制在 8-12 个。
-2. 子问题必须聚焦**本期窗口内**的信号扫描 —— 不求深挖，求覆盖面（为下游 Top 5 排名提供候选 topic）。
-3. 每个子问题必须能用一次联网搜索回答 —— 具体、有边界、不开放式。
-4. search_intent 用一句话引导 researcher（例如："本期小红书关于 KYC 申诉失败的新讨论"、"抖音上卖家反馈的 Seller Assistant 异常案例"）。
+# 分析思路
 
-仅返回合法 JSON，不要 markdown 围栏：
+## 横向扫描
+把输入里所有 misconception / painpoints / quantified_observations
+过一遍，寻找模式：
+- 多个 topic 是否指向同一类认知错误？
+- 某个政策领域是否被反复误解？
+- 某项工具是否被系统性误用？
+- 跨模块（封号 / 下架 / 工具反馈）的共通痛点？
+
+## 合并
+把同一根源的误区合并成一个 education opportunity。一个教育
+机会可以串联多个 topic 的问题 — 不要强制 1:1 对应。
+
+## 紧迫度综合判断
+按以下因素综合判断（无需打分）：
+- 被串联的 topic 的 voice_volume 总和（来自 Stage 1）
+- 被串联的 topic 的 severity（对业务影响）
+- 误解会否导致不可逆损失（资金冻结 / 账号永封 / 品牌失权等）
+- 误区是否可以通过明确教育内容纠正（而非平台政策争议）
+
+# 输出字段 Schema
+
 {
-  "subquestions": [
-    {
-      "text": "具体的研究子问题",
-      "search_intent": "给 researcher 的简短指引",
-      "target_module": "suspension | listing | tool_feedback | education"
-    }
+  "rank": <int, 1-3>,
+  "theme": <string, ≤20 中文字符, 教育主题>,
+  "target_audience": <string, ≤30 字, 明确描述目标卖家群体>,
+  "linked_topics": <array of strings, 来自 Stage 1 的 topic 名,
+                    最少 1 个>,
+  "misconception_summary": <string, ≤80 字, 串联的核心误区总结>,
+  "education_anchor": {
+    "wrong_belief": <string, ≤60 字, 卖家错误认知>,
+    "correct_practice": <string, ≤80 字, 正确认知或最佳实践>
+  },
+  "recommended_format": <array of 1-4 strings, 推荐的教育形式,
+                         每条 ≤15 字>,
+  "supporting_evidence": <array of 2-4 strings, 每条 ≤60 字,
+                          来自 Stage 1/2 的具体证据引用片段
+                          或 case 标题>,
+  "urgency": <"high" | "medium" | "low">
+}
+
+# 强约束
+- Top 1-3 上限：宁可少给，不可凑数
+- linked_topics 必须至少 1 个，否则删除该机会
+- supporting_evidence 必须至少 2 条具体证据，否则删除
+- target_audience 必须具体（目标品类 / 规模 / 阶段）
+
+# 输出
+只返回合法 JSON，不要 markdown 围栏。
+
+{
+  "education_opportunities": [ ... or [] ]
+}`;
+
+// ------------------------------------------------------------
+// Stage 4 — Per-Engine Assembler
+// Input: Stage 1 + Stage 2 + Stage 3 outputs
+// Output: EngineAssembledContent (ReportContent shape for this engine only).
+// No web search — structural assembly only. The outer Synthesizer later
+// merges two engines' assembled contents into the final ReportContent.
+// ------------------------------------------------------------
+
+export const ASSEMBLER_PROMPT = `# 角色
+你是亚马逊"账户健康与申诉"雷达报告的**报告组装员**（本引擎侧）。
+不做 web search，不做创作。你的任务：基于 Stage 1/2/3 的结构化
+数据，装配出本 engine 的 ReportContent。
+
+# 反幻觉总则（最高优先级）
+1. 只能使用 Stage 1/2/3 已有的字段值。
+2. 禁止新增内容、扩写、归纳总结。
+3. 如果输入某字段为空，对应输出 block 直接省略。
+4. 禁止把输入中没出现过的事件、卖家、数字、引用放进报告。
+
+# 时间窗口
+- 报告标题：Account Health Radar Report · {week_label}
+- dateRange: {start_date} ~ {end_date}
+
+# 输入
+- Stage 1: {stage1_input}
+- Stage 2 deep_dives: {stage2_input}
+- Stage 3 education_opportunities: {stage3_input}
+
+# 输出结构
+
+{
+  "title": <string>,
+  "dateRange": <string>,
+  "modules": [
+    { /* Tab 1: Account Suspension Trends */ },
+    { /* Tab 2: Listing Takedown Trends */ },
+    { /* Tab 3: Account Health Tool Feedback */ },
+    { /* Tab 4: Education Opportunities */ }
   ]
-}`;
+}
 
-// ------------------------------------------------------------
-// Stage 3 — Top 5 Ranker
-// ------------------------------------------------------------
-//
-// Input: all findings from Stage 2 (each tagged with module_hint + source_channel_type).
-// Output: per-module Top 5 topic ranking, or fewer if the module has <3 topics.
-// Ranker computes Voice Volume = Σ(channel_count × channel_weight).
-// Weights: forum=1.0 / provider=2.0 / media=4.0 / kol=5.0.
-// ------------------------------------------------------------
+# 4 个 Tab 固定顺序
 
-export const TOP5_RANKER_PROMPT = `你是亚马逊"账户健康与申诉"雷达报告的 Top 5 排名器。Stage 2 广度研究员产出了 N 条 findings，每条带 module_hint 和 source_channel_type。你的任务：**按语义聚类 topic，计算 Voice Volume，每个模块排出 Top 5**。
+## Tab 1: Account Suspension Trends
+源：Stage 1 account_health_topics + Stage 2 deep_dives where module="account_health"
 
-覆盖时间窗口：{start_date} 至 {end_date}（{week_label}）。
-所属领域：{domain_name}。
+## Tab 2: Listing Takedown Trends
+源：Stage 1 listing_topics + Stage 2 deep_dives where module="listing"
 
-Stage 2 findings（合并两个引擎的所有 findings）：
-{findings_input}
+## Tab 3: Account Health Tool Feedback
+源：Stage 1 tool_feedback_items
+空数组时：tables=[], blocks=[]
 
-Voice Volume 权重规则：
-  - source_channel_type = "forum"    → 权重 1.0（论坛帖 / 社区问答 / 社交媒体评论区）
-  - source_channel_type = "provider" → 权重 2.0（服务商文章 / 代运营公号 / 工具商稿件）
-  - source_channel_type = "media"    → 权重 4.0（跨境电商媒体如雨果网、亿恩网、Marketplace Pulse）
-  - source_channel_type = "kol"      → 权重 5.0（小红书/抖音/微信个人号、B 站跨境博主）
+## Tab 4: Education Opportunities
+源：Stage 3 education_opportunities
+空数组时：tables=[], blocks=[]
 
-指令：
-1. **Topic 聚类**：把讲同一根因 / 同一政策 / 同一痛点的 findings 聚成一个 topic。判断标准是语义相似，不是措辞一致。起一个清晰、简短的 topic 名（例如 "KYC 重新验证失败"、"Product Authenticity 申诉被拒"）。
-2. **Volume 计算**：一个 topic 下的所有 findings，按 source_channel_type 分类计数，再乘权重累加：
-   voice_volume = forum_count × 1.0 + provider_count × 2.0 + media_count × 4.0 + kol_count × 5.0
-   结果保留 1 位小数。
-3. **每模块排序 + 取 Top 5**：按 module_hint 分到 4 个模块，每模块内 voice_volume 降序取前 5。
-4. **模块信号不足跳过**：如果某模块聚类后 topic 数 < 3，该模块输出空数组 \`[]\`。不要硬凑。
-5. **字段要求**：
-   - topic: 清晰简短（不超过 15 字）
-   - voice_volume: 数字
-   - keywords: 3-5 个卖家讨论的关键词（中文，用于 table 展示）
-   - seller_discussion: 1-2 句话描述卖家讨论核心（≤30 字，面向读者）
-   - severity: 根据信号体量和卖家情绪综合判断（high/medium/low）
-   - channel_counts: 各渠道 finding 数量 audit trail（object: { forum, provider, media, kol }）
-6. 所有文本字段用**中文**。
+# Tab 1 / Tab 2 结构
 
-仅返回合法 JSON，不要 markdown 围栏：
+## tables（1 张 Top 5）
+
 {
-  "modules": {
-    "suspension": [
-      {
-        "rank": 1,
-        "topic": "KYC 重新验证失败",
-        "voice_volume": 48.0,
-        "keywords": ["电费单被拒", "72 小时超时", "上传无响应"],
-        "seller_discussion": "卖家反映 KYC 重验材料反复被拒，申诉窗口关闭无预警",
-        "severity": "high",
-        "channel_counts": { "forum": 3, "provider": 2, "media": 2, "kol": 6 }
-      }
-    ],
-    "listing": [],
-    "tool_feedback": [],
-    "education": []
+  "headers": ["Rank", "Topic", "热度", "Keywords", "卖家核心讨论", "严重度"],
+  "rows": <对每个 topic 生成 1 行>
+}
+
+每行 6 列：
+- col 1: rank 数字字符串（"1", "2", ...）
+- col 2: topic 字符串
+- col 3: { "text": <voice_volume 数字, 1 位小数>, "badge": null }
+- col 4: keywords 用顿号连接的字符串
+- col 5: seller_discussion 字符串
+- col 6: 严重度对象 {
+    "text": <"高"|"中"|"低">,
+    "badge": { "text": <同上>, "level": <"high"|"medium"|"low"> }
   }
-}`;
 
-// ------------------------------------------------------------
-// Stage 4 — Deep Researcher (per Top-3 topic)
-// ------------------------------------------------------------
-//
-// System-owned (not admin-editable) so we guarantee the output shape and
-// the depth mandate. Called once per Top-3 topic per engine, with web
-// search enabled via OpenRouter :online.
-// ------------------------------------------------------------
+## blocks（对 Top 3 每个 topic 生成 5-7 block）
 
-export const DEEP_RESEARCHER_PROMPT = `你是亚马逊"账户健康与申诉"雷达报告的深度追踪研究员。Top 5 排名器已经识别出一个高关注度 topic。你的任务：**针对这个 topic 做深度挖掘**，聚焦**卖家的真实声音**、**具体痛点**、**实际案例**。
+对 rank 1, 2, 3 的每个 topic：
 
-覆盖时间窗口：{start_date} 至 {end_date}（{week_label}）。
-所属领域：{domain_name}。
-当前深度追踪 topic：{topic}
-Topic 所属模块：{module}
-Top 5 表里提炼的关键词：{keywords}
+1. heading
+   { "type": "heading", 
+     "text": "深度追踪 · <rank>. <topic>", 
+     "label": <confidence from deep_dive> }
 
-目标渠道：
-{channel_profile}
+2. narrative
+   { "type": "narrative", 
+     "text": <deep_dive.narrative>, 
+     "label": <confidence> }
 
-指令：
-1. **严格时间过滤**：只用覆盖窗口内（{start_date} 至 {end_date}）的来源。窗口外内容一律丢弃。
-2. 围绕 topic 主动联网搜索，深挖以下四类内容：
-   - **背景 narrative**：这个 topic 本期为何受关注，讨论的全貌（2-4 句中文）
-   - **痛点 painpoints**：卖家反复抱怨的具体痛点，3-5 条，每条 ≤20 字
-   - **卖家原话 quotes**：逐字保留的卖家原话 2-4 条，每条带 source（"渠道 · 作者 · 日期"格式，不要 URL）
-   - **实际案例 cases**：具体的卖家遭遇故事，2-4 条。每条含 content（完整讲述这个卖家做了什么、发生了什么、结果如何）；可选 title 和 meta（来源简写）
-3. 如果 topic 在本窗口有显著**行动建议**（例如官方口径变化、社区共识做法），可填 recommendation 字段（可选）。
-4. 所有文字**用中文**。quote 保留原文语言。不要 URL。
-5. 信息不足时各字段可为空数组，但整个 response 仍须是合法 JSON。
+3. insight · painpoint
+   { "type": "insight", 
+     "text": <deep_dive.painpoints>, 
+     "label": "卖家痛点" }
 
-仅返回合法 JSON，不要 markdown 围栏：
+4. insight · 误区拆解
+   { "type": "insight", 
+     "text": "<misconception>\\n\\n官方政策：<policy_reality>\\n\\n误解根源：<root_cause_of_misunderstanding>", 
+     "label": "核心误区拆解" }
+
+5. 对 deep_dive.quotes 的每一条生成一个 quote block：
+   { "type": "quote", 
+     "quote": <quote.text>, 
+     "source": <quote.source>,
+     "label": <confidence> }
+
+6. list 案例（若 deep_dive.cases 非空）
+   { "type": "list", 
+     "items": <array of { meta, title, content }>,
+     "label": <confidence> }
+
+7. stat 量化（若 quantified_observations 非空）
+   { "type": "stat", 
+     "stats": <array of { value: <observation string>, label: "" }>,
+     "label": "卖家原话量化" }
+
+# Tab 3: Tool Feedback 结构
+
+若 tool_feedback_items 非空：
+
+## tables（1 张工具总览）
+
 {
-  "topic": "{topic}",
-  "module": "{module}",
-  "narrative": "2-4 句中文背景叙述",
-  "painpoints": ["痛点 1", "痛点 2", "痛点 3"],
-  "quotes": [
-    { "quote": "卖家原话（逐字）", "source": "小红书 · 用户名 · 2026-04-20" }
-  ],
-  "cases": [
-    { "title": "可选短标题", "content": "完整的卖家案例讲述", "meta": "来源简写" }
-  ],
-  "recommendation": "可选的一句行动建议"
-}`;
+  "headers": ["工具", "情绪", "热度", "关键反馈要点"],
+  "rows": <对每个工具 1 行>
+}
 
-// ------------------------------------------------------------
-// Stage 5 — Engine Summarizer
-// ------------------------------------------------------------
-//
-// Input: Top5RankerOutput + DeepDiveOutput[] (for Top-3 only).
-// Output: per-engine consolidated JSON that the outer Synthesizer will
-// then merge across two engines.
-// ------------------------------------------------------------
-
-export const ENGINE_SUMMARIZER_PROMPT = `你是亚马逊"账户健康与申诉"雷达报告的 per-engine 整合器。你拿到本引擎 Stage 3 的 Top 5 排名和 Stage 4 的深度追踪产出。你的任务：**把两者合成一份 per-module 结构化 summary**，供外层 synthesizer 合并两路引擎。
-
-覆盖时间窗口：{start_date} 至 {end_date}（{week_label}）。
-所属领域：{domain_name}。
-渠道 profile：{channel_profile}
-
-Stage 3 Top 5 排名：
-{top5_input}
-
-Stage 4 深度追踪（Top 3 per module）：
-{deep_dives_input}
-
-指令：
-1. 对每个模块：
-   - 如果 Top 5 列表为空（模块被跳过）→ 该模块输出 empty_reason: "本期该模块无显著信号"，其他字段留空。
-   - 否则 → 输出 top5_table（完整 5 条或少于 5 条的实际值）+ deep_dives（按 rank 升序排列 Top 3）。
-2. top5_table 里每行保留 rank、topic、voice_volume、keywords、seller_discussion、severity 六个字段，和 Stage 3 输入完全对应。
-3. deep_dives 里每个 topic 的 narrative / painpoints / quotes / cases / recommendation 直接沿用 Stage 4 输出，不要改写。
-4. 4 个模块顺序固定：suspension → listing → tool_feedback → education。
-5. 所有文本用**中文**。quote 保持原文语言。
-
-仅返回合法 JSON，不要 markdown 围栏：
-{
-  "modules": {
-    "suspension": {
-      "top5_table": [ /* Top5Entry[], 0-5 items */ ],
-      "deep_dives": [ /* DeepDiveOutput[], 0-3 items, rank-ordered */ ],
-      "empty_reason": "可选 — 当该模块无显著信号时填写"
-    },
-    "listing": { ... },
-    "tool_feedback": { ... },
-    "education": { ... }
+每行 4 列：
+- col 1: tool_name
+- col 2: 情绪对象 {
+    "text": <"正面"|"中性"|"负面"|"混合">,
+    "badge": {
+      "text": <同上>,
+      "level": <negative→"high", mixed→"medium", neutral/positive→"low">
+    }
   }
-}`;
+- col 3: { "text": <voice_volume 数字>, "badge": null }
+- col 4: key_feedback_points 用顿号连接
 
-// ------------------------------------------------------------
-// Shared channel profile
-// ------------------------------------------------------------
+## blocks（对每个 tool）
+1. heading
+   { "type": "heading", 
+     "text": "<tool_name> · <sentiment 中文>" }
 
-/**
- * Shared channel profile used by BOTH engines.
- *
- * Both engines query the same channels; differentiation comes from
- * the models themselves (DeepSeek V3.2 vs Kimi K2). High-confidence
- * signals are those independently surfaced by both.
- *
- * The list is REPRESENTATIVE; researchers are told to discover
- * equivalent Chinese-seller-facing channels they may know of.
- */
-export const SHARED_CHANNEL_PROFILE = `中国卖家的市场声音主要出现在以下渠道，这是代表性清单，不是穷尽列表 —— 研究员应主动探索同类型的其他中国卖家聚集地：
+2. narrative
+   { "type": "narrative", 
+     "text": <key_feedback_points 展开叙述, 用句号或顿号拼接> }
 
-- 小红书 (xiaohongshu)：亚马逊卖家笔记、账号申诉经验、选品与运营分享
-- 抖音 (douyin)：跨境卖家短视频、直播回放、卖家个人号
-- 知无不言 (zwbz.net)：亚马逊卖家论坛深度帖、案例分析
-- 卖家之家 (maijiazhijia.com)：案例与政策解读、运营经验
-- 微信公众号：跨境电商媒体号、服务商号、卖家个人号
-- 亿恩网 (enet.com.cn)、雨果网 (cifnews.com)：跨境电商媒体的卖家声音报道
-- Reddit r/FulfillmentByAmazon、r/AmazonSeller 上中国卖家的讨论
+3. list evidence（若 evidence_snippets 非空）
+   { "type": "list", 
+     "items": <array of { title: "", content: <snippet>, meta: "" }> }
 
-渠道分类规则（researcher 在输出 source_channel_type 时使用）：
-  - forum：论坛帖、社区问答、社交媒体评论区（小红书评论、抖音评论、知无不言帖子、Reddit、卖家之家论坛区）
-  - provider：服务商文章、代运营公号稿、工具商文档（卖家之家服务商稿、第三方服务文章）
-  - media：跨境电商新闻媒体（雨果网、亿恩网、Marketplace Pulse、Seller Sessions）
-  - kol：KOL / 个人大号（小红书/抖音/微信卖家个人号、B 站跨境博主）
+# Tab 4: Education Opportunities 结构
 
-注意：Amazon Seller Central 官方公告和政策页面不是首选来源（内部已有解读），重点放在卖家的真实体验、痛点、原话和讨论。`;
+若 education_opportunities 非空：
+
+## tables（1 张 Top 3）
+
+{
+  "headers": ["优先级", "教育主题", "目标人群", "紧迫度", "推荐形式"],
+  "rows": <对每个 opportunity 1 行>
+}
+
+每行 5 列：
+- col 1: rank 字符串
+- col 2: theme
+- col 3: target_audience
+- col 4: 紧迫度对象 {
+    "text": <"高"|"中"|"低">,
+    "badge": { "text": <同上>, "level": <"high"|"medium"|"low"> }
+  }
+- col 5: recommended_format 用顿号连接
+
+## blocks（对每个 opportunity）
+1. heading
+   { "type": "heading", 
+     "text": "<rank>. <theme>" }
+
+2. insight · 教育锚点
+   { "type": "insight", 
+     "text": "卖家错误认知: <wrong_belief>\\n\\n正确实践: <correct_practice>",
+     "label": "教育锚点" }
+
+3. narrative
+   { "type": "narrative", 
+     "text": <misconception_summary> }
+
+4. list supporting_evidence
+   { "type": "list", 
+     "items": <array of { title: "", content: <evidence>, meta: "" }> }
+
+5. recommendation
+   { "type": "recommendation", 
+     "text": "建议形式: <recommended_format 顿号连接>；目标人群: <target_audience>",
+     "label": "行动建议" }
+
+# 通用规则
+- 4 个 tab 顺序固定：
+  "Account Suspension Trends" → 
+  "Listing Takedown Trends" → 
+  "Account Health Tool Feedback" → 
+  "Education Opportunities"
+- 空 module: tables=[], blocks=[]
+- 所有文本保持中文
+- level 映射：high→red, medium→yellow, low→blue
+- 输入字段为 null 或空字符串时，对应 block 省略
+
+# 输出
+只返回合法 JSON，不要 markdown 围栏，严格符合 ReportContent 结构。`;

@@ -1,13 +1,13 @@
 import type { ReportContent } from '@/types/report';
 import { substitute } from './substitute';
-import type { CoverageWindow, EngineError } from './types';
+import type { CoverageWindow, EngineError, EngineAssembledContent } from './types';
 import { callOpenRouter, type ChatMessage } from './engines/openrouter-client';
 import { formatDateRange } from '@/lib/inngest/coverage-window';
 
 /**
  * Synthesizer model — DeepSeek V3.2 for stable, widely-provisioned
- * structured JSON output that clears the account's privacy guardrails.
- * V3.2 has 128k context which comfortably fits both engine traces.
+ * structured JSON output. V3.2 has 128k context which comfortably fits
+ * both engines' assembled ReportContent.
  */
 const DEFAULT_MODEL = 'deepseek/deepseek-v3.2';
 
@@ -19,10 +19,10 @@ export const REQUIRED_MODULE_TITLES = [
 ] as const;
 
 export interface SynthesizerInput {
-  /** Gemini engine summarizer output, or null if Gemini loop failed. */
-  geminiSummary: unknown | null;
-  /** Kimi engine summarizer output, or null if Kimi loop failed. */
-  kimiSummary: unknown | null;
+  /** Engine A (gemini col in DB) assembled content, or null if loop failed. */
+  geminiAssembled: EngineAssembledContent | null;
+  /** Engine B (kimi col in DB) assembled content, or null if loop failed. */
+  kimiAssembled: EngineAssembledContent | null;
   synthesizerPrompt: string;
   coverageWindow: CoverageWindow;
   openRouterApiKey: string;
@@ -34,32 +34,28 @@ export type SynthesizerResult =
   | { ok: false; error: EngineError };
 
 /**
- * Merges two engine summaries into one final ReportContent.
+ * Merges two engines' assembled ReportContent into one final ReportContent.
  *
  * Handles three cases:
- *   - Both engines succeeded: full cross-validation, mixed confidence tags
- *   - One engine null: single-engine path, every block labeled 1/2 sources
+ *   - Both engines succeeded: full cross-validation, cross_engine_confirmed tagging
+ *   - One engine null: single-engine path, all topics labeled "单路观察"
  *   - Both null: caller should NOT invoke the synthesizer at all
  */
 export async function synthesize(
   input: SynthesizerInput
 ): Promise<SynthesizerResult> {
-  if (input.geminiSummary === null && input.kimiSummary === null) {
-    // Caller contract: should not be invoked when both engines failed.
+  if (input.geminiAssembled === null && input.kimiAssembled === null) {
     return {
       ok: false,
       error: {
         engine: 'synthesizer',
         errorClass: 'MalformedResponse',
-        message: 'Synthesizer invoked with both engine summaries null',
+        message: 'Synthesizer invoked with both engines null',
       },
     };
   }
 
   // Human-readable YYYY-MM-DD ~ YYYY-MM-DD (Asia/Shanghai wall-clock).
-  // Synthesizer uses this for the report's `dateRange` field AND as the
-  // {start_date}/{end_date} substitution inside the synthesizer prompt —
-  // historical ISO timestamps like "2026-04-12T16:00:00Z" were ugly.
   const startShanghai = formatDateRange(
     new Date(input.coverageWindow.startIso),
     new Date(input.coverageWindow.startIso)
@@ -74,18 +70,21 @@ export async function synthesize(
     end_date: endShanghai,
     week_label: input.coverageWindow.weekLabel,
     gemini_output:
-      input.geminiSummary !== null
-        ? JSON.stringify(input.geminiSummary)
+      input.geminiAssembled !== null
+        ? JSON.stringify(input.geminiAssembled)
         : 'null (engine failed)',
     kimi_output:
-      input.kimiSummary !== null
-        ? JSON.stringify(input.kimiSummary)
+      input.kimiAssembled !== null
+        ? JSON.stringify(input.kimiAssembled)
         : 'null (engine failed)',
   });
 
   const messages: ChatMessage[] = [
     { role: 'system', content: resolvedPrompt },
-    { role: 'user', content: 'Merge the two engine outputs and return the final ReportContent JSON.' },
+    {
+      role: 'user',
+      content: 'Merge the two engine outputs per the rules in system prompt. Return the final ReportContent JSON.',
+    },
   ];
 
   const raw = await callOpenRouter<unknown>({
