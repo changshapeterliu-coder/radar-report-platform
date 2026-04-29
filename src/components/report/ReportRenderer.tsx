@@ -51,31 +51,62 @@ function CellContent({ cell }: { cell: TableCell }) {
 /* ─── Row normalization (accept array-of-arrays OR { cells: [...] }) ─── */
 
 function normalizeCell(raw: unknown): TableCell {
-  if (raw == null) return { text: '' };
-  if (typeof raw === 'object') {
-    const obj = raw as Record<string, unknown>;
-    if (typeof obj.text === 'string') {
-      const badge = obj.badge as TableCell['badge'];
-      return badge ? { text: obj.text, badge } : { text: obj.text };
+  try {
+    if (raw == null) return { text: '' };
+    if (typeof raw === 'object') {
+      const obj = raw as Record<string, unknown>;
+      if (typeof obj.text === 'string') {
+        const badgeRaw = obj.badge;
+        if (
+          badgeRaw &&
+          typeof badgeRaw === 'object' &&
+          typeof (badgeRaw as Record<string, unknown>).text === 'string'
+        ) {
+          const b = badgeRaw as Record<string, unknown>;
+          const level = b.level === 'high' || b.level === 'medium' || b.level === 'low'
+            ? (b.level as 'high' | 'medium' | 'low')
+            : 'low';
+          return {
+            text: obj.text,
+            badge: { text: String(b.text), level },
+          };
+        }
+        return { text: obj.text };
+      }
+      // Object without `text` field — stringify as fallback so we still show something.
+      try {
+        return { text: JSON.stringify(raw) };
+      } catch {
+        return { text: '' };
+      }
     }
-    return { text: JSON.stringify(raw) };
+    return { text: String(raw) };
+  } catch {
+    return { text: '' };
   }
-  return { text: String(raw) };
 }
 
 function normalizeRow(raw: unknown): { cells: TableCell[] } {
-  // Already in canonical shape: { cells: [...] }
-  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-    const obj = raw as Record<string, unknown>;
-    if (Array.isArray(obj.cells)) {
-      return { cells: obj.cells.map(normalizeCell) };
+  try {
+    // Canonical shape: { cells: [...] }
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      const obj = raw as Record<string, unknown>;
+      if (Array.isArray(obj.cells)) {
+        return { cells: obj.cells.map(normalizeCell) };
+      }
+      // Object but no cells array (or cells is null/undefined/non-array).
+      // Treat the object's own values as cells.
+      const vals = Object.values(obj);
+      return { cells: vals.map(normalizeCell) };
     }
+    // AI-produced shape: plain array of values
+    if (Array.isArray(raw)) {
+      return { cells: raw.map(normalizeCell) };
+    }
+    return { cells: [] };
+  } catch {
+    return { cells: [] };
   }
-  // Legacy / AI-produced shape: plain array of values
-  if (Array.isArray(raw)) {
-    return { cells: raw.map(normalizeCell) };
-  }
-  return { cells: [] };
 }
 
 /* ─── Table ─── */
