@@ -369,19 +369,19 @@ function ModuleEditor({
   onRemove: () => void;
 }) {
   const updateTable = (ti: number, table: ReportTable) => {
-    const tables = module.tables.map((t, i) => (i === ti ? table : t));
+    const tables = (module.tables ?? []).map((t, i) => (i === ti ? table : t));
     onChange({ ...module, tables });
   };
 
   const updateSection = (si: number, section: AnalysisSection) => {
-    const analysisSections = module.analysisSections.map((s, i) =>
+    const analysisSections = (module.analysisSections ?? []).map((s, i) =>
       i === si ? section : s
     );
     onChange({ ...module, analysisSections });
   };
 
   const updateHighlight = (hi: number, box: HighlightBox) => {
-    const highlightBoxes = module.highlightBoxes.map((h, i) =>
+    const highlightBoxes = (module.highlightBoxes ?? []).map((h, i) =>
       i === hi ? box : h
     );
     onChange({ ...module, highlightBoxes });
@@ -413,13 +413,13 @@ function ModuleEditor({
 
       {/* Tables */}
       <p className="text-sm font-bold text-gray-600 mb-1">Tables</p>
-      {module.tables.map((table, ti) => (
+      {(module.tables ?? []).map((table, ti) => (
         <div key={ti} className="relative">
           <TableEditor table={table} onChange={(t) => updateTable(ti, t)} />
-          {module.tables.length > 1 && (
+          {(module.tables ?? []).length > 1 && (
             <button
               onClick={() =>
-                onChange({ ...module, tables: module.tables.filter((_, i) => i !== ti) })
+                onChange({ ...module, tables: (module.tables ?? []).filter((_, i) => i !== ti) })
               }
               className="absolute top-1 right-1 text-red-400 hover:text-red-600 text-xs"
             >
@@ -429,7 +429,7 @@ function ModuleEditor({
         </div>
       ))}
       <button
-        onClick={() => onChange({ ...module, tables: [...module.tables, emptyTable()] })}
+        onClick={() => onChange({ ...module, tables: [...(module.tables ?? []), emptyTable()] })}
         className="text-xs text-[#146eb4] hover:underline mb-3"
       >
         + Table
@@ -437,18 +437,18 @@ function ModuleEditor({
 
       {/* Analysis Sections */}
       <p className="text-sm font-bold text-gray-600 mb-1">Analysis Sections</p>
-      {module.analysisSections.map((section, si) => (
+      {(module.analysisSections ?? []).map((section, si) => (
         <div key={si} className="relative">
           <AnalysisSectionEditor
             section={section}
             onChange={(s) => updateSection(si, s)}
           />
-          {module.analysisSections.length > 1 && (
+          {(module.analysisSections ?? []).length > 1 && (
             <button
               onClick={() =>
                 onChange({
                   ...module,
-                  analysisSections: module.analysisSections.filter((_, i) => i !== si),
+                  analysisSections: (module.analysisSections ?? []).filter((_, i) => i !== si),
                 })
               }
               className="absolute top-1 right-1 text-red-400 hover:text-red-600 text-xs"
@@ -462,7 +462,7 @@ function ModuleEditor({
         onClick={() =>
           onChange({
             ...module,
-            analysisSections: [...module.analysisSections, emptyAnalysisSection()],
+            analysisSections: [...(module.analysisSections ?? []), emptyAnalysisSection()],
           })
         }
         className="text-xs text-[#146eb4] hover:underline mb-3"
@@ -472,7 +472,7 @@ function ModuleEditor({
 
       {/* Highlight Boxes */}
       <p className="text-sm font-bold text-gray-600 mb-1">Highlight Boxes</p>
-      {module.highlightBoxes.map((box, hi) => (
+      {(module.highlightBoxes ?? []).map((box, hi) => (
         <div key={hi} className="flex items-start gap-1">
           <div className="flex-1">
             <HighlightBoxEditor box={box} onChange={(b) => updateHighlight(hi, b)} />
@@ -481,7 +481,7 @@ function ModuleEditor({
             onClick={() =>
               onChange({
                 ...module,
-                highlightBoxes: module.highlightBoxes.filter((_, i) => i !== hi),
+                highlightBoxes: (module.highlightBoxes ?? []).filter((_, i) => i !== hi),
               })
             }
             className="text-red-400 hover:text-red-600 text-xs mt-1"
@@ -494,7 +494,7 @@ function ModuleEditor({
         onClick={() =>
           onChange({
             ...module,
-            highlightBoxes: [...module.highlightBoxes, emptyHighlightBox()],
+            highlightBoxes: [...(module.highlightBoxes ?? []), emptyHighlightBox()],
           })
         }
         className="text-xs text-[#146eb4] hover:underline"
