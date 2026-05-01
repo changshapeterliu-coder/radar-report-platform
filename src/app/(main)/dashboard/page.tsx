@@ -6,8 +6,10 @@ import { useTranslation } from 'react-i18next';
 import { createClient } from '@/lib/supabase/client';
 import { useDomain } from '@/contexts/DomainContext';
 import { TableRenderer } from '@/components/report/ReportRenderer';
+import TopTopicsTable from '@/components/report/TopTopicsTable';
 import type { Database } from '@/types/database';
-import type { ReportContent, ReportTable } from '@/types/report';
+import type { ReportContent, ReportTable, ReportModule } from '@/types/report';
+import { isMarkdownModule } from '@/lib/validators/report-schema';
 import {
   LineChart,
   Line,
@@ -76,10 +78,10 @@ export default function DashboardPage() {
   // Extract summary tables from latest report
   const latestReport = reports[0] ?? null;
   const latestContent = latestReport?.content as ReportContent | null;
-  const module1Table: ReportTable | null =
-    latestContent?.modules?.[0]?.tables?.[0] ?? null;
-  const module2Table: ReportTable | null =
-    latestContent?.modules?.[1]?.tables?.[0] ?? null;
+  const module1: ReportModule | null = latestContent?.modules?.[0] ?? null;
+  const module2: ReportModule | null = latestContent?.modules?.[1] ?? null;
+  const module1Table: ReportTable | null = module1?.tables?.[0] ?? null;
+  const module2Table: ReportTable | null = module2?.tables?.[0] ?? null;
 
   // Split news: top 3 as HOT, rest as history
   const hotNews = latestNews.slice(0, 3);
@@ -243,21 +245,29 @@ export default function DashboardPage() {
           </section>
 
           {/* Module 1 Summary Table */}
-          {module1Table && (
+          {module1 && (isMarkdownModule(module1) ? (module1.topTopics ?? []).length > 0 : !!module1Table) && (
             <section>
               <h2 className="text-lg font-bold text-[#232f3e] mb-3">📊 {t('dashboard.module1Summary')}</h2>
               <div className="bg-white rounded-lg border border-gray-200 p-4 overflow-x-auto shadow-sm">
-                <TableRenderer table={module1Table} />
+                {isMarkdownModule(module1) ? (
+                  <TopTopicsTable topics={module1.topTopics!} />
+                ) : (
+                  module1Table && <TableRenderer table={module1Table} />
+                )}
               </div>
             </section>
           )}
 
           {/* Module 2 Summary Table */}
-          {module2Table && (
+          {module2 && (isMarkdownModule(module2) ? (module2.topTopics ?? []).length > 0 : !!module2Table) && (
             <section>
               <h2 className="text-lg font-bold text-[#232f3e] mb-3">📊 {t('dashboard.module2Summary')}</h2>
               <div className="bg-white rounded-lg border border-gray-200 p-4 overflow-x-auto shadow-sm">
-                <TableRenderer table={module2Table} />
+                {isMarkdownModule(module2) ? (
+                  <TopTopicsTable topics={module2.topTopics!} />
+                ) : (
+                  module2Table && <TableRenderer table={module2Table} />
+                )}
               </div>
             </section>
           )}

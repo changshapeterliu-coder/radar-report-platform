@@ -10,6 +10,9 @@ import type {
   TableCell,
 } from '@/types/report';
 import BlockRenderer from './BlockRenderer';
+import MarkdownRenderer from './MarkdownRenderer';
+import TopTopicsTable from './TopTopicsTable';
+import { isMarkdownModule } from '@/lib/validators/report-schema';
 
 /* ─── Badge helpers ─── */
 
@@ -221,6 +224,41 @@ function HighlightBoxRenderer({ box }: { box: HighlightBox }) {
 /* ─── Module Card ─── */
 
 function ModuleCard({ module }: { module: ReportModule }) {
+  // v4 Markdown-hybrid dispatch: if the module has a `markdown` field,
+  // render via MarkdownRenderer + TopTopicsTable (new path). Otherwise
+  // fall back to the legacy blocks/tables/analysisSections/highlightBoxes
+  // renderer for pre-v4 drafts.
+  if (isMarkdownModule(module)) {
+    return <MarkdownModuleCard module={module} />;
+  }
+  return <LegacyModuleCard module={module} />;
+}
+
+/* ─── v4 Markdown Module Card ─── */
+
+function MarkdownModuleCard({ module }: { module: ReportModule }) {
+  const hasTopTopics = Array.isArray(module.topTopics) && module.topTopics.length > 0;
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 mb-8 overflow-hidden">
+      <div className="px-6 sm:px-10 py-5 border-b border-gray-200">
+        <h2 className="text-xl font-bold text-[#232f3e]">{module.title}</h2>
+        {module.subtitle && (
+          <p className="text-sm text-gray-500 mt-1">{module.subtitle}</p>
+        )}
+      </div>
+      <div className="px-6 sm:px-10 py-8">
+        <div className="max-w-[820px] mx-auto">
+          {hasTopTopics && <TopTopicsTable topics={module.topTopics!} />}
+          <MarkdownRenderer source={module.markdown ?? ''} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Legacy Module Card (v1-v3 compatible) ─── */
+
+function LegacyModuleCard({ module }: { module: ReportModule }) {
   const hasBlocks = Array.isArray(module.blocks) && module.blocks.length > 0;
   const hasLegacyParagraphs = Array.isArray(module.paragraphs) && module.paragraphs.length > 0;
 

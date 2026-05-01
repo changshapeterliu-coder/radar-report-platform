@@ -14,6 +14,8 @@ import type {
   HighlightBox,
 } from '@/types/report';
 import ReportRenderer from '@/components/report/ReportRenderer';
+import MarkdownContentEditor from './MarkdownContentEditor';
+import { isV4Content } from '@/lib/validators/report-schema';
 
 /* ─── Helpers ─── */
 
@@ -576,6 +578,15 @@ export interface ContentEditorProps {
 }
 
 export default function ContentEditor({ value, onChange, reportType = 'regular' }: ContentEditorProps) {
+  // v4 Markdown-hybrid drafts route to MarkdownContentEditor.
+  // Pre-v4 drafts (blocks/tables/analysisSections) keep the legacy editor.
+  if (isV4Content(value)) {
+    return <MarkdownContentEditor value={value} onChange={onChange} />;
+  }
+  return <LegacyContentEditor value={value} onChange={onChange} reportType={reportType} />;
+}
+
+function LegacyContentEditor({ value, onChange, reportType = 'regular' }: ContentEditorProps) {
   const { t } = useTranslation();
   const [showPreview, setShowPreview] = useState(false);
   const [previewModuleIndex, setPreviewModuleIndex] = useState(0);
