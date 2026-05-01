@@ -19,9 +19,17 @@ import {
  *     web search (OpenRouter :online used Exa, which has weak coverage of
  *     小红书 / 抖音 / 雨果网 etc.). Stage 3/4 remain on OpenRouter.
  *
- * Stage timeouts chosen under Vercel Pro 60s serverless-function limit:
- *   Stage 1/2 do web search → 50s each
- *   Stage 3/4 are pure LLM    → 30s / 40s
+ * Stage timeouts chosen for Vercel Pro Inngest serverless-function limit:
+ *   Pro Inngest = 300s / step. We target a conservative 40% headroom.
+ *   Stage 1/2 do web search with Moonshot $web_search multi-round tool_calls
+ *   and can legitimately need 60-100s (LLM reasoning + Kimi's native search
+ *   agent + cross-border network latency from Vercel US to api.moonshot.cn).
+ *   Stage 3/4 are pure LLM calls → shorter.
+ *
+ *   Stage 1  hotRadar        → 120s
+ *   Stage 2  deepDive        → 120s (each topic; parallel)
+ *   Stage 3  education       → 60s
+ *   Stage 4  assembler       → 90s
  */
 const DEFAULT_RESEARCHER_MODEL = 'kimi-k2.6'; // Moonshot direct — $web_search enabled
 const DEFAULT_MODEL = 'deepseek/deepseek-v3.2'; // OpenRouter for Stage 3/4
@@ -58,10 +66,10 @@ export async function runGeminiLoop(
       openRouterApiKey: input.openRouterApiKey,
       moonshotApiKey: input.moonshotApiKey,
       deepDivePerModule: input.deepDivePerModule,
-      hotRadarTimeoutMs: 50_000,
-      deepDiveTimeoutMs: 50_000,
-      educationMapperTimeoutMs: 30_000,
-      assemblerTimeoutMs: 40_000,
+      hotRadarTimeoutMs: 120_000,
+      deepDiveTimeoutMs: 120_000,
+      educationMapperTimeoutMs: 60_000,
+      assemblerTimeoutMs: 90_000,
     },
     stageRunner
   );

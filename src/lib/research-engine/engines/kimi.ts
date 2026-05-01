@@ -17,9 +17,14 @@ import {
  * OpenRouter + Exa which has weak Chinese community coverage — the
  * cross-engine value is limited until PR 2 lands.
  *
- * Stage timeouts aligned to Vercel Pro 60s serverless-function limit
- * (same as Engine A). Previously was 4 minutes which silently exceeded
- * the platform cap.
+ * Stage timeouts aligned to Vercel Pro Inngest 300s serverless-function limit
+ * (same as Engine A). Previously was 4 minutes at the engine-loop level which
+ * silently exceeded the underlying HTTP call cap.
+ *
+ *   Stage 1  hotRadar        → 120s
+ *   Stage 2  deepDive        → 120s
+ *   Stage 3  education       → 60s
+ *   Stage 4  assembler       → 90s
  */
 const DEFAULT_MODEL = 'moonshotai/kimi-k2-0905';
 const DEFAULT_RESEARCHER_MODEL = 'moonshotai/kimi-k2-0905:online';
@@ -52,10 +57,10 @@ export async function runKimiLoop(
       domainName: input.domainName,
       openRouterApiKey: input.openRouterApiKey,
       deepDivePerModule: input.deepDivePerModule,
-      hotRadarTimeoutMs: 50_000,
-      deepDiveTimeoutMs: 50_000,
-      educationMapperTimeoutMs: 30_000,
-      assemblerTimeoutMs: 40_000,
+      hotRadarTimeoutMs: 120_000,
+      deepDiveTimeoutMs: 120_000,
+      educationMapperTimeoutMs: 60_000,
+      assemblerTimeoutMs: 90_000,
     },
     stageRunner
   );
