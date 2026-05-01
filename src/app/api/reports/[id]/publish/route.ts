@@ -18,6 +18,17 @@ async function extractTopicsForModule(
   apiKey: string
 ): Promise<TopicEntry[]> {
   const mod = content.modules?.[moduleIndex];
+  if (!mod) return [];
+
+  // v4 fast path: module already has structured topTopics — bypass LLM.
+  // Each topTopic is our canonical rank/topic/keywords/discussion shape
+  // so we only need to map into TopicEntry + LLM-stabilize the label
+  // across weeks.
+  if (Array.isArray(mod.topTopics) && mod.topTopics.length > 0) {
+    return stabilizeLabelsV4(mod.topTopics, existingLabels, apiKey);
+  }
+
+  // Legacy path: fall back to reading the first table's rows.
   const table = mod?.tables?.[0];
   if (!table?.rows?.length) return [];
 
@@ -62,6 +73,78 @@ Return ONLY a JSON array: [{ "rank": 1, "topic_label": "Account Association", "r
   const parsed = JSON.parse(raw);
   // Handle both direct array and { topics: [...] } wrapper
   return Array.isArray(parsed) ? parsed : (parsed.topics || parsed.results || []);
+}
+
+/**
+ * v4 path: topTopics already has canonical topic/keywords/seller_discussion.
+ * We still call the LLM to stabilize topic_label across weeks (a canonical
+ * English short label) so the Dashboard trending chart groups consistently.
+ *
+ * Input entries come from ReportModule.topTopics. Numeric rank is parsed
+ * from the rank string (e.g. "1 ✓" -> 1, "2" -> 2). If parse fails, we
+ * fall back to array index.
+ */
+async function stabilizeLabelsV4(
+  topics: NonNullable<ReportContent['modules'][number]['topTopics']>,
+  existingLabels: string[],
+  apiKey: string
+): Promise<TopicEntry[]> {
+  const entries = topics.map((t, i) => {
+    const parsedRank = parseInt(t.rank, 10);
+    return {
+      rank: Number.isFinite(parsedRank) ? parsedRank : i + 1,
+      topic: t.topic,
+      keywords: t.keywords.join('、'),
+      discussion: t.seller_discussion,
+    };
+  });
+
+  const prompt = `You are a topic matching assistant. For each entry below, map its Chinese topic to a standardized English label (max 40 chars). Reuse existing labels when semantically equivalent.
+
+Existing labels: ${JSON.stringify(existingLabels)}
+
+Entries:
+${entries.map((e) => `Rank ${e.rank}: Topic="${e.topic}", Keywords="${e.keywords}", Discussion="${e.discussion}"`).join('\n')}
+
+Return ONLY a JSON array: [{ "rank": 1, "topic_label": "Account Association", "raw_reason": "Topic Chinese name", "raw_keywords": "Keywords list" }, ...]`;
+
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'openrouter/auto',
+      messages: [
+        { role: 'system', content: 'You are a topic classification assistant. Return only valid JSON.' },
+        { role: 'user', content: prompt },
+      ],
+      response_format: { type: 'json_object' },
+    }),
+  });
+  if (!res.ok) {
+    // If LLM labeling fails, fall back to using the Chinese topic as label.
+    // This keeps the Dashboard trending working (less-grouped) rather than
+    // silently dropping data.
+    return entries.map((e) => ({
+      rank: e.rank,
+      topic_label: e.topic,
+      raw_reason: e.topic,
+      raw_keywords: e.keywords,
+    }));
+  }
+  const data = await res.json();
+  const raw = data?.choices?.[0]?.message?.content || '[]';
+  try {
+    const parsed = JSON.parse(raw);
+    const out = Array.isArray(parsed)
+      ? parsed
+      : parsed.topics || parsed.results || [];
+    return out as TopicEntry[];
+  } catch {
+    return [];
+  }
 }
 
 export async function PUT(request: NextRequest, context: RouteContext) {

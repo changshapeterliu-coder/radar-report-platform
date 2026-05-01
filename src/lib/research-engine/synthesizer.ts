@@ -155,9 +155,19 @@ function validateSynthesizerOutput(raw: unknown): ValidationResult {
         reason: `modules[${i}].title must be "${REQUIRED_MODULE_TITLES[i]}" (got "${String(m.title)}")`,
       };
     }
-    // blocks should exist as an array (may be empty)
-    if (m.blocks !== undefined && !Array.isArray(m.blocks)) {
-      return { ok: false, reason: `modules[${i}].blocks must be an array if present` };
+    // v4 shape: markdown required (blocks path deprecated for new content).
+    // We accept either:
+    //   - v4: markdown is a string (may be empty "")
+    //   - legacy: blocks is an array (may be empty [])
+    // to stay compatible with pre-v4 cached runs while the synthesizer prompt
+    // is being migrated.
+    const hasMarkdown = typeof m.markdown === 'string';
+    const hasBlocksArray = Array.isArray(m.blocks);
+    if (!hasMarkdown && !hasBlocksArray) {
+      return {
+        ok: false,
+        reason: `modules[${i}] must have either markdown (string) or blocks (array)`,
+      };
     }
   }
 

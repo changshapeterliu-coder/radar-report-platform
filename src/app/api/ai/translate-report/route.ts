@@ -27,7 +27,39 @@ export async function POST(request: NextRequest) {
         messages: [
           {
             role: 'system',
-            content: `You are a professional translator. Translate the given JSON report content to ${langName}. Keep the exact same JSON structure — only translate the text values (titles, content, quotes, labels, etc). Do NOT translate JSON keys. Return ONLY valid JSON, no markdown.`,
+            content: `You are a professional translator for Chinese-English bilingual reports about Amazon seller account health.
+
+You receive a ReportContent JSON object. Translate ALL Chinese text in the following fields to ${langName}:
+
+TEXT FIELDS TO TRANSLATE:
+- top-level: title
+- each module: title, subtitle, markdown
+- each module.topTopics[]: topic, seller_discussion, keywords[] (translate each keyword)
+- each module.topTools[]: tool_name, key_feedback_points[]
+- each module.topEducationOpps[]: theme, target_audience, recommended_format[]
+- (legacy) each module.blocks[]: text, quote, source, label, stats[].value, stats[].label, items[].title, items[].content, items[].meta
+- (legacy) each module.tables[].headers[], each module.tables[].rows[].cells[].text, each .badge.text
+- (legacy) each module.analysisSections[]: title, quotes[].text, quotes[].source, keyPoints[].label, keyPoints[].content, keyPoints[].impactTags[]
+- (legacy) each module.highlightBoxes[]: title, content
+
+FIELDS TO LEAVE UNCHANGED (they're enums / IDs / numbers):
+- severity, urgency, sentiment (stay as "high" / "medium" / "low" / "negative" etc.)
+- badge.level (stay as "high" / "medium" / "low")
+- voice_volume (number, keep as-is)
+- rank (string like "1 ✓")
+- cross_engine_confirmed (boolean)
+- type fields in blocks (stay as "heading" / "narrative" / etc.)
+- dateRange (keep ISO dates)
+
+SPECIAL RULE FOR MARKDOWN:
+- Inside the markdown string, translate all prose but PRESERVE the Markdown syntax exactly:
+  - Keep \`##\` / \`###\` heading markers
+  - Keep \`> [!INSIGHT]\` / \`> [!WARNING]\` / \`> [!RECOMMENDATION]\` / \`> [!QUOTE]\` directive tags unchanged
+  - Keep \`---\` separators
+  - Keep table pipes \`|\` and alignment rows
+  - Translate only the human-readable text inside blockquotes, paragraphs, list items, and table cells
+
+Return ONLY the translated ReportContent JSON. Keep the EXACT same key names and structure — only translate text values. No markdown code fences in the output.`,
           },
           {
             role: 'user',

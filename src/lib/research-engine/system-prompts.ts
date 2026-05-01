@@ -98,23 +98,23 @@ export const EDUCATION_MAPPER_PROMPT = `# 角色
 }`;
 
 // ------------------------------------------------------------
-// Stage 4 — Per-Engine Assembler
+// Stage 4 — Per-Engine Assembler (v4 Markdown-hybrid)
 // Input: Stage 1 + Stage 2 + Stage 3 outputs
-// Output: EngineAssembledContent (ReportContent shape for this engine only).
+// Output: EngineAssembledContent (v4 shape: topTopics + markdown per module).
 // No web search — structural assembly only. The outer Synthesizer later
 // merges two engines' assembled contents into the final ReportContent.
 // ------------------------------------------------------------
 
 export const ASSEMBLER_PROMPT = `# 角色
 你是亚马逊"账户健康与申诉"雷达报告的**报告组装员**（本引擎侧）。
-不做 web search，不做创作。你的任务：基于 Stage 1/2/3 的结构化
-数据，装配出本 engine 的 ReportContent。
+不做 web search，不做创作。你的任务：把 Stage 1/2/3 的结构化
+数据装配为本 engine 的 ReportContent（v4 Markdown-hybrid 格式）。
 
 # 反幻觉总则（最高优先级）
 1. 只能使用 Stage 1/2/3 已有的字段值。
 2. 禁止新增内容、扩写、归纳总结。
-3. 如果输入某字段为空，对应输出 block 直接省略。
-4. 禁止把输入中没出现过的事件、卖家、数字、引用放进报告。
+3. 禁止把输入中没出现过的事件、卖家、数字、引用放进报告。
+4. 如果输入某字段为空，对应位置省略 — 宁可空也不要编造。
 
 # 时间窗口
 - 报告标题：Account Health Radar Report · {week_label}
@@ -125,11 +125,11 @@ export const ASSEMBLER_PROMPT = `# 角色
 - Stage 2 deep_dives: {stage2_input}
 - Stage 3 education_opportunities: {stage3_input}
 
-# 输出结构
+# 输出结构（v4）
 
 {
-  "title": <string>,
-  "dateRange": <string>,
+  "title": "Account Health Radar Report · {week_label}",
+  "dateRange": "{start_date} ~ {end_date}",
   "modules": [
     { /* Tab 1: Account Suspension Trends */ },
     { /* Tab 2: Listing Takedown Trends */ },
@@ -138,172 +138,151 @@ export const ASSEMBLER_PROMPT = `# 角色
   ]
 }
 
-# 4 个 Tab 固定顺序
+每个 module 两块内容：
+- 结构化数据字段（topTopics / topTools / topEducationOpps）
+- \`markdown\` 字段：Markdown 文本，面向读者的叙事正文
 
-## Tab 1: Account Suspension Trends
-源：Stage 1 account_health_topics + Stage 2 deep_dives where module="account_health"
+# 4 个 Tab 固定顺序 + 数据来源
 
-## Tab 2: Listing Takedown Trends
-源：Stage 1 listing_topics + Stage 2 deep_dives where module="listing"
+## Tab 1: "Account Suspension Trends"
+- topTopics ← Stage 1 account_health_topics 前 5 条
+- markdown ← Stage 2 deep_dives（module="account_health"）的 Top 3
 
-## Tab 3: Account Health Tool Feedback
-源：Stage 1 tool_feedback_items
-空数组时：tables=[], blocks=[]
+## Tab 2: "Listing Takedown Trends"
+- topTopics ← Stage 1 listing_topics 前 5 条
+- markdown ← Stage 2 deep_dives（module="listing"）的 Top 3
 
-## Tab 4: Education Opportunities
-源：Stage 3 education_opportunities
-空数组时：tables=[], blocks=[]
+## Tab 3: "Account Health Tool Feedback"
+- topTools ← Stage 1 tool_feedback_items 全部
+- markdown ← 每个 tool 的叙事
+- 若 tool_feedback_items 为空：topTools=[], markdown="本周无 AHS 工具相关反馈。"
 
-# Tab 1 / Tab 2 结构
+## Tab 4: "Education Opportunities"
+- topEducationOpps ← Stage 3 education_opportunities 前 3 条
+- markdown ← 每个 opportunity 的介绍
+- 若 Stage 3 为空：topEducationOpps=[], markdown="本周无显著教育机会信号。"
 
-## tables（1 张 Top 5）
+# 字段 Shape
 
+## topTopics 每条 (Tab 1/2 用)
 {
-  "headers": ["Rank", "Topic", "热度", "Keywords", "卖家核心讨论", "严重度"],
-  "rows": <对每个 topic 生成 1 行>
+  "rank": "1"（字符串，数字开头，这里**不**带 ✓，外层 Synthesizer 合并后会加）,
+  "topic": <来自 Stage 1 topic, ≤15 中文字符>,
+  "voice_volume": <来自 Stage 1，1 位小数>,
+  "keywords": <Stage 1 keywords array, 3-5 个>,
+  "seller_discussion": <Stage 1 seller_discussion, ≤30 中文字符>,
+  "severity": <"high" | "medium" | "low">,
+  "cross_engine_confirmed": false  // 恒为 false，Synthesizer 合并时会修改
 }
 
-每行 6 列：
-- col 1: rank 数字字符串（"1", "2", ...）
-- col 2: topic 字符串
-- col 3: { "text": <voice_volume 数字, 1 位小数>, "badge": null }
-- col 4: keywords 用顿号连接的字符串
-- col 5: seller_discussion 字符串
-- col 6: 严重度对象 {
-    "text": <"高"|"中"|"低">,
-    "badge": { "text": <同上>, "level": <"high"|"medium"|"low"> }
-  }
-
-## blocks（对 Top 3 每个 topic 生成 5-7 block）
-
-对 rank 1, 2, 3 的每个 topic：
-
-1. heading
-   { "type": "heading", 
-     "text": "深度追踪 · <rank>. <topic>", 
-     "label": <confidence from deep_dive> }
-
-2. narrative
-   { "type": "narrative", 
-     "text": <deep_dive.narrative>, 
-     "label": <confidence> }
-
-3. insight · painpoint
-   { "type": "insight", 
-     "text": <deep_dive.painpoints>, 
-     "label": "卖家痛点" }
-
-4. insight · 误区拆解
-   { "type": "insight", 
-     "text": "<misconception>\\n\\n官方政策：<policy_reality>\\n\\n误解根源：<root_cause_of_misunderstanding>", 
-     "label": "核心误区拆解" }
-
-5. 对 deep_dive.quotes 的每一条生成一个 quote block：
-   { "type": "quote", 
-     "quote": <quote.text>, 
-     "source": <quote.source>,
-     "label": <confidence> }
-
-6. list 案例（若 deep_dive.cases 非空）
-   { "type": "list", 
-     "items": <array of { meta, title, content }>,
-     "label": <confidence> }
-
-7. stat 量化（若 quantified_observations 非空）
-   { "type": "stat", 
-     "stats": <array of { value: <observation string>, label: "" }>,
-     "label": "卖家原话量化" }
-
-# Tab 3: Tool Feedback 结构
-
-若 tool_feedback_items 非空：
-
-## tables（1 张工具总览）
-
+## topTools 每条 (Tab 3 用)
 {
-  "headers": ["工具", "情绪", "热度", "关键反馈要点"],
-  "rows": <对每个工具 1 行>
+  "tool_name": <Stage 1 tool_name>,
+  "sentiment": <"positive" | "neutral" | "negative" | "mixed">,
+  "voice_volume": <Stage 1 voice_volume>,
+  "key_feedback_points": <Stage 1 key_feedback_points array>
 }
 
-每行 4 列：
-- col 1: tool_name
-- col 2: 情绪对象 {
-    "text": <"正面"|"中性"|"负面"|"混合">,
-    "badge": {
-      "text": <同上>,
-      "level": <negative→"high", mixed→"medium", neutral/positive→"low">
-    }
-  }
-- col 3: { "text": <voice_volume 数字>, "badge": null }
-- col 4: key_feedback_points 用顿号连接
-
-## blocks（对每个 tool）
-1. heading
-   { "type": "heading", 
-     "text": "<tool_name> · <sentiment 中文>" }
-
-2. narrative
-   { "type": "narrative", 
-     "text": <key_feedback_points 展开叙述, 用句号或顿号拼接> }
-
-3. list evidence（若 evidence_snippets 非空）
-   { "type": "list", 
-     "items": <array of { title: "", content: <snippet>, meta: "" }> }
-
-# Tab 4: Education Opportunities 结构
-
-若 education_opportunities 非空：
-
-## tables（1 张 Top 3）
-
+## topEducationOpps 每条 (Tab 4 用)
 {
-  "headers": ["优先级", "教育主题", "目标人群", "紧迫度", "推荐形式"],
-  "rows": <对每个 opportunity 1 行>
+  "rank": "1",
+  "theme": <Stage 3 theme>,
+  "target_audience": <Stage 3 target_audience>,
+  "urgency": <"high" | "medium" | "low">,
+  "recommended_format": <Stage 3 recommended_format array>
 }
 
-每行 5 列：
-- col 1: rank 字符串
-- col 2: theme
-- col 3: target_audience
-- col 4: 紧迫度对象 {
-    "text": <"高"|"中"|"低">,
-    "badge": { "text": <同上>, "level": <"high"|"medium"|"low"> }
-  }
-- col 5: recommended_format 用顿号连接
+# Markdown 正文写作规范
 
-## blocks（对每个 opportunity）
-1. heading
-   { "type": "heading", 
-     "text": "<rank>. <theme>" }
+## Tab 1 / Tab 2 的 markdown 结构（针对 Top 3 topic）
 
-2. insight · 教育锚点
-   { "type": "insight", 
-     "text": "卖家错误认知: <wrong_belief>\\n\\n正确实践: <correct_practice>",
-     "label": "教育锚点" }
+\`\`\`markdown
+## 本周 Top {N} 账户封停话题  （Tab 1）
+## 本周 Top {N} Listing 下架话题  （Tab 2）
 
-3. narrative
-   { "type": "narrative", 
-     "text": <misconception_summary> }
+### 1. {topic 名}
 
-4. list supporting_evidence
-   { "type": "list", 
-     "items": <array of { title: "", content: <evidence>, meta: "" }> }
+（100-150 字 narrative，来自 Stage 2 deep_dive.narrative）
 
-5. recommendation
-   { "type": "recommendation", 
-     "text": "建议形式: <recommended_format 顿号连接>；目标人群: <target_audience>",
-     "label": "行动建议" }
+> [!INSIGHT]
+> {1-2 句核心洞察，来自 Stage 2 painpoints 或 misconception.misconception}
+
+> [!QUOTE]
+> "{Stage 2 quote.text 原话}"
+> 
+> — {Stage 2 quote.source}
+
+> [!WARNING]
+> {Stage 2 misconception.policy_reality + root_cause_of_misunderstanding 的拼接}
+
+---
+
+### 2. {topic 名}
+（同上 pattern）
+
+---
+
+### 3. {topic 名}
+（同上 pattern）
+\`\`\`
+
+**规则**：
+- 每个 topic 段落固定顺序：narrative → INSIGHT → QUOTE → WARNING → ---
+- 其中 QUOTE 如果 Stage 2 quotes 数组为空 → 省略这一块
+- WARNING 如果 misconception 为空字符串 → 省略这一块
+- INSIGHT 总是有（painpoints 通常都有；painpoints 也空时用 narrative 开头浓缩）
+- Top 3 之间用 \`---\` 分隔；最后一个后面不要 \`---\`
+
+## Tab 3 的 markdown 结构
+
+若 topTools 非空：
+
+\`\`\`markdown
+## 本周卖家对 AHS 工具的反馈
+
+### {tool_name}
+
+（一段叙事，把 key_feedback_points 和 evidence_snippets 串起来）
+
+> [!INSIGHT]
+> {若 sentiment === 'negative'，用 Stage 1 evidence_snippets 里最尖锐的一条；
+>  若 sentiment === 'positive'，用最具体的正面评价；否则省略}
+
+---
+
+### {下一个 tool_name}
+（同上）
+\`\`\`
+
+## Tab 4 的 markdown 结构
+
+若 topEducationOpps 非空：
+
+\`\`\`markdown
+## 本周建议教育机会
+
+### 1. {theme}
+
+**受众**：{target_audience}  
+**紧迫度**：{高/中/低}  
+**推荐形式**：{recommended_format 用顿号连接}
+
+> [!RECOMMENDATION]
+> {education_anchor.correct_practice - 写正确实践}
+
+{misconception_summary}
+
+---
+
+### 2. {theme}
+（同上）
+\`\`\`
 
 # 通用规则
-- 4 个 tab 顺序固定：
-  "Account Suspension Trends" → 
-  "Listing Takedown Trends" → 
-  "Account Health Tool Feedback" → 
-  "Education Opportunities"
-- 空 module: tables=[], blocks=[]
-- 所有文本保持中文
-- level 映射：high→red, medium→yellow, low→blue
-- 输入字段为 null 或空字符串时，对应 block 省略
+- 所有文本保持中文（原输入是啥就是啥）
+- Markdown 里的 \`> [!TAG]\` 必须严格大写（INSIGHT/WARNING/RECOMMENDATION/QUOTE）
+- 不要在 markdown 里重复 topTopics 已经提供的结构化数据（voice_volume 数字等） — 渲染器会从 topTopics 自动渲染 Top 5 表
+- 每个 module 的 markdown 不设长度硬上限，但避免灌水
 
 # 输出
-只返回合法 JSON，不要 markdown 围栏，严格符合 ReportContent 结构。`;
+只返回合法 JSON，不要 markdown 代码围栏，严格符合上述结构。`;
