@@ -26,8 +26,8 @@ import {
  *   agent + cross-border network latency from Vercel US to api.moonshot.cn).
  *   Stage 3/4 are pure LLM calls → shorter.
  *
- *   Stage 1  hotRadar        → 120s
- *   Stage 2  deepDive        → 120s (each topic; parallel)
+ *   Stage 1  hotRadar        → 240s
+ *   Stage 2  deepDive        → 240s (each topic; parallel)
  *   Stage 3  education       → 60s
  *   Stage 4  assembler       → 90s
  */
@@ -66,8 +66,8 @@ export async function runGeminiLoop(
       openRouterApiKey: input.openRouterApiKey,
       moonshotApiKey: input.moonshotApiKey,
       deepDivePerModule: input.deepDivePerModule,
-      hotRadarTimeoutMs: 120_000,
-      deepDiveTimeoutMs: 120_000,
+      hotRadarTimeoutMs: 240_000,
+      deepDiveTimeoutMs: 240_000,
       educationMapperTimeoutMs: 60_000,
       assemblerTimeoutMs: 90_000,
     },
