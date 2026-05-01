@@ -60,6 +60,7 @@ export async function run(
         engineAHotRadarPrompt: input.engineAHotRadarPrompt,
         sharedDeepDivePrompt: input.sharedDeepDivePrompt,
         openRouterApiKey: input.openRouterApiKey,
+        moonshotApiKey: input.moonshotApiKey ?? '',
         deepDivePerModule,
       },
       stageRunner

@@ -6,14 +6,25 @@ import {
 } from './loop';
 
 /**
- * Engine A — DeepSeek V3.2.
+ * Engine A — Moonshot Kimi direct with $web_search builtin tool.
  *
  * File name / function name kept as "gemini" to preserve DB column mapping
  * (scheduled_runs.gemini_output) and avoid ripple-refactoring the Inngest
- * function. The actual model running inside is DEFAULT_MODEL / DEFAULT_RESEARCHER_MODEL.
+ * function. The actual model running inside is defined below.
+ *
+ * Historical notes:
+ *   - 2026-03: original Engine A was google/gemini-2.0-flash (hence the name).
+ *   - 2026-04-12: switched to deepseek/deepseek-v3.2:online via OpenRouter.
+ *   - 2026-05-01: switched to Moonshot Kimi direct for native Chinese-site
+ *     web search (OpenRouter :online used Exa, which has weak coverage of
+ *     小红书 / 抖音 / 雨果网 etc.). Stage 3/4 remain on OpenRouter.
+ *
+ * Stage timeouts chosen under Vercel Pro 60s serverless-function limit:
+ *   Stage 1/2 do web search → 50s each
+ *   Stage 3/4 are pure LLM    → 30s / 40s
  */
-const DEFAULT_MODEL = 'deepseek/deepseek-v3.2';
-const DEFAULT_RESEARCHER_MODEL = 'deepseek/deepseek-v3.2:online';
+const DEFAULT_RESEARCHER_MODEL = 'kimi-k2.6'; // Moonshot direct — $web_search enabled
+const DEFAULT_MODEL = 'deepseek/deepseek-v3.2'; // OpenRouter for Stage 3/4
 
 export interface GeminiLoopInput {
   coverageWindow: CoverageWindow;
@@ -22,7 +33,10 @@ export interface GeminiLoopInput {
   engineAHotRadarPrompt: string;
   /** DB-editable Stage 2 prompt (shared_deep_dive). */
   sharedDeepDivePrompt: string;
+  /** OpenRouter key — used for Stage 3/4 education + assembler. */
   openRouterApiKey: string;
+  /** Moonshot key — used for Stage 1/2 research with $web_search. */
+  moonshotApiKey: string;
   /** How many top topics per module to deep-dive. Default 3. */
   deepDivePerModule: number;
 }
@@ -36,16 +50,18 @@ export async function runGeminiLoop(
       engineLabel: 'gemini',
       model: DEFAULT_MODEL,
       researcherModel: DEFAULT_RESEARCHER_MODEL,
+      researcherProvider: 'moonshot',
       hotRadarPrompt: input.engineAHotRadarPrompt,
       deepDivePrompt: input.sharedDeepDivePrompt,
       coverageWindow: input.coverageWindow,
       domainName: input.domainName,
       openRouterApiKey: input.openRouterApiKey,
+      moonshotApiKey: input.moonshotApiKey,
       deepDivePerModule: input.deepDivePerModule,
-      hotRadarTimeoutMs: 4 * 60_000,
-      deepDiveTimeoutMs: 5 * 60_000,
-      educationMapperTimeoutMs: 2 * 60_000,
-      assemblerTimeoutMs: 3 * 60_000,
+      hotRadarTimeoutMs: 50_000,
+      deepDiveTimeoutMs: 50_000,
+      educationMapperTimeoutMs: 30_000,
+      assemblerTimeoutMs: 40_000,
     },
     stageRunner
   );

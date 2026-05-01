@@ -42,6 +42,24 @@ export interface EngineError {
   httpStatus?: number;
 }
 
+/**
+ * Citation metadata captured from a researcher-tier API call
+ * (Moonshot $web_search, Qwen search_info, OpenRouter annotations).
+ * Published-date is optional — not every provider exposes one.
+ */
+export interface EngineSearchReference {
+  url: string;
+  title?: string;
+  /** ISO-8601 date string if the provider exposed it. */
+  published_date?: string;
+  /** Which stage produced this reference — helps debug coverage. */
+  stage: LoopStage;
+  /** Which provider returned this reference. */
+  provider: 'moonshot' | 'qwen' | 'openrouter-exa';
+  /** Free-text snippet (truncated) — optional. */
+  snippet?: string;
+}
+
 // ============================================================
 // v3 Hot-Radar-Driven types
 // ============================================================
@@ -160,6 +178,11 @@ export interface EngineLoopTrace {
   deepDives: DeepDiveOutput[];
   educationOpportunities: EducationOpportunity[];
   assembled: EngineAssembledContent | null;
+  /**
+   * Web-search citations collected across Stage 1 + Stage 2.
+   * Optional — pre-v3.2 traces won't have this field.
+   */
+  searchReferences?: EngineSearchReference[];
 }
 
 export interface ResearchEngineInput {
@@ -174,6 +197,12 @@ export interface ResearchEngineInput {
   /** Outer synthesizer merge prompt. */
   synthesizerPrompt: string;
   openRouterApiKey: string;
+  /**
+   * Required when Engine A is configured with researcherProvider='moonshot'
+   * (which is now the default). Tests that exercise only legacy OpenRouter
+   * paths may omit it and use a dummy value.
+   */
+  moonshotApiKey?: string;
   /** Loop-wide soft cap; individual stage timeouts override. */
   engineTimeoutMs?: number;
   /** Synthesizer call timeout. Default 3 * 60_000. */

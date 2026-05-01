@@ -13,6 +13,7 @@ export type {
   EngineError,
   EngineErrorClass,
   EngineLoopTrace,
+  EngineSearchReference,
   HotRadarModuleKey,
   HotRadarOutput,
   HotRadarTopic,

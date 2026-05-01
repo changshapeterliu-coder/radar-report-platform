@@ -11,12 +11,15 @@ import {
   type EngineAssembledContent,
   type EngineError,
   type EngineLoopTrace,
+  type EngineSearchReference,
   type HotRadarOutput,
   type HotRadarModuleKey,
   type HotRadarTopic,
+  type LoopStage,
   type ToolFeedbackItem,
 } from '../types';
 import { callOpenRouter, type ChatMessage } from './openrouter-client';
+import { callMoonshot } from './moonshot-client';
 import { formatDateRange } from '@/lib/inngest/coverage-window';
 
 /** Caller-injected step runner. Default impl = direct call. Inngest injects step.run. */
@@ -24,19 +27,30 @@ export type StageRunner = <T>(stageName: string, fn: () => Promise<T>) => Promis
 
 export const DEFAULT_STAGE_RUNNER: StageRunner = (_name, fn) => fn();
 
+export type ResearcherProvider = 'openrouter' | 'moonshot';
+
 export interface EngineLoopConfig {
   engineLabel: 'gemini' | 'kimi';
-  /** Base model used for Stage 3/4 (no web search). */
+  /** Base model used for Stage 3/4 (no web search). Always an OpenRouter model. */
   model: string;
-  /** Model used for Stage 1/2 with :online web search. */
+  /**
+   * Model used for Stage 1/2 with web search. Format depends on researcherProvider:
+   *   - 'openrouter' → OpenRouter model slug with :online suffix (legacy).
+   *   - 'moonshot'   → Bare Moonshot model id, e.g. 'kimi-k2.6'.
+   */
   researcherModel: string;
+  /** Which API powers Stage 1/2 research calls. */
+  researcherProvider: ResearcherProvider;
   /** Stage 1 prompt (DB-editable, engine-specific). */
   hotRadarPrompt: string;
   /** Stage 2 prompt (DB-editable, shared by both engines). */
   deepDivePrompt: string;
   coverageWindow: CoverageWindow;
   domainName: string;
+  /** Always required — Stage 3/4 + education-mapper + assembler use OpenRouter. */
   openRouterApiKey: string;
+  /** Required when researcherProvider === 'moonshot'. */
+  moonshotApiKey?: string;
   /** Top-N topics per module to deep-dive. Default 3. */
   deepDivePerModule: number;
   hotRadarTimeoutMs: number;
@@ -77,6 +91,7 @@ export async function runEngineLoop(
     deepDives: [],
     educationOpportunities: [],
     assembled: null,
+    searchReferences: [],
   };
   const errors: EngineError[] = [];
 
@@ -101,6 +116,7 @@ export async function runEngineLoop(
     return { trace, assembled: null, errors };
   }
   trace.hotRadar = hotRadarResult.data;
+  pushRefs(trace, hotRadarResult.searchReferences);
 
   // ── Stage 2: Deep Dive (parallel, Top N per module) ──
   trace.deepDives = await runDeepDives(
@@ -108,7 +124,8 @@ export async function runEngineLoop(
     commonVars,
     hotRadarResult.data,
     stageRunner,
-    errors
+    errors,
+    trace
   );
 
   // ── Stage 3: Education Opportunity Mapper ──
@@ -141,6 +158,95 @@ export async function runEngineLoop(
 }
 
 // ==========================================================
+// Researcher dispatcher — routes Stage 1/2 calls to the
+// configured provider (OpenRouter :online vs direct Moonshot).
+// Returns normalized shape so caller doesn't care which ran.
+// ==========================================================
+
+interface ResearcherCallParams {
+  messages: ChatMessage[];
+  timeoutMs: number;
+  stage: LoopStage;
+  topicIndex?: number;
+}
+
+interface ResearcherOk<T> {
+  ok: true;
+  data: T;
+  searchReferences: EngineSearchReference[];
+}
+type ResearcherResult<T> = ResearcherOk<T> | { ok: false; error: EngineError };
+
+async function callResearcher<T>(
+  config: EngineLoopConfig,
+  p: ResearcherCallParams
+): Promise<ResearcherResult<T>> {
+  if (config.researcherProvider === 'moonshot') {
+    if (!config.moonshotApiKey) {
+      return {
+        ok: false,
+        error: {
+          engine: config.engineLabel,
+          stage: p.stage,
+          topicIndex: p.topicIndex,
+          errorClass: 'ServerError',
+          message:
+            'researcherProvider=moonshot but moonshotApiKey is missing',
+        },
+      };
+    }
+    const result = await callMoonshot<T>({
+      model: config.researcherModel,
+      messages: p.messages,
+      apiKey: config.moonshotApiKey,
+      timeoutMs: p.timeoutMs,
+      jsonMode: true,
+      errorContext: {
+        engine: config.engineLabel,
+        stage: p.stage,
+        topicIndex: p.topicIndex,
+      },
+    });
+    if (!result.ok) return result;
+    return {
+      ok: true,
+      data: result.data,
+      searchReferences: result.searchReferences,
+    };
+  }
+
+  // Default / legacy path: OpenRouter :online suffix.
+  const result = await callOpenRouter<T>({
+    model: config.researcherModel,
+    messages: p.messages,
+    apiKey: config.openRouterApiKey,
+    timeoutMs: p.timeoutMs,
+    jsonMode: true,
+    errorContext: {
+      engine: config.engineLabel,
+      stage: p.stage,
+      topicIndex: p.topicIndex,
+    },
+  });
+  if (!result.ok) return result;
+  // OpenRouter :online doesn't expose citation metadata in a structured way,
+  // so we return an empty reference list for this path.
+  return { ok: true, data: result.data, searchReferences: [] };
+}
+
+function pushRefs(trace: EngineLoopTrace, refs: EngineSearchReference[]): void {
+  if (!refs || refs.length === 0) return;
+  if (!trace.searchReferences) trace.searchReferences = [];
+  const seen = new Set(trace.searchReferences.map((r) => r.url));
+  for (const r of refs) {
+    if (!seen.has(r.url)) {
+      trace.searchReferences.push(r);
+      seen.add(r.url);
+    }
+  }
+}
+
+// ==========================================================
 // Stage 1 — Hot Radar Scan
 // ==========================================================
 
@@ -153,7 +259,8 @@ async function callHotRadar(
   config: EngineLoopConfig,
   vars: StageCommonVars
 ): Promise<
-  { ok: true; data: HotRadarOutput } | { ok: false; error: EngineError }
+  | { ok: true; data: HotRadarOutput; searchReferences: EngineSearchReference[] }
+  | { ok: false; error: EngineError }
 > {
   const systemPrompt = substitute(config.hotRadarPrompt, vars);
   const messages: ChatMessage[] = [
@@ -163,13 +270,10 @@ async function callHotRadar(
       content: '请按 system 指令做一次综合 web search，输出 JSON。',
     },
   ];
-  const raw = await callOpenRouter<unknown>({
-    model: config.researcherModel,
+  const raw = await callResearcher<unknown>(config, {
     messages,
-    apiKey: config.openRouterApiKey,
     timeoutMs: config.hotRadarTimeoutMs,
-    jsonMode: true,
-    errorContext: { engine: config.engineLabel, stage: 'hot-radar-scan' },
+    stage: 'hot-radar-scan',
   });
   if (!raw.ok) return raw;
 
@@ -185,7 +289,11 @@ async function callHotRadar(
       },
     };
   }
-  return { ok: true, data: normalized.data };
+  return {
+    ok: true,
+    data: normalized.data,
+    searchReferences: raw.searchReferences,
+  };
 }
 
 // ==========================================================
@@ -197,7 +305,8 @@ async function runDeepDives(
   vars: StageCommonVars,
   hotRadar: HotRadarOutput,
   stageRunner: StageRunner,
-  errors: EngineError[]
+  errors: EngineError[],
+  trace: EngineLoopTrace
 ): Promise<DeepDiveOutput[]> {
   // Build the (module, topic) target list: top-N from each module.
   const targets: Array<{ module: HotRadarModuleKey; topic: HotRadarTopic }> = [];
@@ -235,22 +344,17 @@ async function runDeepDives(
           content: `请针对 topic "${topic.topic}" 做深挖 web search，返回 JSON。`,
         },
       ];
-      const result = await callOpenRouter<unknown>({
-        model: config.researcherModel,
+      const result = await callResearcher<unknown>(config, {
         messages,
-        apiKey: config.openRouterApiKey,
         timeoutMs: config.deepDiveTimeoutMs,
-        jsonMode: true,
-        errorContext: {
-          engine: config.engineLabel,
-          stage: 'deep-dive',
-          topicIndex: idx + 1,
-        },
+        stage: 'deep-dive',
+        topicIndex: idx + 1,
       });
       if (!result.ok) {
         errors.push(result.error);
         return normalizeDeepDive(null, topic.topic, module);
       }
+      pushRefs(trace, result.searchReferences);
       return normalizeDeepDive(result.data, topic.topic, module);
     })
   );

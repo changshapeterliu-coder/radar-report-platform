@@ -148,6 +148,12 @@ export const generateReport = inngest.createFunction(
       if (!openRouterApiKey) {
         throw new Error('OPENROUTER_API_KEY is not set');
       }
+      const moonshotApiKey = process.env.MOONSHOT_API_KEY;
+      if (!moonshotApiKey) {
+        throw new Error(
+          'MOONSHOT_API_KEY is not set — Engine A requires direct Moonshot access for $web_search'
+        );
+      }
 
       return {
         domainName: domainRes.data[0].name as string,
@@ -156,6 +162,7 @@ export const generateReport = inngest.createFunction(
         sharedDeepDive,
         synthesizerPrompt,
         openRouterApiKey,
+        moonshotApiKey,
       };
     });
 
@@ -179,6 +186,7 @@ export const generateReport = inngest.createFunction(
           engineAHotRadarPrompt: config.engineAHotRadar,
           sharedDeepDivePrompt: config.sharedDeepDive,
           openRouterApiKey: config.openRouterApiKey,
+          moonshotApiKey: config.moonshotApiKey,
           deepDivePerModule: 3,
         },
         geminiStageRunner
