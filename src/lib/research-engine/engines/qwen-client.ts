@@ -80,7 +80,12 @@ export async function callQwen<T = unknown>(
       search_strategy: 'agent',
       enable_source: true,
     },
-    response_format: { type: 'json_object' },
+    // NOTE: Qwen DashScope rejects response_format when enable_search is on:
+    //   "The current model does not support the json response format when using search"
+    // So we rely on stripCodeFences + JSON.parse to handle markdown-wrapped
+    // output on the receiving end. System prompt still instructs the model
+    // to return "only JSON, no markdown fences" — models typically honor that
+    // even without the response_format constraint.
   };
 
   try {

@@ -124,11 +124,14 @@ describe('callQwen', () => {
       model: string;
       enable_search: boolean;
       search_options: { search_strategy: string; enable_source: boolean };
+      response_format?: unknown;
     };
     expect(sent.model).toBe('qwen3-max');
     expect(sent.enable_search).toBe(true);
     expect(sent.search_options.search_strategy).toBe('agent');
     expect(sent.search_options.enable_source).toBe(true);
+    // Must NOT set response_format — Qwen rejects that when enable_search=true.
+    expect(sent.response_format).toBeUndefined();
   });
 
   it('classifies 401 as CreditsExhausted (no retry)', async () => {
