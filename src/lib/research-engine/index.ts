@@ -72,6 +72,7 @@ export async function run(
         engineBHotRadarPrompt: input.engineBHotRadarPrompt,
         sharedDeepDivePrompt: input.sharedDeepDivePrompt,
         openRouterApiKey: input.openRouterApiKey,
+        qwenApiKey: input.qwenApiKey ?? '',
         deepDivePerModule,
       },
       stageRunner

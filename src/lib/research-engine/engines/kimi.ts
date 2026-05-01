@@ -6,28 +6,31 @@ import {
 } from './loop';
 
 /**
- * Engine B — currently Moonshot Kimi K2 via OpenRouter :online suffix.
+ * Engine B — Alibaba Qwen direct via DashScope with enable_search.
  *
- * File name kept as "kimi" to preserve DB column mapping
- * (scheduled_runs.kimi_output).
+ * File name / function name kept as "kimi" to preserve DB column mapping
+ * (scheduled_runs.kimi_output). The actual model running inside is defined
+ * below.
  *
- * PLANNED: switch to Alibaba Qwen direct with enable_search for native
- * Chinese-site coverage (夸克 search ecosystem). Tracked as PR 2 in the
- * 2026-05 engine-provider refactor. Until then this engine still uses
- * OpenRouter + Exa which has weak Chinese community coverage — the
- * cross-engine value is limited until PR 2 lands.
+ * Historical notes:
+ *   - 2026-03 to 2026-04: Moonshot Kimi K2 via OpenRouter :online (Exa search).
+ *   - 2026-05-01 AM: switched Engine A to Moonshot direct (PR 1) for native
+ *     CN search; Engine B kept on OpenRouter :online as a transition.
+ *   - 2026-05-01 PM: switched Engine B to Alibaba Qwen direct (this PR) for
+ *     true heterogeneous cross-engine confirmation — Qwen's 夸克 search has
+ *     strong coverage of the e-commerce / 1688 / Taobao ecosystem,
+ *     complementing Moonshot's deeper social / 小红书 / 知乎 coverage.
  *
- * Stage timeouts aligned to Vercel Pro Inngest 300s serverless-function limit
- * (same as Engine A). Previously was 4 minutes at the engine-loop level which
- * silently exceeded the underlying HTTP call cap.
+ * Stage timeouts aligned to Vercel Pro Inngest 300s serverless-function
+ * limit (same as Engine A), with 40% headroom:
  *
  *   Stage 1  hotRadar        → 120s
- *   Stage 2  deepDive        → 120s
+ *   Stage 2  deepDive        → 120s (per topic; parallel)
  *   Stage 3  education       → 60s
  *   Stage 4  assembler       → 90s
  */
-const DEFAULT_MODEL = 'moonshotai/kimi-k2-0905';
-const DEFAULT_RESEARCHER_MODEL = 'moonshotai/kimi-k2-0905:online';
+const DEFAULT_RESEARCHER_MODEL = 'qwen3-max'; // DashScope direct — enable_search
+const DEFAULT_MODEL = 'moonshotai/kimi-k2-0905'; // OpenRouter for Stage 3/4
 
 export interface KimiLoopInput {
   coverageWindow: CoverageWindow;
@@ -36,7 +39,10 @@ export interface KimiLoopInput {
   engineBHotRadarPrompt: string;
   /** DB-editable Stage 2 prompt (shared_deep_dive). */
   sharedDeepDivePrompt: string;
+  /** OpenRouter key — used for Stage 3/4 education + assembler. */
   openRouterApiKey: string;
+  /** DashScope (Alibaba) key — used for Stage 1/2 research with enable_search. */
+  qwenApiKey: string;
   /** How many top topics per module to deep-dive. Default 3. */
   deepDivePerModule: number;
 }
@@ -50,12 +56,13 @@ export async function runKimiLoop(
       engineLabel: 'kimi',
       model: DEFAULT_MODEL,
       researcherModel: DEFAULT_RESEARCHER_MODEL,
-      researcherProvider: 'openrouter',
+      researcherProvider: 'qwen',
       hotRadarPrompt: input.engineBHotRadarPrompt,
       deepDivePrompt: input.sharedDeepDivePrompt,
       coverageWindow: input.coverageWindow,
       domainName: input.domainName,
       openRouterApiKey: input.openRouterApiKey,
+      qwenApiKey: input.qwenApiKey,
       deepDivePerModule: input.deepDivePerModule,
       hotRadarTimeoutMs: 120_000,
       deepDiveTimeoutMs: 120_000,

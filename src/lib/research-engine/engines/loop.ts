@@ -20,6 +20,7 @@ import {
 } from '../types';
 import { callOpenRouter, type ChatMessage } from './openrouter-client';
 import { callMoonshot } from './moonshot-client';
+import { callQwen } from './qwen-client';
 import { formatDateRange } from '@/lib/inngest/coverage-window';
 
 /** Caller-injected step runner. Default impl = direct call. Inngest injects step.run. */
@@ -27,7 +28,7 @@ export type StageRunner = <T>(stageName: string, fn: () => Promise<T>) => Promis
 
 export const DEFAULT_STAGE_RUNNER: StageRunner = (_name, fn) => fn();
 
-export type ResearcherProvider = 'openrouter' | 'moonshot';
+export type ResearcherProvider = 'openrouter' | 'moonshot' | 'qwen';
 
 export interface EngineLoopConfig {
   engineLabel: 'gemini' | 'kimi';
@@ -37,6 +38,7 @@ export interface EngineLoopConfig {
    * Model used for Stage 1/2 with web search. Format depends on researcherProvider:
    *   - 'openrouter' → OpenRouter model slug with :online suffix (legacy).
    *   - 'moonshot'   → Bare Moonshot model id, e.g. 'kimi-k2.6'.
+   *   - 'qwen'       → Bare DashScope model id, e.g. 'qwen3-max'.
    */
   researcherModel: string;
   /** Which API powers Stage 1/2 research calls. */
@@ -51,6 +53,8 @@ export interface EngineLoopConfig {
   openRouterApiKey: string;
   /** Required when researcherProvider === 'moonshot'. */
   moonshotApiKey?: string;
+  /** Required when researcherProvider === 'qwen'. */
+  qwenApiKey?: string;
   /** Top-N topics per module to deep-dive. Default 3. */
   deepDivePerModule: number;
   hotRadarTimeoutMs: number;
@@ -201,6 +205,38 @@ async function callResearcher<T>(
       apiKey: config.moonshotApiKey,
       timeoutMs: p.timeoutMs,
       jsonMode: true,
+      errorContext: {
+        engine: config.engineLabel,
+        stage: p.stage,
+        topicIndex: p.topicIndex,
+      },
+    });
+    if (!result.ok) return result;
+    return {
+      ok: true,
+      data: result.data,
+      searchReferences: result.searchReferences,
+    };
+  }
+
+  if (config.researcherProvider === 'qwen') {
+    if (!config.qwenApiKey) {
+      return {
+        ok: false,
+        error: {
+          engine: config.engineLabel,
+          stage: p.stage,
+          topicIndex: p.topicIndex,
+          errorClass: 'ServerError',
+          message: 'researcherProvider=qwen but qwenApiKey is missing',
+        },
+      };
+    }
+    const result = await callQwen<T>({
+      model: config.researcherModel,
+      messages: p.messages,
+      apiKey: config.qwenApiKey,
+      timeoutMs: p.timeoutMs,
       errorContext: {
         engine: config.engineLabel,
         stage: p.stage,

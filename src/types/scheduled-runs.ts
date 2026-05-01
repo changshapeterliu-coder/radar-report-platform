@@ -203,6 +203,12 @@ export interface ResearchEngineInput {
    * paths may omit it and use a dummy value.
    */
   moonshotApiKey?: string;
+  /**
+   * Required when Engine B is configured with researcherProvider='qwen'
+   * (which is now the default). Tests that exercise only legacy OpenRouter
+   * paths may omit it and use a dummy value.
+   */
+  qwenApiKey?: string;
   /** Loop-wide soft cap; individual stage timeouts override. */
   engineTimeoutMs?: number;
   /** Synthesizer call timeout. Default 3 * 60_000. */
