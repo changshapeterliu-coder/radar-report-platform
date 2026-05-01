@@ -29,7 +29,19 @@ import {
  *   Stage 3  education       → 60s
  *   Stage 4  assembler       → 90s
  */
-const DEFAULT_RESEARCHER_MODEL = 'qwen3-max'; // DashScope direct — enable_search
+/**
+ * Engine B researcher model — Alibaba DashScope direct, enable_search enabled.
+ *
+ * Why qwen3.5-plus (not qwen3-max):
+ *   qwen3-max runs in "thinking mode" by default. Alibaba's API rejects
+ *   enable_search + non-streaming + thinking mode together with a 400:
+ *     'Non-streaming mode does not support Web Search in thinking mode'
+ *   qwen3.5-plus is a non-thinking model that fully supports enable_search
+ *   in regular (non-streaming) mode, which is what our serverless setup uses.
+ *   For the search + top-N extraction task we're doing, qwen3.5-plus is
+ *   more than capable; we don't need thinking-tier reasoning.
+ */
+const DEFAULT_RESEARCHER_MODEL = 'qwen3.5-plus';
 const DEFAULT_MODEL = 'moonshotai/kimi-k2-0905'; // OpenRouter for Stage 3/4
 
 export interface KimiLoopInput {
