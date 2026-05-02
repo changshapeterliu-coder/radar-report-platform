@@ -106,6 +106,17 @@ export async function callQwen<T = unknown>(
           search_strategy: 'agent',
           enable_source: true,
         },
+        // DashScope rejects the 3-way combination `enable_search + thinking mode
+        // + non-streaming` with HTTP 400 "Non-streaming mode does not support
+        // Web Search in thinking mode".
+        //
+        // Qwen models (qwen-plus, qwen3-max, qwen3.5-*, qwen3.6-*) return
+        // thinking-mode-on *at runtime* unless explicitly overridden, even when
+        // the official docs say the model "defaults to thinking off". This is
+        // reproducible and widely reported in the community (Spring AI issue,
+        // modelscope issue #948, etc.). We must always set enable_thinking=false
+        // on every non-streaming search call.
+        enable_thinking: false,
         // Note: no response_format — incompatible with enable_search.
       },
       retryBudget: MAX_RETRIES,
