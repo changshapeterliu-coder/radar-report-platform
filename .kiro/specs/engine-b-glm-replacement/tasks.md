@@ -144,10 +144,10 @@ Convert the feature design into a series of prompts for a code-generation LLM th
   - [x] 12.2 **If it fails — STOP.** Do NOT commit. Do NOT push. Investigate per task 4.4. This re-run is the last safety net before the change goes live.
   - _Requirements: 7.2_
 
-- [-] 13. Commit (no push yet)
-  - [ ] 13.1 `git add -A` to stage new, modified, and deleted files in one shot
-  - [ ] 13.2 `git status` — confirm the staged file list matches design §4 (same check as 11.3, but on staged set)
-  - [ ] 13.3 Create commit with this message:
+- [x] 13. Commit (no push yet)
+  - [x] 13.1 `git add -A` to stage new, modified, and deleted files in one shot
+  - [x] 13.2 `git status` — confirm the staged file list matches design §4 (same check as 11.3, but on staged set)
+  - [x] 13.3 Create commit with this message:
     ```
     Swap Engine B backend from Qwen (DashScope) to Zhipu GLM (z.ai)
 
@@ -162,39 +162,39 @@ Convert the feature design into a series of prompts for a code-generation LLM th
 
     Closes engine-b-glm-replacement spec.
     ```
-  - [ ] 13.4 Run `git show --stat HEAD` to display commit summary as a sanity check
+  - [x] 13.4 Run `git show --stat HEAD` to display commit summary as a sanity check
   - _Requirements: n/a (mechanical)_
 
-- [ ] 14. **Ask user before pushing** (GATE)
-  - [ ] 14.1 Use the `userInput` tool to ask: `"Local probe passed; build green; tests 9/9; commit staged. Push to origin/main now? (yes / no / show diff)"`
-  - [ ] 14.2 WAIT for user confirmation. Do not push without an explicit "yes" or equivalent. If user asks to see the diff, show `git show HEAD` output first.
+- [x] 14. **Ask user before pushing** (GATE)
+  - [x] 14.1 Use the `userInput` tool to ask: `"Local probe passed; build green; tests 9/9; commit staged. Push to origin/main now? (yes / no / show diff)"`
+  - [x] 14.2 WAIT for user confirmation. Do not push without an explicit "yes" or equivalent. If user asks to see the diff, show `git show HEAD` output first.
   - _Requirements: safety_guardrails (git-push-to-main)_
 
-- [ ] 15. Push to origin/main
-  - [ ] 15.1 `git push origin main` (user already confirmed in task 14)
-  - [ ] 15.2 `git log origin/main -1` to confirm the new commit is on the remote
-  - [ ] 15.3 Tell the user: "Wait for Vercel to mark the new deployment as Ready AND Current/Production on the Deployments page. Vercel auto-deploys on push; typical time 2-4 minutes."
+- [x] 15. Push to origin/main
+  - [x] 15.1 `git push origin main` (user already confirmed in task 14)
+  - [x] 15.2 `git log origin/main -1` to confirm the new commit is on the remote
+  - [x] 15.3 Tell the user: "Wait for Vercel to mark the new deployment as Ready AND Current/Production on the Deployments page. Vercel auto-deploys on push; typical time 2-4 minutes."
   - _Requirements: n/a (mechanical)_
 
-- [ ] 16. Wait for Vercel Ready + Current (user action)
-  - [ ] 16.1 (user action) Open Vercel → Deployments, wait for the new commit to show Ready AND Current (Production)
-  - [ ] 16.2 Ask user via `userInput`: `"Is the new commit showing Ready AND Current on the Vercel Deployments page?"`
-  - [ ] 16.3 If user says "not Current yet", advise: (a) some Vercel projects require clicking "Promote to Production" on the Ready deployment, (b) an empty commit `git commit --allow-empty -m "Trigger redeploy" && git push` can force a fresh deploy if the Ready one got stuck. Wait for Current before proceeding.
+- [x] 16. Wait for Vercel Ready + Current (user action)
+  - [x] 16.1 (user action) Open Vercel → Deployments, wait for the new commit to show Ready AND Current (Production)
+  - [x] 16.2 Ask user via `userInput`: `"Is the new commit showing Ready AND Current on the Vercel Deployments page?"`
+  - [x] 16.3 If user says "not Current yet", advise: (a) some Vercel projects require clicking "Promote to Production" on the Ready deployment, (b) an empty commit `git commit --allow-empty -m "Trigger redeploy" && git push` can force a fresh deploy if the Ready one got stuck. Wait for Current before proceeding.
   - _Requirements: deploy-pipeline gate (per verification-before-completion.md)_
 
-- [ ] 17. Clean DB + trigger manual run (user action)
-  - [ ] 17.1 (user action) In Supabase SQL Editor, clear existing queued/running rows so the manual trigger isn't deduped:
+- [x] 17. Clean DB + trigger manual run (user action)
+  - [x] 17.1 (user action) In Supabase SQL Editor, clear existing queued/running rows so the manual trigger isn't deduped:
     ```sql
     DELETE FROM scheduled_runs WHERE status IN ('queued', 'running');
     ```
     (Design note: this targets only in-flight rows, not historical succeeded/failed runs — preserves audit trail. If user wants a fully clean slate they can `DELETE FROM scheduled_runs;` but this is not required.)
-  - [ ] 17.2 (user action) Open `/admin/scheduled-runs`, click "Trigger now" for the test domain
-  - [ ] 17.3 (user action) Record the trigger time (HH:MM) in chat so we can correlate with Inngest logs
+  - [x] 17.2 (user action) Open `/admin/scheduled-runs`, click "Trigger now" for the test domain
+  - [x] 17.3 (user action) Record the trigger time (HH:MM) in chat so we can correlate with Inngest logs
   - _Requirements: 8.1_
 
-- [ ] 18. Wait 5-10 minutes, then collect evidence (user action)
-  - [ ] 18.1 (user action) Wait until Inngest dashboard shows the run as Completed (or Failed)
-  - [ ] 18.2 (user action) Run this SQL and paste the result into chat:
+- [x] 18. Wait 5-10 minutes, then collect evidence (user action)
+  - [x] 18.1 (user action) Wait until Inngest dashboard shows the run as Completed (or Failed)
+  - [x] 18.2 (user action) Run this SQL and paste the result into chat:
     ```sql
     SELECT id,
            status,
@@ -210,23 +210,23 @@ Convert the feature design into a series of prompts for a code-generation LLM th
     ORDER BY triggered_at DESC
     LIMIT 1;
     ```
-  - [ ] 18.3 (user action) Also paste the Inngest `engine-kimi-stage1-hot-radar` step output (first 50 lines) so we can see the first live callZai response envelope
+  - [x] 18.3 (user action) Also paste the Inngest `engine-kimi-stage1-hot-radar` step output (first 50 lines) so we can see the first live callZai response envelope
   - _Requirements: 8.1, 8.2_
 
-- [ ] 19. Interpret results → close spec OR rollback
-  - [ ] 19.1 **PASS case**: `status='succeeded' AND b_ok=true AND b_refs >= 3 AND b_err_class IS NULL`.
+- [x] 19. Interpret results → close spec OR rollback
+  - [x] 19.1 **PASS case**: `status='succeeded' AND b_ok=true AND b_refs >= 3 AND b_err_class IS NULL`.
     - Tell user: 🎉 GLM swap verified. Remind user to delete `DASHSCOPE_API_KEY` from Vercel Environment Variables now (per design §8 / Q8) — the Tier 1 rollback window is closed.
     - Proceed to task 20.
-  - [ ] 19.2 **FAIL case — new error class** (`b_err_class` is neither empty nor a known-thinking-mode artifact): investigate the specific error per design §6 error table. The most likely fixes are shape-level inside `zai-client.ts` (field name mismatch, `'True'` vs `true`, `thinking` shape). Ask user for full Inngest log before pushing a patch.
-  - [ ] 19.3 **FAIL case — timeout / rate-limit**: design §10 risk table predicts this. Tell user — this is a known risk, remediation is retry tuning or Stage 2 concurrency semaphore (out of scope for this spec). Do not rollback on this alone; rerun once and watch.
-  - [ ] 19.4 **FAIL case — complete engine failure** (`status='failed'` or `b_ok=false` with opaque server error): walk through Rollback Tier 1 per design §8:
+  - [x] 19.2 **FAIL case — new error class** (`b_err_class` is neither empty nor a known-thinking-mode artifact): investigate the specific error per design §6 error table. The most likely fixes are shape-level inside `zai-client.ts` (field name mismatch, `'True'` vs `true`, `thinking` shape). Ask user for full Inngest log before pushing a patch.
+  - [x] 19.3 **FAIL case — timeout / rate-limit**: design §10 risk table predicts this. Tell user — this is a known risk, remediation is retry tuning or Stage 2 concurrency semaphore (out of scope for this spec). Do not rollback on this alone; rerun once and watch.
+  - [x] 19.4 **FAIL case — complete engine failure** (`status='failed'` or `b_ok=false` with opaque server error): walk through Rollback Tier 1 per design §8:
     - `git revert <commit-sha>` → `git push origin main` → Vercel auto-redeploys
     - Since `DASHSCOPE_API_KEY` is still live in Vercel (not yet deleted per task 19.1), the reverted code finds its credential and returns to the previous-broken-Qwen baseline (which still lets Engine A + Synthesizer produce a single-source report per design §8 Tier 1)
     - Ask user to re-run task 17-18 on the reverted code to confirm rollback succeeded
     - Investigate the GLM failure on a branch, not on main
   - _Requirements: 8.3, 9.3_
 
-- [ ] 20. Final checkpoint — declare spec complete (per verification-before-completion.md)
+- [x] 20. Final checkpoint — declare spec complete (per verification-before-completion.md)
   - Only close the spec when ALL of these gates are green:
     - ✓ `npm run build` zero errors (task 11.1)
     - ✓ zai-client unit tests 9/9 pass (task 11.2)

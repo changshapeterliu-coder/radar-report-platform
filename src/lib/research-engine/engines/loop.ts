@@ -247,7 +247,7 @@ async function callResearcher<T>(
       searchRecency = 'oneWeek';
       contentSize = 'medium';
     } else if (p.stage === 'deep-dive') {
-      searchRecency = 'oneMonth';
+      searchRecency = 'oneWeek';
       contentSize = 'high';
     }
     const result = await callZai<T>({
