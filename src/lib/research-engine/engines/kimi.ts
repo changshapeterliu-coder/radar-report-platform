@@ -32,33 +32,34 @@ import {
 /**
  * Engine B researcher model — Alibaba DashScope direct, enable_search enabled.
  *
- * Why qwen3-max (not qwen-plus, not qwen3.5-plus):
+ * Why qwen3.5-plus (final landing after 4 prior attempts):
  *
- *   1. Thinking-mode default. Alibaba's API rejects the 3-way combination
- *      `enable_search + non-streaming + thinking-mode-on` with HTTP 400
- *      'Non-streaming mode does not support Web Search in thinking mode'.
- *      This rules out every Qwen3.5 and Qwen3.6 model (thinking ON by default).
+ *   The official Qwen OpenAI-Chat-Completions API docs list the `enable_thinking`
+ *   parameter as applicable ONLY to these series:
+ *     Qwen3.6 · Qwen3.5 · Qwen3 · Qwen3-Omni-Flash · Qwen3-VL
  *
- *      Both `qwen3-max` and `qwen-plus` default thinking OFF per Alibaba's
- *      docs, so either would stop the 400.
+ *   Non-listed models (qwen3-max, qwen-plus, etc.) are NOT hybrid-thinking
+ *   models; they ignore `enable_thinking` and always run in "thinking" mode
+ *   at runtime. Combined with `enable_search: true` + non-streaming, DashScope
+ *   rejects the request with HTTP 400 "Non-streaming mode does not support
+ *   Web Search in thinking mode".
  *
- *   2. `search_strategy: 'agent'`. qwen-client.ts sends
- *      `search_options: { search_strategy: 'agent', enable_source: true }`
- *      on every Stage 1 and Stage 2 call. Per Alibaba's web-search docs,
- *      the `agent` strategy (multi-round agentic search with self-directed
- *      query refinement) is supported ONLY on the qwen3-max series. On
- *      qwen-plus and every other model the value is silently downgraded
- *      to `turbo` (single-round), defeating the multi-round deep-search
- *      Engine B is configured for.
+ *   qwen3.5-plus satisfies both constraints simultaneously:
+ *     • Listed in `enable_thinking` support table → we can force thinking OFF
+ *     • Listed in `search_options.search_strategy: 'agent'` support table
+ *       (qwen-client.ts uses 'agent' for multi-round deep search)
  *
- *   qwen3-max is the unique model that satisfies both constraints:
- *   thinking OFF by default AND native `search_strategy: 'agent'` support.
+ *   Prior attempts that failed and why:
+ *     • qwen3.5-plus alone          → 400 (never passed enable_thinking:false)
+ *     • qwen-plus                   → NOT a hybrid-thinking model (docs)
+ *     • qwen3-max + enable_thinking → qwen3-max not in support table, param ignored
  *
  *   Refs:
+ *     https://help.aliyun.com/zh/model-studio/qwen-api-via-openai-chat-completions
  *     https://help.aliyun.com/zh/model-studio/deep-thinking
  *     https://help.aliyun.com/zh/model-studio/web-search
  */
-const DEFAULT_RESEARCHER_MODEL = 'qwen3-max';
+const DEFAULT_RESEARCHER_MODEL = 'qwen3.5-plus';
 const DEFAULT_MODEL = 'moonshotai/kimi-k2-0905'; // OpenRouter for Stage 3/4
 
 export interface KimiLoopInput {
