@@ -32,16 +32,33 @@ import {
 /**
  * Engine B researcher model — Alibaba DashScope direct, enable_search enabled.
  *
- * Why qwen3.5-plus (not qwen3-max):
- *   qwen3-max runs in "thinking mode" by default. Alibaba's API rejects
- *   enable_search + non-streaming + thinking mode together with a 400:
- *     'Non-streaming mode does not support Web Search in thinking mode'
- *   qwen3.5-plus is a non-thinking model that fully supports enable_search
- *   in regular (non-streaming) mode, which is what our serverless setup uses.
- *   For the search + top-N extraction task we're doing, qwen3.5-plus is
- *   more than capable; we don't need thinking-tier reasoning.
+ * Why qwen3-max (not qwen-plus, not qwen3.5-plus):
+ *
+ *   1. Thinking-mode default. Alibaba's API rejects the 3-way combination
+ *      `enable_search + non-streaming + thinking-mode-on` with HTTP 400
+ *      'Non-streaming mode does not support Web Search in thinking mode'.
+ *      This rules out every Qwen3.5 and Qwen3.6 model (thinking ON by default).
+ *
+ *      Both `qwen3-max` and `qwen-plus` default thinking OFF per Alibaba's
+ *      docs, so either would stop the 400.
+ *
+ *   2. `search_strategy: 'agent'`. qwen-client.ts sends
+ *      `search_options: { search_strategy: 'agent', enable_source: true }`
+ *      on every Stage 1 and Stage 2 call. Per Alibaba's web-search docs,
+ *      the `agent` strategy (multi-round agentic search with self-directed
+ *      query refinement) is supported ONLY on the qwen3-max series. On
+ *      qwen-plus and every other model the value is silently downgraded
+ *      to `turbo` (single-round), defeating the multi-round deep-search
+ *      Engine B is configured for.
+ *
+ *   qwen3-max is the unique model that satisfies both constraints:
+ *   thinking OFF by default AND native `search_strategy: 'agent'` support.
+ *
+ *   Refs:
+ *     https://help.aliyun.com/zh/model-studio/deep-thinking
+ *     https://help.aliyun.com/zh/model-studio/web-search
  */
-const DEFAULT_RESEARCHER_MODEL = 'qwen3.5-plus';
+const DEFAULT_RESEARCHER_MODEL = 'qwen3-max';
 const DEFAULT_MODEL = 'moonshotai/kimi-k2-0905'; // OpenRouter for Stage 3/4
 
 export interface KimiLoopInput {
