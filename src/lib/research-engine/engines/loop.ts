@@ -20,7 +20,7 @@ import {
 } from '../types';
 import { callOpenRouter, type ChatMessage } from './openrouter-client';
 import { callMoonshot } from './moonshot-client';
-import { callQwen } from './qwen-client';
+import { callZai } from './zai-client';
 import { formatDateRange } from '@/lib/inngest/coverage-window';
 
 /** Caller-injected step runner. Default impl = direct call. Inngest injects step.run. */
@@ -28,7 +28,7 @@ export type StageRunner = <T>(stageName: string, fn: () => Promise<T>) => Promis
 
 export const DEFAULT_STAGE_RUNNER: StageRunner = (_name, fn) => fn();
 
-export type ResearcherProvider = 'openrouter' | 'moonshot' | 'qwen';
+export type ResearcherProvider = 'openrouter' | 'moonshot' | 'zai';
 
 export interface EngineLoopConfig {
   engineLabel: 'gemini' | 'kimi';
@@ -38,7 +38,7 @@ export interface EngineLoopConfig {
    * Model used for Stage 1/2 with web search. Format depends on researcherProvider:
    *   - 'openrouter' → OpenRouter model slug with :online suffix (legacy).
    *   - 'moonshot'   → Bare Moonshot model id, e.g. 'kimi-k2.6'.
-   *   - 'qwen'       → Bare DashScope model id, e.g. 'qwen3-max'.
+   *   - 'zai'        → Bare Zhipu GLM model id, e.g. 'glm-4.6'.
    */
   researcherModel: string;
   /** Which API powers Stage 1/2 research calls. */
@@ -53,8 +53,8 @@ export interface EngineLoopConfig {
   openRouterApiKey: string;
   /** Required when researcherProvider === 'moonshot'. */
   moonshotApiKey?: string;
-  /** Required when researcherProvider === 'qwen'. */
-  qwenApiKey?: string;
+  /** Required when researcherProvider === 'zai'. */
+  zaiApiKey?: string;
   /** Top-N topics per module to deep-dive. Default 3. */
   deepDivePerModule: number;
   hotRadarTimeoutMs: number;
@@ -219,8 +219,8 @@ async function callResearcher<T>(
     };
   }
 
-  if (config.researcherProvider === 'qwen') {
-    if (!config.qwenApiKey) {
+  if (config.researcherProvider === 'zai') {
+    if (!config.zaiApiKey) {
       return {
         ok: false,
         error: {
@@ -228,15 +228,36 @@ async function callResearcher<T>(
           stage: p.stage,
           topicIndex: p.topicIndex,
           errorClass: 'ServerError',
-          message: 'researcherProvider=qwen but qwenApiKey is missing',
+          message: 'researcherProvider=zai but zaiApiKey is missing',
         },
       };
     }
-    const result = await callQwen<T>({
+    // Per-stage tiered search parameters (design §7.3 / §7.4):
+    //   Stage 1 hot-radar → oneWeek + medium (freshness-first for ranking)
+    //   Stage 2 deep-dive → oneMonth + high (depth-first for narrative)
+    let searchRecency:
+      | 'noLimit'
+      | 'oneDay'
+      | 'oneWeek'
+      | 'oneMonth'
+      | 'oneYear'
+      | undefined;
+    let contentSize: 'low' | 'medium' | 'high' | undefined;
+    if (p.stage === 'hot-radar-scan') {
+      searchRecency = 'oneWeek';
+      contentSize = 'medium';
+    } else if (p.stage === 'deep-dive') {
+      searchRecency = 'oneMonth';
+      contentSize = 'high';
+    }
+    const result = await callZai<T>({
       model: config.researcherModel,
       messages: p.messages,
-      apiKey: config.qwenApiKey,
+      apiKey: config.zaiApiKey,
       timeoutMs: p.timeoutMs,
+      jsonMode: true,
+      searchRecency,
+      contentSize,
       errorContext: {
         engine: config.engineLabel,
         stage: p.stage,

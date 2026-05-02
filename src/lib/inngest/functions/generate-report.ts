@@ -154,10 +154,10 @@ export const generateReport = inngest.createFunction(
           'MOONSHOT_API_KEY is not set — Engine A requires direct Moonshot access for $web_search'
         );
       }
-      const qwenApiKey = process.env.DASHSCOPE_API_KEY;
-      if (!qwenApiKey) {
+      const zaiApiKey = process.env.ZAI_API_KEY;
+      if (!zaiApiKey) {
         throw new Error(
-          'DASHSCOPE_API_KEY is not set — Engine B requires direct Alibaba Qwen access for enable_search'
+          'ZAI_API_KEY is not set — Engine B requires Zhipu GLM access for web_search'
         );
       }
 
@@ -169,7 +169,7 @@ export const generateReport = inngest.createFunction(
         synthesizerPrompt,
         openRouterApiKey,
         moonshotApiKey,
-        qwenApiKey,
+        zaiApiKey,
       };
     });
 
@@ -205,7 +205,7 @@ export const generateReport = inngest.createFunction(
           engineBHotRadarPrompt: config.engineBHotRadar,
           sharedDeepDivePrompt: config.sharedDeepDive,
           openRouterApiKey: config.openRouterApiKey,
-          qwenApiKey: config.qwenApiKey,
+          zaiApiKey: config.zaiApiKey,
           deepDivePerModule: 3,
         },
         kimiStageRunner

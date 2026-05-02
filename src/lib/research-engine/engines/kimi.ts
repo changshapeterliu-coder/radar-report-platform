@@ -6,7 +6,7 @@ import {
 } from './loop';
 
 /**
- * Engine B — Alibaba Qwen direct via DashScope with enable_search.
+ * Engine B — Zhipu GLM (glm-4.6) direct via z.ai with web_search tool.
  *
  * File name / function name kept as "kimi" to preserve DB column mapping
  * (scheduled_runs.kimi_output). The actual model running inside is defined
@@ -16,10 +16,17 @@ import {
  *   - 2026-03 to 2026-04: Moonshot Kimi K2 via OpenRouter :online (Exa search).
  *   - 2026-05-01 AM: switched Engine A to Moonshot direct (PR 1) for native
  *     CN search; Engine B kept on OpenRouter :online as a transition.
- *   - 2026-05-01 PM: switched Engine B to Alibaba Qwen direct (this PR) for
- *     true heterogeneous cross-engine confirmation — Qwen's 夸克 search has
- *     strong coverage of the e-commerce / 1688 / Taobao ecosystem,
- *     complementing Moonshot's deeper social / 小红书 / 知乎 coverage.
+ *   - 2026-05-01 PM: switched Engine B to Alibaba Qwen direct for true
+ *     heterogeneous cross-engine confirmation. Unfortunately DashScope's
+ *     "non-streaming + web_search + thinking-mode" combination rejects with
+ *     HTTP 400 at runtime regardless of documented defaults; 5 workarounds
+ *     attempted across models (qwen3-max, qwen-plus, qwen3.5-plus) all
+ *     failed in production.
+ *   - 2026-05-02 (this PR): swapped Engine B from Qwen to Zhipu GLM-4.6 via
+ *     z.ai. GLM has no equivalent restriction on response_format + web_search
+ *     in a single call, so the two-step Qwen workaround collapses back to
+ *     one HTTP round-trip. Explicit `thinking: { type: 'disabled' }` is set
+ *     on every call as belt-and-suspenders against the same class of trap.
  *
  * Stage timeouts aligned to Vercel Pro Inngest 300s serverless-function
  * limit (same as Engine A), with 40% headroom:
@@ -30,36 +37,26 @@ import {
  *   Stage 4  assembler       → 90s
  */
 /**
- * Engine B researcher model — Alibaba DashScope direct, enable_search enabled.
+ * Engine B researcher model — Zhipu GLM direct via z.ai, web_search enabled.
  *
- * Why qwen3.5-plus (final landing after 4 prior attempts):
+ * Why glm-4.6 (over glm-4.5-air cheaper tier or glm-4.7 / glm-5.1 newer):
  *
- *   The official Qwen OpenAI-Chat-Completions API docs list the `enable_thinking`
- *   parameter as applicable ONLY to these series:
- *     Qwen3.6 · Qwen3.5 · Qwen3 · Qwen3-Omni-Flash · Qwen3-VL
- *
- *   Non-listed models (qwen3-max, qwen-plus, etc.) are NOT hybrid-thinking
- *   models; they ignore `enable_thinking` and always run in "thinking" mode
- *   at runtime. Combined with `enable_search: true` + non-streaming, DashScope
- *   rejects the request with HTTP 400 "Non-streaming mode does not support
- *   Web Search in thinking mode".
- *
- *   qwen3.5-plus satisfies both constraints simultaneously:
- *     • Listed in `enable_thinking` support table → we can force thinking OFF
- *     • Listed in `search_options.search_strategy: 'agent'` support table
- *       (qwen-client.ts uses 'agent' for multi-round deep search)
- *
- *   Prior attempts that failed and why:
- *     • qwen3.5-plus alone          → 400 (never passed enable_thinking:false)
- *     • qwen-plus                   → NOT a hybrid-thinking model (docs)
- *     • qwen3-max + enable_thinking → qwen3-max not in support table, param ignored
+ *   • Zhipu positions glm-4.6 explicitly as a "tool using and search-based
+ *     agents" workhorse — exactly our Stage 1/2 profile.
+ *   • Released 2025-09; ~6 months of production hardening before we adopt.
+ *     The Qwen cycle taught that "just released" models have runtime surprises
+ *     even when docs look correct; avoid the same trap.
+ *   • Same price tier as 4.7 / 5.1 per z.ai pricing page; "go latest" offers
+ *     no cost advantage and trades proven behavior for marginal capability
+ *     gains we don't need.
+ *   • One-line upgrade path to a newer SKU if quality proves insufficient —
+ *     change this constant only.
  *
  *   Refs:
- *     https://help.aliyun.com/zh/model-studio/qwen-api-via-openai-chat-completions
- *     https://help.aliyun.com/zh/model-studio/deep-thinking
- *     https://help.aliyun.com/zh/model-studio/web-search
+ *     https://docs.z.ai/guides/tools/web-search
+ *     https://docs.z.ai/guides/llm/glm-4.6
  */
-const DEFAULT_RESEARCHER_MODEL = 'qwen3.5-plus';
+const DEFAULT_RESEARCHER_MODEL = 'glm-4.6';
 const DEFAULT_MODEL = 'moonshotai/kimi-k2-0905'; // OpenRouter for Stage 3/4
 
 export interface KimiLoopInput {
@@ -71,8 +68,8 @@ export interface KimiLoopInput {
   sharedDeepDivePrompt: string;
   /** OpenRouter key — used for Stage 3/4 education + assembler. */
   openRouterApiKey: string;
-  /** DashScope (Alibaba) key — used for Stage 1/2 research with enable_search. */
-  qwenApiKey: string;
+  /** z.ai (Zhipu) key — used for Stage 1/2 research via callZai. */
+  zaiApiKey: string;
   /** How many top topics per module to deep-dive. Default 3. */
   deepDivePerModule: number;
 }
@@ -86,13 +83,13 @@ export async function runKimiLoop(
       engineLabel: 'kimi',
       model: DEFAULT_MODEL,
       researcherModel: DEFAULT_RESEARCHER_MODEL,
-      researcherProvider: 'qwen',
+      researcherProvider: 'zai',
       hotRadarPrompt: input.engineBHotRadarPrompt,
       deepDivePrompt: input.sharedDeepDivePrompt,
       coverageWindow: input.coverageWindow,
       domainName: input.domainName,
       openRouterApiKey: input.openRouterApiKey,
-      qwenApiKey: input.qwenApiKey,
+      zaiApiKey: input.zaiApiKey,
       deepDivePerModule: input.deepDivePerModule,
       hotRadarTimeoutMs: 240_000,
       deepDiveTimeoutMs: 240_000,

@@ -55,7 +55,7 @@ export interface EngineSearchReference {
   /** Which stage produced this reference — helps debug coverage. */
   stage: LoopStage;
   /** Which provider returned this reference. */
-  provider: 'moonshot' | 'qwen' | 'openrouter-exa';
+  provider: 'moonshot' | 'zai' | 'openrouter-exa';
   /** Free-text snippet (truncated) — optional. */
   snippet?: string;
 }
@@ -204,11 +204,11 @@ export interface ResearchEngineInput {
    */
   moonshotApiKey?: string;
   /**
-   * Required when Engine B is configured with researcherProvider='qwen'
+   * Required when Engine B is configured with researcherProvider='zai'
    * (which is now the default). Tests that exercise only legacy OpenRouter
    * paths may omit it and use a dummy value.
    */
-  qwenApiKey?: string;
+  zaiApiKey?: string;
   /** Loop-wide soft cap; individual stage timeouts override. */
   engineTimeoutMs?: number;
   /** Synthesizer call timeout. Default 3 * 60_000. */
