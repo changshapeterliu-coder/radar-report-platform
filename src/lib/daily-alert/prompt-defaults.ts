@@ -10,7 +10,10 @@
  *
  * CRITICAL — cross-file invariant:
  *   The text below MUST stay byte-identical to the dollar-quoted SQL literals
- *   in `supabase/migrations/017_extend_prompt_templates_for_daily.sql`.
+ *   in the most recent daily_scan_prompt / daily_canonicalization_prompt
+ *   migration. Currently that is:
+ *     - 017 (initial seed)
+ *     - 019 (rewrite daily_scan_prompt: goal-oriented, anti-hallucination)
  *   If you edit one, edit the other in the same commit. No drift allowed.
  *
  * Placeholder contract (enforced by PUT validation on /api/admin/daily-alert-prompts):
@@ -35,33 +38,41 @@ export const DEFAULT_DAILY_SCAN_PROMPT = `# 角色
 
 # 使命
 在 {coverage_window_start} 至 {coverage_window_end}（Asia/Shanghai 前一自然日
-00:00–23:59）这一 24 小时窗口内，扫描中国跨境卖家公开社交媒体渠道，
-识别最可能在未来几天驱动卖家向 Amazon 支持团队升级咨询的热点话题。
-你的输出将被 CN-seller support team 用作当日的预警简报。
+00:00–23:59）这一 24 小时窗口内，通过 web_search 扫描中国跨境卖家公开
+社交媒体渠道，识别最可能在未来几天驱动卖家向 Amazon 支持团队升级咨询的
+热点话题。你的输出将被 CN-seller support team 用作当日的预警简报。
 
 # 工作前提：精确、诚实、可追溯
-你不是在写周报 —— 你是在做"早期预警"。读者拿到你的输出就要判断
-今天是否需要额外准备支持资源、调整支持话术。因此：
+你是在做"早期预警"。读者拿到你的输出就要判断今天是否需要额外准备
+支持资源、调整支持话术。因此：
 
 1. **日内热度优先**：只关心 24 小时内观察到的真实讨论。历史议题如果
    今天没有新增讨论，不要进榜。
-2. **诚实宁可空**：目标 Top 10，但如果今天真实观察到的优质信号只有
+2. **诚实优先于凑数**：目标 Top 10，但如果今天真实观察到的优质信号只有
    3 条，就返回 3 条。凑数的预警没有价值。
 3. **每条必须有原话与外链**：\`sample_quotes\` 是卖家口气的 verbatim
    片段（2–3 条）；\`source_links\` 是至少 3 条可点开的外部 URL（直接
    来自 web_search 工具返回的结果）。两者都不得编造。
 
-# 搜索深度：由你决定
-使用 web search 工具扫描 24 小时内的讨论。搜索次数、关键词轮换、
-终止时机由你根据信号质量自行判断。基线现实：中国跨境卖家社区每天
-都有账户 / Listing / 合规讨论，如果首轮信号稀薄，请换关键词再搜。
+# 搜索策略：目标导向，你自行决定深度
+调用 web_search 工具扫描 24 小时内的讨论。搜索次数、关键词轮换、
+终止时机由你根据信号质量自行判断。
 
-# 数据源优先范围（非封闭清单）
-- 社媒：小红书、抖音、B 站（跨境博主）、微博
-- 论坛：知无不言、卖家之家
-- 公众号：微信跨境电商公号（服务商 + 个人 KOL）
-- 跨境专业媒体：雨果网、亿恩网、AMZ123、跨境知道 等
-- 海外讨论：Reddit r/AmazonSeller（关注中国卖家相关议题）
+**基线现实**：中国跨境卖家社区**每天都有**账户 / Listing / 合规讨论。
+如果首轮搜索信号稀薄，**请主动换关键词或视角再搜**；搜不到不等于问题
+不存在，而是搜索覆盖面不够。
+
+**绝不允许从训练知识回忆话题。** 本 prompt 里提到的任何话题示例、你从
+过往周报中"记得"的议题、模型内置的常识性跨境电商话题 —— 都不是"今日
+搜索命中"。唯一合法的 topic 来源是本次 web_search 工具实际返回的结果。
+
+# 数据源优先范围（非封闭清单，你自行选择覆盖）
+- 论坛 / 社区：知无不言、卖家之家、雪球网论坛、创蓝论坛、卖家精灵
+- 社媒：小红书、抖音、微博、B 站跨境博主、微信跨境电商公号
+- 跨境专业媒体：雨果网、亿恩网、AMZ123、跨境知道、亿邦动力网、36Kr、
+  大数跨境、白鲸出海、电商报、扬帆出海、钛媒体
+- 服务商公号：境维、Avask、eVAT、FunTax、EUREP、宁波海关技术中心、
+  TB Accountant、洲博通、九米
 
 # 输出字段 Schema
 
@@ -94,8 +105,10 @@ export const DEFAULT_DAILY_SCAN_PROMPT = `# 角色
   "topics": [ ...最多 10 条, 按 hot_score 降序 ]
 }
 
-本日真实信号不足 3 条时可以返回 \`{"topics": []}\` —— 系统会正确处理
-为"今日无显著热点"的空日预警。
+**空值规则**：只有当你**已经完成至少 3 轮 web_search、换过不同关键词
+和视角、仍然没有任何相关中文 seller 讨论命中**时，才返回
+\`{"topics": []}\`。空数组在下游系统里是一个明确的"搜索失败"信号，
+会触发操作员复查 —— 不要把它当默认退路。
 `;
 
 export const DEFAULT_DAILY_CANONICALIZATION_PROMPT = `# 角色
