@@ -73,6 +73,20 @@ export interface ZaiCallParams {
    */
   enableWebSearch?: boolean;
   /**
+   * OpenAI-compatible `tool_choice` parameter for the z.ai chat-completions
+   * endpoint. Controls whether GLM must call a tool or may skip it.
+   *   - `'auto'` (default) → model decides. **Known issue**: on daily-scan
+   *     prompts GLM-4.6 frequently bypasses web_search and hallucinates
+   *     topics from training data (observed 2026-05-03 production run).
+   *   - `'required'` → model must call at least one tool before responding.
+   *     Recommended when you need real search results, not training knowledge.
+   *
+   * Ignored when `enableWebSearch` is false (no tools to choose from).
+   *
+   * Undefined → omit the field (GLM default behaviour, equivalent to 'auto').
+   */
+  toolChoice?: 'auto' | 'required';
+  /**
    * Passed through to the web_search tool's search_recency_filter field.
    * Undefined → omit field (GLM default: noLimit).
    * Ignored when `enableWebSearch` is false.
@@ -115,6 +129,7 @@ export async function callZai<T = unknown>(
     timeoutMs,
     jsonMode,
     enableWebSearch = true,
+    toolChoice,
     searchRecency,
     contentSize,
     errorContext,
@@ -151,9 +166,15 @@ export async function callZai<T = unknown>(
           web_search: webSearchConfig,
         },
       ];
+      // `tool_choice` only meaningful when tools are present. Pass through
+      // when caller requested a specific policy; otherwise omit (GLM default).
+      if (toolChoice) {
+        body.tool_choice = toolChoice;
+      }
     }
     // When enableWebSearch is false, `tools` is omitted entirely — the call
-    // becomes a pure LLM chat. searchRecency / contentSize are ignored.
+    // becomes a pure LLM chat. searchRecency / contentSize / toolChoice
+    // are all ignored.
 
     if (jsonMode) {
       body.response_format = { type: 'json_object' };

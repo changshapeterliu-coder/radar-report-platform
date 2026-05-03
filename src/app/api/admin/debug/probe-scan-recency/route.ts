@@ -55,8 +55,9 @@ const PROMPT = `# 角色
 `;
 
 interface CaseResult {
-  label: 'A_oneDay' | 'B_oneWeek' | 'C_noLimit';
+  label: 'A_oneDay' | 'B_oneWeek' | 'C_noLimit' | 'D_oneWeek_toolRequired';
   searchRecency: 'oneDay' | 'oneWeek' | 'noLimit';
+  toolChoice: 'auto' | 'required';
   ok: boolean;
   durationMs: number;
   searchCount: number;
@@ -73,6 +74,7 @@ interface CaseResult {
 async function runOne(
   label: CaseResult['label'],
   searchRecency: CaseResult['searchRecency'],
+  toolChoice: CaseResult['toolChoice'],
   apiKey: string
 ): Promise<CaseResult> {
   const start = Date.now();
@@ -85,6 +87,7 @@ async function runOne(
     enableWebSearch: true,
     searchRecency,
     contentSize: 'high',
+    toolChoice: toolChoice === 'auto' ? undefined : toolChoice,
     errorContext: { engine: 'kimi', stage: 'hot-radar-scan' },
   });
   const durationMs = Date.now() - start;
@@ -93,6 +96,7 @@ async function runOne(
     return {
       label,
       searchRecency,
+      toolChoice,
       ok: false,
       durationMs,
       searchCount: 0,
@@ -112,6 +116,7 @@ async function runOne(
   return {
     label,
     searchRecency,
+    toolChoice,
     ok: true,
     durationMs,
     searchCount: result.searchCount,
@@ -122,45 +127,61 @@ async function runOne(
 }
 
 function diagnose(results: CaseResult[]): string {
-  const a = results.find((r) => r.searchRecency === 'oneDay');
-  const b = results.find((r) => r.searchRecency === 'oneWeek');
-  const c = results.find((r) => r.searchRecency === 'noLimit');
-  if (!a || !b || !c) return 'inconclusive: missing case results';
+  const a = results.find((r) => r.label === 'A_oneDay');
+  const b = results.find((r) => r.label === 'B_oneWeek');
+  const c = results.find((r) => r.label === 'C_noLimit');
+  const d = results.find((r) => r.label === 'D_oneWeek_toolRequired');
+  if (!a || !b || !c || !d) return 'inconclusive: missing case results';
 
+  // Prior experiment (2026-05-03 first pass) showed ALL of A/B/C returned
+  // searchCount=0 + topicsCount=5 — i.e. GLM was bypassing the web_search
+  // tool entirely and hallucinating topics from training data. Case D tests
+  // whether tool_choice='required' forces GLM to actually call the tool.
+
+  const bypassInABC =
+    a.searchCount === 0 &&
+    b.searchCount === 0 &&
+    c.searchCount === 0 &&
+    a.topicsCount > 0;
+
+  if (bypassInABC && !d.ok) {
+    return (
+      `tool_choice='required' was REJECTED by z.ai: ${d.errorMessage ?? '(no error message)'}. ` +
+      `The API layer cannot force tool use. FIX: fall back to a prompt-layer ` +
+      `hard rule ("必须至少调用 web_search 3 次，严禁从训练知识回忆").`
+    );
+  }
+
+  if (bypassInABC && d.ok && d.searchCount > 0) {
+    return (
+      `ROOT CAUSE CONFIRMED: GLM-4.6 defaults to bypassing the web_search tool ` +
+      `(A/B/C all returned searchCount=0 but topicsCount=${a.topicsCount} from ` +
+      `training knowledge). tool_choice='required' FIXES this: D returned ` +
+      `searchCount=${d.searchCount} topicsCount=${d.topicsCount} in ${(d.durationMs / 1000).toFixed(1)}s. ` +
+      `FIX: change scan.ts to pass toolChoice:'required' (with searchRecency:'oneWeek' ` +
+      `for best coverage since oneDay adds no value when tool is actually firing).`
+    );
+  }
+
+  if (bypassInABC && d.ok && d.searchCount === 0) {
+    return (
+      `tool_choice='required' accepted by API but DID NOT force tool use. ` +
+      `D returned searchCount=0 just like A/B/C. The parameter is a silent ` +
+      `no-op on z.ai's chat-completions endpoint. FIX: fall back to a prompt- ` +
+      `layer hard rule.`
+    );
+  }
+
+  // Fallback: cover the originally-envisaged cases
   if (a.searchCount === 0 && (b.searchCount > 0 || c.searchCount > 0)) {
     return (
-      `ROOT CAUSE: search_recency_filter='oneDay' returned ZERO refs while ` +
-      `oneWeek (${b.searchCount}) / noLimit (${c.searchCount}) returned refs. ` +
-      `z.ai's oneDay is an aggressive hard filter on indexable publish_date, ` +
-      `and Chinese seller-community sites rarely expose publish_date to indexers. ` +
-      `FIX: change scan.ts to searchRecency='oneWeek' (keep the "24h window" semantic ` +
-      `in prompt text only — the Zod schema already doesn't enforce per-source date).`
+      `search_recency_filter='oneDay' returned ZERO refs while oneWeek ` +
+      `(${b.searchCount}) / noLimit (${c.searchCount}) returned refs. ` +
+      `FIX: change scan.ts to searchRecency='oneWeek'.`
     );
   }
 
-  if (a.searchCount > 0 && a.topicsCount === 0 && b.topicsCount > 0) {
-    return (
-      `ROOT CAUSE: oneDay returned refs (${a.searchCount}) but engine self-censored topics=[]. ` +
-      `With oneWeek the engine returned ${b.topicsCount} topics from ${b.searchCount} refs. ` +
-      `FIX: loosen the prompt's "诚实宁可空 / topics:[] 逃生口" wording ` +
-      `so the engine reports weak signals with lower hot_score instead of empty array.`
-    );
-  }
-
-  if (a.searchCount > 0 && a.topicsCount > 0) {
-    return (
-      `NO ACTION NEEDED in code: oneDay works fine in isolation today. ` +
-      `Production empty-day at 2026-05-03 may have been genuine low signal or ` +
-      `GLM non-determinism. Recommend: collect another sample in a few hours ` +
-      `before any prompt/code change.`
-    );
-  }
-
-  return (
-    `INCONCLUSIVE: all three recency settings returned similar low values. ` +
-    `Possible: z.ai backend issue, API key limits, or today really is a quiet ` +
-    `news day across all horizons. Collect another sample.`
-  );
+  return 'INCONCLUSIVE: unexpected result combination. Inspect all 4 cases manually.';
 }
 
 export async function GET(_request: NextRequest) {
@@ -181,19 +202,24 @@ export async function GET(_request: NextRequest) {
     );
   }
 
-  console.log('[probe-scan-recency] starting 3-way comparison...');
+  console.log('[probe-scan-recency] starting 4-way comparison...');
 
   const results: CaseResult[] = [];
-  for (const [label, recency] of [
-    ['A_oneDay', 'oneDay'] as const,
-    ['B_oneWeek', 'oneWeek'] as const,
-    ['C_noLimit', 'noLimit'] as const,
-  ]) {
-    console.log(`[probe-scan-recency] ▶ ${label} (${recency})...`);
-    const r = await runOne(label, recency, apiKey);
+  const cases: Array<
+    [CaseResult['label'], CaseResult['searchRecency'], CaseResult['toolChoice']]
+  > = [
+    ['A_oneDay', 'oneDay', 'auto'],
+    ['B_oneWeek', 'oneWeek', 'auto'],
+    ['C_noLimit', 'noLimit', 'auto'],
+    ['D_oneWeek_toolRequired', 'oneWeek', 'required'],
+  ];
+  for (const [label, recency, toolChoice] of cases) {
+    console.log(`[probe-scan-recency] ▶ ${label} (recency=${recency}, tool_choice=${toolChoice})...`);
+    const r = await runOne(label, recency, toolChoice, apiKey);
     results.push(r);
     console.log(
-      `[probe-scan-recency] ← ${r.ok ? 'OK' : 'FAIL'}  dur=${(r.durationMs / 1000).toFixed(1)}s  refs=${r.searchCount}  topics=${r.topicsCount}`
+      `[probe-scan-recency] ← ${r.ok ? 'OK' : 'FAIL'}  dur=${(r.durationMs / 1000).toFixed(1)}s  refs=${r.searchCount}  topics=${r.topicsCount}` +
+        (r.errorMessage ? `  error=${r.errorMessage}` : '')
     );
   }
 
