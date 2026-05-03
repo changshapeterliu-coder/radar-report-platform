@@ -55,7 +55,12 @@ const PROMPT = `# 角色
 `;
 
 interface CaseResult {
-  label: 'A_oneDay' | 'B_oneWeek' | 'C_noLimit' | 'D_oneWeek_toolRequired';
+  label:
+    | 'A_oneDay'
+    | 'B_oneWeek'
+    | 'C_noLimit'
+    | 'D_oneWeek_toolRequired'
+    | 'E_weeklyPromptReplay';
   searchRecency: 'oneDay' | 'oneWeek' | 'noLimit';
   toolChoice: 'auto' | 'required';
   ok: boolean;
@@ -75,18 +80,20 @@ async function runOne(
   label: CaseResult['label'],
   searchRecency: CaseResult['searchRecency'],
   toolChoice: CaseResult['toolChoice'],
-  apiKey: string
+  apiKey: string,
+  promptOverride?: string,
+  contentSizeOverride?: 'low' | 'medium' | 'high'
 ): Promise<CaseResult> {
   const start = Date.now();
   const result = await callZai<{ topics?: unknown[] }>({
     model: 'glm-4.6',
-    messages: [{ role: 'user', content: PROMPT }],
+    messages: [{ role: 'user', content: promptOverride ?? PROMPT }],
     apiKey,
     timeoutMs: 240_000,
     jsonMode: true,
     enableWebSearch: true,
     searchRecency,
-    contentSize: 'high',
+    contentSize: contentSizeOverride ?? 'high',
     toolChoice: toolChoice === 'auto' ? undefined : toolChoice,
     errorContext: { engine: 'kimi', stage: 'hot-radar-scan' },
   });
@@ -106,7 +113,19 @@ async function runOne(
     };
   }
 
-  const topicsCount = Array.isArray(result.data?.topics) ? result.data.topics.length : 0;
+  // topicsCount may come from {topics: [...]} (daily shape) OR from weekly's
+  // {account_health_topics: [...], listing_topics: [...], tool_feedback_items: [...]}.
+  // Sum all three if present so case E reflects "did weekly output anything at all".
+  const data = result.data ?? {};
+  const topicsList = Array.isArray(data.topics) ? data.topics.length : 0;
+  const weeklyA = Array.isArray((data as Record<string, unknown>).account_health_topics)
+    ? ((data as Record<string, unknown>).account_health_topics as unknown[]).length
+    : 0;
+  const weeklyB = Array.isArray((data as Record<string, unknown>).listing_topics)
+    ? ((data as Record<string, unknown>).listing_topics as unknown[]).length
+    : 0;
+  const topicsCount = topicsList + weeklyA + weeklyB;
+
   const firstFiveRefs = result.searchReferences.slice(0, 5).map((r) => ({
     title: r.title ?? null,
     publishDate: r.published_date ?? null,
@@ -126,49 +145,104 @@ async function runOne(
   };
 }
 
+/**
+ * Load the production weekly Engine B scan prompt from prompt_templates and
+ * substitute the {start_date} / {end_date} / {week_label} placeholders with
+ * the last 7-day window ending yesterday. Returns the resolved string, or
+ * null if the prompt row can't be loaded (e.g. missing seed).
+ */
+async function loadAndResolveWeeklyEngineBPrompt(
+  supabase: Awaited<ReturnType<typeof createClient>>
+): Promise<string | null> {
+  const { data: domainRows } = await supabase
+    .from('domains')
+    .select('id')
+    .eq('name', 'Account Health')
+    .limit(1);
+  const domainId = domainRows?.[0]?.id;
+  if (!domainId) return null;
+
+  const { data: promptRows } = await supabase
+    .from('prompt_templates')
+    .select('template_text')
+    .eq('domain_id', domainId)
+    .eq('prompt_type', 'engine_b_hot_radar')
+    .limit(1);
+  const template = promptRows?.[0]?.template_text;
+  if (!template || typeof template !== 'string') return null;
+
+  // Compute last 7-day window ending yesterday (Shanghai-ish; for this probe
+  // we don't need timezone precision, only rough placeholder values).
+  const now = new Date();
+  const endDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const startDate = new Date(endDate.getTime() - 6 * 24 * 60 * 60 * 1000);
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  const weekLabel = `${fmt(startDate)} ~ ${fmt(endDate)}`;
+
+  return template
+    .split('{start_date}')
+    .join(fmt(startDate))
+    .split('{end_date}')
+    .join(fmt(endDate))
+    .split('{week_label}')
+    .join(weekLabel);
+}
+
 function diagnose(results: CaseResult[]): string {
   const a = results.find((r) => r.label === 'A_oneDay');
   const b = results.find((r) => r.label === 'B_oneWeek');
   const c = results.find((r) => r.label === 'C_noLimit');
   const d = results.find((r) => r.label === 'D_oneWeek_toolRequired');
+  const e = results.find((r) => r.label === 'E_weeklyPromptReplay');
   if (!a || !b || !c || !d) return 'inconclusive: missing case results';
 
-  // Prior experiment (2026-05-03 first pass) showed ALL of A/B/C returned
-  // searchCount=0 + topicsCount=5 — i.e. GLM was bypassing the web_search
-  // tool entirely and hallucinating topics from training data. Case D tests
-  // whether tool_choice='required' forces GLM to actually call the tool.
+  // Prior experiment (2026-05-03) confirmed:
+  //   A/B/C all returned searchCount=0 + topicsCount=5 (hallucinated from training).
+  //   D returned 400 Invalid parameter — z.ai doesn't accept tool_choice.
+  // So the question reduces to: does GLM call web_search when given a
+  // prompt structure that it *does* call on in weekly production (case E)?
 
-  const bypassInABC =
+  const dailyBypass =
     a.searchCount === 0 &&
     b.searchCount === 0 &&
     c.searchCount === 0 &&
     a.topicsCount > 0;
 
-  if (bypassInABC && !d.ok) {
+  if (dailyBypass && e) {
+    if (!e.ok) {
+      return (
+        `Case E (weekly prompt replay) failed: ${e.errorMessage ?? '(no message)'}. ` +
+        `Can't distinguish between "daily prompt triggers bypass" and "z.ai regression". ` +
+        `Inspect the error manually.`
+      );
+    }
+    if (e.searchCount > 0) {
+      return (
+        `ROOT CAUSE CONFIRMED: It's the daily prompt itself. Weekly production ` +
+        `prompt triggered a real search (searchCount=${e.searchCount}, duration=${(e.durationMs / 1000).toFixed(1)}s) ` +
+        `while daily prompts A/B/C bypassed search and hallucinated. The daily ` +
+        `prompt is shorter/less anchored and doesn't signal GLM strongly enough ` +
+        `that it *must* search. FIX: rewrite daily_scan_prompt closer to the ` +
+        `weekly structure — explicit "使命 + {coverage_window} as first-class ` +
+        `anchor", 具体渠道清单 first-class section, and remove any hints that ` +
+        `could read as "你可以不搜". Test again with the revised prompt.`
+      );
+    }
     return (
-      `tool_choice='required' was REJECTED by z.ai: ${d.errorMessage ?? '(no error message)'}. ` +
-      `The API layer cannot force tool use. FIX: fall back to a prompt-layer ` +
-      `hard rule ("必须至少调用 web_search 3 次，严禁从训练知识回忆").`
+      `SYSTEMIC: Even the weekly production prompt returned searchCount=0 ` +
+      `on z.ai today (topicsCount=${e.topicsCount}, duration=${(e.durationMs / 1000).toFixed(1)}s). ` +
+      `This is NOT a daily-prompt problem — it's a z.ai service-level regression ` +
+      `or upstream issue. Check: recent z.ai status page, any silent API deprecation ` +
+      `announcement, or recent ZAI_API_KEY quota change. Before changing any prompt, ` +
+      `verify the last successful weekly production run's scheduled_runs.kimi_output ` +
+      `searchReferences.length.`
     );
   }
 
-  if (bypassInABC && d.ok && d.searchCount > 0) {
+  if (dailyBypass && !d.ok) {
     return (
-      `ROOT CAUSE CONFIRMED: GLM-4.6 defaults to bypassing the web_search tool ` +
-      `(A/B/C all returned searchCount=0 but topicsCount=${a.topicsCount} from ` +
-      `training knowledge). tool_choice='required' FIXES this: D returned ` +
-      `searchCount=${d.searchCount} topicsCount=${d.topicsCount} in ${(d.durationMs / 1000).toFixed(1)}s. ` +
-      `FIX: change scan.ts to pass toolChoice:'required' (with searchRecency:'oneWeek' ` +
-      `for best coverage since oneDay adds no value when tool is actually firing).`
-    );
-  }
-
-  if (bypassInABC && d.ok && d.searchCount === 0) {
-    return (
-      `tool_choice='required' accepted by API but DID NOT force tool use. ` +
-      `D returned searchCount=0 just like A/B/C. The parameter is a silent ` +
-      `no-op on z.ai's chat-completions endpoint. FIX: fall back to a prompt- ` +
-      `layer hard rule.`
+      `tool_choice='required' REJECTED by z.ai (${d.errorMessage ?? '(no message)'}). ` +
+      `The API layer cannot force tool use. Check case E result to decide next step.`
     );
   }
 
@@ -181,7 +255,7 @@ function diagnose(results: CaseResult[]): string {
     );
   }
 
-  return 'INCONCLUSIVE: unexpected result combination. Inspect all 4 cases manually.';
+  return 'INCONCLUSIVE: unexpected result combination. Inspect all cases manually.';
 }
 
 export async function GET(_request: NextRequest) {
@@ -202,20 +276,48 @@ export async function GET(_request: NextRequest) {
     );
   }
 
-  console.log('[probe-scan-recency] starting 4-way comparison...');
+  console.log('[probe-scan-recency] starting 5-way comparison...');
+
+  const weeklyPrompt = await loadAndResolveWeeklyEngineBPrompt(supabase);
+  if (weeklyPrompt == null) {
+    console.warn('[probe-scan-recency] Could not load weekly engine_b_hot_radar prompt; case E will be skipped');
+  }
 
   const results: CaseResult[] = [];
-  const cases: Array<
-    [CaseResult['label'], CaseResult['searchRecency'], CaseResult['toolChoice']]
-  > = [
-    ['A_oneDay', 'oneDay', 'auto'],
-    ['B_oneWeek', 'oneWeek', 'auto'],
-    ['C_noLimit', 'noLimit', 'auto'],
-    ['D_oneWeek_toolRequired', 'oneWeek', 'required'],
+  const cases: Array<{
+    label: CaseResult['label'];
+    recency: CaseResult['searchRecency'];
+    toolChoice: CaseResult['toolChoice'];
+    promptOverride?: string;
+    contentSizeOverride?: 'low' | 'medium' | 'high';
+  }> = [
+    { label: 'A_oneDay', recency: 'oneDay', toolChoice: 'auto' },
+    { label: 'B_oneWeek', recency: 'oneWeek', toolChoice: 'auto' },
+    { label: 'C_noLimit', recency: 'noLimit', toolChoice: 'auto' },
+    { label: 'D_oneWeek_toolRequired', recency: 'oneWeek', toolChoice: 'required' },
   ];
-  for (const [label, recency, toolChoice] of cases) {
-    console.log(`[probe-scan-recency] ▶ ${label} (recency=${recency}, tool_choice=${toolChoice})...`);
-    const r = await runOne(label, recency, toolChoice, apiKey);
+  if (weeklyPrompt) {
+    cases.push({
+      label: 'E_weeklyPromptReplay',
+      recency: 'oneWeek',
+      toolChoice: 'auto',
+      promptOverride: weeklyPrompt,
+      contentSizeOverride: 'medium', // matches weekly production loop.ts config
+    });
+  }
+
+  for (const c of cases) {
+    console.log(
+      `[probe-scan-recency] ▶ ${c.label} (recency=${c.recency}, tool_choice=${c.toolChoice}${c.promptOverride ? ', prompt=weekly-production' : ''})...`
+    );
+    const r = await runOne(
+      c.label,
+      c.recency,
+      c.toolChoice,
+      apiKey,
+      c.promptOverride,
+      c.contentSizeOverride
+    );
     results.push(r);
     console.log(
       `[probe-scan-recency] ← ${r.ok ? 'OK' : 'FAIL'}  dur=${(r.durationMs / 1000).toFixed(1)}s  refs=${r.searchCount}  topics=${r.topicsCount}` +
