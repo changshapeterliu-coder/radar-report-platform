@@ -45,20 +45,20 @@ Fix two drifts surfaced after 2026-05-02 GLM swap: Stage 2 deep-dive引用过时
     ```
   - _Source: none (mechanical)_
 
-- [ ] 5. **Ask user before pushing** (GATE, per git_safety rule)
-  - [ ] 5.1 Use `userInput` tool to ask "Build green, tests 16/16, 2-file scope confirmed. Push to origin/main now?"
-  - [ ] 5.2 Wait for explicit confirmation
+- [x] 5. **Ask user before pushing** (GATE, per git_safety rule)
+  - [x] 5.1 Use `userInput` tool to ask "Build green, tests 16/16, 2-file scope confirmed. Push to origin/main now?"
+  - [x] 5.2 Wait for explicit confirmation
   - _Source: safety_guardrails_
 
-- [ ] 6. Push
-  - [ ] 6.1 `git push origin main`
-  - [ ] 6.2 `git log origin/main -1 --oneline` confirm
-  - [ ] 6.3 Tell user to wait for Vercel Ready + Current
+- [x] 6. Push
+  - [x] 6.1 `git push origin main`
+  - [x] 6.2 `git log origin/main -1 --oneline` confirm
+  - [x] 6.3 Tell user to wait for Vercel Ready + Current
   - _Source: none (mechanical)_
 
-- [ ] 7. User applies migration 013 in Supabase SQL Editor
-  - [ ] 7.1 (user action) Open Supabase SQL Editor, paste contents of `supabase/migrations/013_align_engine_personas.sql`, execute
-  - [ ] 7.2 (user action) Run the verification SQL from design §8:
+- [x] 7. User applies migration 013 in Supabase SQL Editor
+  - [x] 7.1 (user action) Open Supabase SQL Editor, paste contents of `supabase/migrations/013_align_engine_personas.sql`, execute
+  - [x] 7.2 (user action) Run the verification SQL from design §8:
     ```sql
     SELECT prompt_type, substring(template_text, 1, 300) AS preview, updated_at
     FROM prompt_templates
@@ -66,15 +66,15 @@ Fix two drifts surfaced after 2026-05-02 GLM swap: Stage 2 deep-dive引用过时
     ORDER BY prompt_type;
     ```
     Confirm: Engine A preview starts with "Moonshot Kimi K2-0906", Engine B with "Zhipu GLM-4.6", synthesizer mentions both correctly. `updated_at` is current timestamp.
-  - [ ] 7.3 (user action) Paste verification SQL result into chat
+  - [x] 7.3 (user action) Paste verification SQL result into chat
   - _Source: design §8_
 
-- [ ] 8. Vercel Ready + Current confirmation
-  - [ ] 8.1 (user action) Open Vercel Deployments, confirm new commit is Ready AND Current
-  - [ ] 8.2 (user action) Confirm in chat
+- [x] 8. Vercel Ready + Current confirmation
+  - [x] 8.1 (user action) Open Vercel Deployments, confirm new commit is Ready AND Current
+  - [x] 8.2 (user action) Confirm in chat
   - _Source: verification-before-completion.md_
 
-- [ ] 9. Trigger a verification run + inspect new draft
+- [-] 9. Trigger a verification run + inspect new draft
   - [ ] 9.1 (user action) In Supabase SQL Editor: `DELETE FROM scheduled_runs WHERE status IN ('queued', 'running');`
   - [ ] 9.2 (user action) Click "Trigger now" on `/admin/scheduled-runs`
   - [ ] 9.3 (user action) Wait 5-10 minutes for Inngest run to complete
