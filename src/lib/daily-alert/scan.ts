@@ -1,0 +1,203 @@
+/**
+ * Daily Scan Engine — Stage 1 of the daily-alert pipeline.
+ *
+ * Flow:
+ *   1. substitute placeholders into scanPrompt
+ *   2. call GLM-4.6 via zai-client (web_search enabled, search_recency=oneDay,
+ *      content_size=high, timeout 240s, 2 retries inside callZai)
+ *   3. Zod-validate the returned JSON against ScanResponseSchema
+ *   4. per-topic validation:
+ *        - hot_score ∈ [0, 100]
+ *        - rank ∈ [1, 10]
+ *        - source_links: drop entries with malformed URLs; reject topic
+ *          if fewer than 3 valid links remain
+ *        - sample_quotes: length ∈ [2, 3]  (already enforced by Zod)
+ *      violations are logged in debug output, topic is dropped
+ *   5. sort surviving topics by hot_score DESC, keep top 10
+ *   6. re-rank surviving topics to 1..N (contiguous) — PBT P33
+ *
+ * Spec refs:
+ *   Requirements: 4.1-4.10, 5.3, 5.4, 7.4, 13.3
+ * Property refs (PBT):
+ *   P5, P6, P7, P8, P9, P13, P33
+ *   (failure-mode naming P12, P13, P15 also touched here for the z.ai side)
+ */
+
+import { callZai } from '@/lib/research-engine/engines/zai-client';
+import {
+  ScanResponseSchema,
+  type ScanTopic,
+  type ScanResponse,
+} from './zod-schemas';
+import { substitute } from './substitute';
+
+// ══════════ Public types ══════════
+
+export interface DailyScanInput {
+  /** Admin-edited `daily_scan_prompt` after domain-level substitution already? No — caller does substitute via this module. */
+  scanPrompt: string;
+  domainName: string;
+  coverageWindowStartIso: string;
+  coverageWindowEndIso: string;
+  zaiApiKey: string;
+  /** For error-context breadcrumb. */
+  runId: string;
+}
+
+export type DailyScanResult =
+  | {
+      ok: true;
+      topics: ScanTopic[];
+      rawContent: string;
+      searchCount: number;
+      /** Diagnostic breadcrumb — topics that were dropped at validation time. */
+      droppedTopics: Array<{ rank: number | null; topicName: string; reason: string }>;
+    }
+  | {
+      ok: false;
+      failureReason: string;
+      /** Truncated to 500 chars for storage in daily_alert_runs.raw_output. */
+      rawOutput: string;
+    };
+
+// ══════════ Public function ══════════
+
+export async function runDailyScan(input: DailyScanInput): Promise<DailyScanResult> {
+  const { scanPrompt, domainName, coverageWindowStartIso, coverageWindowEndIso, zaiApiKey } = input;
+
+  // Env-var fail-fast — normally caller checks, but guard here too in case
+  // someone invokes the module directly (e.g. from a one-off script / test).
+  if (!zaiApiKey) {
+    return {
+      ok: false,
+      failureReason: 'ZAI_API_KEY missing',
+      rawOutput: '',
+    };
+  }
+
+  const resolvedPrompt = substitute(scanPrompt, {
+    coverage_window_start: coverageWindowStartIso,
+    coverage_window_end: coverageWindowEndIso,
+    domain_name: domainName,
+  });
+
+  const result = await callZai<unknown>({
+    model: 'glm-4.6',
+    messages: [{ role: 'user', content: resolvedPrompt }],
+    apiKey: zaiApiKey,
+    timeoutMs: 240_000,
+    jsonMode: true,
+    enableWebSearch: true,
+    searchRecency: 'oneDay',
+    contentSize: 'high',
+    errorContext: {
+      engine: 'kimi', // Reused per task 1.5 — breadcrumb lives in `stage` below.
+      stage: 'hot-radar-scan', // Reused from existing LoopStage union (breadcrumb precision via errorContext only).
+    },
+  });
+
+  if (!result.ok) {
+    return {
+      ok: false,
+      failureReason: mapScanErrorToFailureReason(result.error.errorClass, result.error.message),
+      rawOutput: truncate(result.error.message ?? '', 500),
+    };
+  }
+
+  // Zod-validate top-level shape.
+  const parsed = ScanResponseSchema.safeParse(result.data);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      failureReason: 'Daily alert: MalformedResponse',
+      rawOutput: truncate(
+        `Zod validation failed: ${parsed.error.message} | raw: ${result.rawContent}`,
+        500
+      ),
+    };
+  }
+
+  const validated: ScanResponse = parsed.data;
+  const droppedTopics: Array<{ rank: number | null; topicName: string; reason: string }> = [];
+
+  // Per-topic sanitation: drop malformed source_links, reject topics with
+  // < 3 valid links after drops.
+  const survivingTopics: ScanTopic[] = [];
+  for (const topic of validated.topics) {
+    const validLinks = topic.source_links.filter((link) => isValidHttpUrl(link.url));
+    if (validLinks.length < 3) {
+      droppedTopics.push({
+        rank: topic.rank,
+        topicName: topic.topic_name_zh,
+        reason: `source_links after URL validation: ${validLinks.length} < 3`,
+      });
+      continue;
+    }
+    // Keep the topic with the cleaned links list (bounded 3–10 by Zod plus our drop).
+    survivingTopics.push({
+      ...topic,
+      source_links: validLinks.slice(0, 10),
+    });
+  }
+
+  // Sort surviving by hot_score desc and cap at top 10.
+  survivingTopics.sort((a, b) => b.hot_score - a.hot_score);
+  const capped = survivingTopics.slice(0, 10);
+
+  // Re-rank survivors 1..N contiguous — per PBT P33.
+  const reranked = capped.map((topic, i) => ({ ...topic, rank: i + 1 }));
+
+  return {
+    ok: true,
+    topics: reranked,
+    rawContent: result.rawContent,
+    searchCount: result.searchCount,
+    droppedTopics,
+  };
+}
+
+// ══════════ Helpers ══════════
+
+/**
+ * Map `zai-client` error class to the failure_reason substring required
+ * by requirements.md § Correctness Properties (PBT P13, P15, etc.) and
+ * by design.md §失败处理矩阵.
+ *
+ *   CreditsExhausted → 'z.ai credits exhausted'   (Req 4.8 / PBT 13)
+ *   TimeoutError     → 'GLM timeout'              (Req 7.4)
+ *   NetworkError     → 'GLM network error'        (Req 7.4)
+ *   ServerError      → 'Daily scan: GLM 5xx'
+ *   RateLimited      → 'Daily scan: GLM rate-limited'
+ *   MalformedResponse→ 'Daily alert: MalformedResponse'  (Req 4.10)
+ */
+function mapScanErrorToFailureReason(errorClass: string, message: string): string {
+  switch (errorClass) {
+    case 'CreditsExhausted':
+      return 'z.ai credits exhausted';
+    case 'TimeoutError':
+      return 'GLM timeout';
+    case 'NetworkError':
+      return 'GLM network error';
+    case 'ServerError':
+      return 'Daily scan: GLM 5xx';
+    case 'RateLimited':
+      return 'Daily scan: GLM rate-limited';
+    case 'MalformedResponse':
+      return 'Daily alert: MalformedResponse';
+    default:
+      return `Daily scan: ${errorClass} (${truncate(message, 100)})`;
+  }
+}
+
+function isValidHttpUrl(raw: string): boolean {
+  try {
+    const url = new URL(raw);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function truncate(s: string, max: number): string {
+  return s.length <= max ? s : `${s.slice(0, max)}...`;
+}

@@ -372,4 +372,52 @@ describe('callZai', () => {
     expect(result.searchReferences[0].title).toBe('跨境电商合规政策');
     expect(result.searchReferences[0].snippet).toContain('本周');
   });
+
+  // 11 — enableWebSearch=false (Daily canonicalization step path).
+  // When web search is disabled, outgoing body must NOT contain `tools`.
+  // searchRecency / contentSize are passed but ignored (no crash, no silent
+  // injection of a tools field). Response has no web_search[] → empty refs.
+  it('enableWebSearch=false omits tools field and returns empty searchReferences', async () => {
+    fetchMock.mockResolvedValueOnce(
+      successResponse({
+        contentJson: JSON.stringify({ assignments: [] }),
+        // NO webSearch key: response has no web_search[] at all, consistent
+        // with a pure LLM chat (no tool round-trip).
+      })
+    );
+
+    const result = await callZai<{ assignments: unknown[] }>({
+      model: 'glm-4.6',
+      messages: [{ role: 'user', content: 'classify these topics' }],
+      apiKey: 'sk-fake',
+      timeoutMs: 10_000,
+      jsonMode: true,
+      enableWebSearch: false,
+      // These two must be silently ignored because web search is disabled.
+      searchRecency: 'noLimit',
+      contentSize: 'high',
+      errorContext: { engine: 'kimi', stage: 'hot-radar-scan' },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // Result shape: empty refs, zero search count.
+    expect(result.searchReferences).toEqual([]);
+    expect(result.searchCount).toBe(0);
+    expect(result.data.assignments).toEqual([]);
+
+    // Outgoing body MUST NOT contain a `tools` field.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0];
+    const sent = JSON.parse((init as { body: string }).body) as Record<
+      string,
+      unknown
+    >;
+    expect(sent.tools).toBeUndefined();
+    // But thinking/response_format/temperature etc. are still present.
+    expect(sent.model).toBe('glm-4.6');
+    expect((sent.thinking as { type: string }).type).toBe('disabled');
+    expect((sent.response_format as { type: string }).type).toBe('json_object');
+  });
 });

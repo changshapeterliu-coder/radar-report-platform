@@ -61,13 +61,27 @@ export interface ZaiCallParams {
   /** If true, include `response_format: { type: 'json_object' }`. */
   jsonMode?: boolean;
   /**
+   * If false, omit the `tools: [{ type: 'web_search', ... }]` field from the
+   * request body — the call becomes a pure LLM chat without web search. This
+   * is required by the Daily canonicalization step (reasoning over a provided
+   * topic + canonical dictionary, no external search needed). Default: true
+   * (preserves historical Engine B / weekly-pipeline behaviour).
+   *
+   * When false: `searchRecency` and `contentSize` are ignored; no
+   * `web_search[]` entries will appear in the response envelope, and
+   * `searchReferences` in the result will always be the empty array.
+   */
+  enableWebSearch?: boolean;
+  /**
    * Passed through to the web_search tool's search_recency_filter field.
    * Undefined → omit field (GLM default: noLimit).
+   * Ignored when `enableWebSearch` is false.
    */
   searchRecency?: 'noLimit' | 'oneDay' | 'oneWeek' | 'oneMonth' | 'oneYear';
   /**
    * Passed through to the web_search tool's content_size field.
    * Undefined → omit field (GLM default: medium).
+   * Ignored when `enableWebSearch` is false.
    */
   contentSize?: 'low' | 'medium' | 'high';
   errorContext: {
@@ -100,6 +114,7 @@ export async function callZai<T = unknown>(
     apiKey,
     timeoutMs,
     jsonMode,
+    enableWebSearch = true,
     searchRecency,
     contentSize,
     errorContext,
@@ -109,32 +124,37 @@ export async function callZai<T = unknown>(
   const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    // Build the web_search tool config. Note the string 'True' / 'False'
-    // convention per z.ai docs — booleans are rejected.
-    const webSearchConfig: Record<string, string> = {
-      enable: 'True',
-      search_result: 'True',
-    };
-    if (searchRecency) {
-      webSearchConfig.search_recency_filter = searchRecency;
-    }
-    if (contentSize) {
-      webSearchConfig.content_size = contentSize;
-    }
-
     const body: Record<string, unknown> = {
       model,
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
       thinking: { type: 'disabled' },
-      tools: [
+      temperature: 0.3,
+      max_tokens: 8192,
+    };
+
+    if (enableWebSearch) {
+      // Build the web_search tool config. Note the string 'True' / 'False'
+      // convention per z.ai docs — booleans are rejected.
+      const webSearchConfig: Record<string, string> = {
+        enable: 'True',
+        search_result: 'True',
+      };
+      if (searchRecency) {
+        webSearchConfig.search_recency_filter = searchRecency;
+      }
+      if (contentSize) {
+        webSearchConfig.content_size = contentSize;
+      }
+      body.tools = [
         {
           type: 'web_search',
           web_search: webSearchConfig,
         },
-      ],
-      temperature: 0.3,
-      max_tokens: 8192,
-    };
+      ];
+    }
+    // When enableWebSearch is false, `tools` is omitted entirely — the call
+    // becomes a pure LLM chat. searchRecency / contentSize are ignored.
+
     if (jsonMode) {
       body.response_format = { type: 'json_object' };
     }

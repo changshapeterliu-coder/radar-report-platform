@@ -33,9 +33,9 @@ framework. Single migration 014. No code changes.
   - [x] 4.3 `git diff --stat` — expect 1 new migration + new spec dir + updated spec tasks.md
   - _Source: design §8 Gate 1_
 
-- [-] 5. Commit
-  - [ ] 5.1 `git add -A`
-  - [ ] 5.2 Commit with message:
+- [x] 5. Commit
+  - [x] 5.1 `git add -A`
+  - [x] 5.2 Commit with message:
     ```
     Rewrite 4 prompts goal-oriented (Anthropic context engineering)
 
@@ -55,14 +55,14 @@ framework. Single migration 014. No code changes.
     ```
   - _Source: none (mechanical)_
 
-- [ ] 6. Push gate (ask user before pushing)
-  - [ ] 6.1 Use `userInput` to ask "Ready to push migration 014 to origin/main?"
-  - [ ] 6.2 Wait for explicit confirmation
+- [x] 6. Push gate (ask user before pushing)
+  - [x] 6.1 Use `userInput` to ask "Ready to push migration 014 to origin/main?"
+  - [x] 6.2 Wait for explicit confirmation
   - _Source: git_safety rule_
 
-- [ ] 7. Push
-  - [ ] 7.1 `git push origin main`
-  - [ ] 7.2 Confirm on remote
+- [x] 7. Push
+  - [x] 7.1 `git push origin main`
+  - [x] 7.2 Confirm on remote
   - _Source: none (mechanical)_
 
 - [ ] 8. User applies migration 014 in Supabase SQL Editor

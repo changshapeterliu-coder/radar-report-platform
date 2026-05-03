@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/hooks/useAuth';
 import { useRole } from '@/hooks/useRole';
 import { DomainProvider, useDomain } from '@/contexts/DomainContext';
@@ -11,6 +12,7 @@ import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import NotificationUI from '@/components/NotificationUI';
 
 function NavBar() {
+  const { t } = useTranslation();
   const { user, signOut } = useAuth();
   const { isAdmin } = useRole();
   const { domains, currentDomain, switchDomain } = useDomain();
@@ -23,6 +25,7 @@ function NavBar() {
     { href: '/dashboard', label: 'Dashboard' },
     { href: '/reports', label: 'Reports' },
     { href: '/news', label: 'News' },
+    { href: '/alerts', label: t('nav.alerts') },
     { href: '/requests', label: 'Request' },
     ...(isAdmin ? [{ href: '/admin', label: 'Admin' }] : []),
   ];
