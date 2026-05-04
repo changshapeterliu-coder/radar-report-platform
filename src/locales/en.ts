@@ -22,8 +22,8 @@ const en = {
   dashboard: {
     title: 'Dashboard',
     recentReports: 'Recent Reports',
-    module1Summary: 'Account Suspension Trend Summary',
-    module2Summary: 'Listing Removal Analysis Summary',
+    module1Summary: 'This Week · Account Suspension',
+    module2Summary: 'This Week · Listing Takedown',
     trendView: 'Trend View',
     noData: 'No data available',
   },

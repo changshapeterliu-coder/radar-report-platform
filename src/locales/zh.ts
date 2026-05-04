@@ -22,8 +22,8 @@ const zh = {
   dashboard: {
     title: '仪表盘',
     recentReports: '近期报告',
-    module1Summary: '封号趋势分析总结',
-    module2Summary: '下架商品分析总结',
+    module1Summary: '本周 · 封号管控',
+    module2Summary: '本周 · 商品下架',
     trendView: '趋势视图',
     noData: '暂无数据',
   },
