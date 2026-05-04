@@ -11,6 +11,7 @@ import { useRole } from '@/hooks/useRole';
 import { DomainProvider, useDomain } from '@/contexts/DomainContext';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import NotificationUI from '@/components/NotificationUI';
+import { Logo } from '@/components/Logo';
 import { cn } from '@/lib/utils';
 
 /**
@@ -55,9 +56,11 @@ function NavBar() {
           <div className="flex items-center gap-4">
             <Link
               href="/dashboard"
-              className="text-base font-semibold text-primary hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded"
+              className="flex items-center gap-1.5 rounded text-base font-semibold text-foreground hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+              aria-label="Radar"
             >
-              Radar Report Platform
+              <Logo size={20} />
+              <span>Radar</span>
             </Link>
 
             {/* Domain Switcher — desktop + mobile (always visible, not hidden in hamburger) */}

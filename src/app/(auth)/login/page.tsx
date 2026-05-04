@@ -7,6 +7,7 @@ import { AlertCircle } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Logo } from '@/components/Logo';
 
 /**
  * Login page.
@@ -61,11 +62,12 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
       <div className="w-full max-w-sm">
-        {/* Brand mark — no card wrapper (modern SaaS: put the mark on the
-            background, not behind chrome). The form sits as a separate card
-            beneath it. */}
-        <div className="mb-8 text-center">
-          <h1 className="text-xl font-semibold text-primary">
+        {/* Brand mark — Logo centered above the product name, sits on the
+            page background (no card wrapper). The login-page keeps the full
+            product name; the navbar uses the shorter "Radar" brand. */}
+        <div className="mb-8 flex flex-col items-center text-center">
+          <Logo size={44} className="mb-3" />
+          <h1 className="text-xl font-semibold text-foreground">
             Radar Report Platform
           </h1>
           <p className="mt-1 text-sm text-foreground-muted">
