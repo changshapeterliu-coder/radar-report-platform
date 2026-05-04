@@ -3,13 +3,18 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
-import { createClient } from '@/lib/supabase/client';
-import { useDomain } from '@/contexts/DomainContext';
-import { TableRenderer } from '@/components/report/ReportRenderer';
-import TopTopicsTable from '@/components/report/TopTopicsTable';
-import type { Database } from '@/types/database';
-import type { ReportContent, ReportTable, ReportModule } from '@/types/report';
-import { isMarkdownModule } from '@/lib/validators/report-schema';
+import {
+  FileText,
+  Flame,
+  Archive,
+  TrendingUp,
+  Sparkles,
+  FileCheck,
+  AlertTriangle,
+  Newspaper,
+  Pin,
+  ChevronRight,
+} from 'lucide-react';
 import {
   LineChart,
   Line,
@@ -20,11 +25,73 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
+import { createClient } from '@/lib/supabase/client';
+import { useDomain } from '@/contexts/DomainContext';
+import { TableRenderer } from '@/components/report/ReportRenderer';
+import TopTopicsTable from '@/components/report/TopTopicsTable';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { SpinnerBlock } from '@/components/ui/spinner';
 import DisclaimerBanner from '@/components/DisclaimerBanner';
+import { cn } from '@/lib/utils';
+import type { Database } from '@/types/database';
+import type { ReportContent, ReportTable, ReportModule } from '@/types/report';
+import { isMarkdownModule } from '@/lib/validators/report-schema';
+
+/**
+ * Dashboard landing page.
+ *
+ * Design refs:
+ * - ui-design-system.md sec 4.4 (no emoji in UI chrome), sec 9.1 (page header),
+ *   sec 3.3 (card conventions), sec 1.4 (chart palette)
+ * - power design-guidelines.md sec 5.2 Information Hierarchy, sec 6.2 Emphasis,
+ *   sec 6.3 Minimalist Design, sec 3.3 Consistency
+ * - power ui-guidelines.md "App Surfaces" — Linear-style restraint, utility
+ *   copy, no hero section on operational workspaces, viewport budget
+ *
+ * Information hierarchy (top to bottom):
+ *   1. Page header (h1)
+ *   2. Recent Reports (2-col grid, main column)
+ *   3. Summary tables (Module 1 + Module 2 of latest report)
+ *   4. Hot News + Recent News (sidebar)
+ *   5. Trend Chart (full-width, at the bottom — supporting reference, not hero)
+ */
 
 type ReportRow = Database['public']['Tables']['reports']['Row'];
 type NewsRow = Database['public']['Tables']['news']['Row'];
 type TopicRankingRow = Database['public']['Tables']['topic_rankings']['Row'];
+
+/**
+ * Chart palette from ui-design-system.md sec 1.4.
+ * Order: primary (orange) first for the #1 series, then cool grays/blues,
+ * then spectral fills for >3-series cases. Never #e74c3c (clashes with --danger).
+ */
+const CHART_COLORS = [
+  '#ff9900', // --primary
+  '#146eb4', // --info
+  '#374151', // neutral-700
+  '#10b981', // --success
+  '#8b5cf6', // violet-500
+  '#06b6d4', // cyan-500
+  '#d97706', // amber-600
+];
+
+/**
+ * Channel -> lucide icon + semantic color intent.
+ * Was emoji; switched per ui-design-system sec 4.4.
+ */
+function getChannelIcon(channel: string) {
+  switch (channel) {
+    case 'AI Insight':
+      return { Icon: Sparkles, tone: 'text-violet-600' };
+    case 'Policy':
+      return { Icon: FileCheck, tone: 'text-info' };
+    case 'Alert':
+      return { Icon: AlertTriangle, tone: 'text-danger' };
+    default:
+      return { Icon: Newspaper, tone: 'text-foreground-muted' };
+  }
+}
 
 export default function DashboardPage() {
   const { t, i18n } = useTranslation();
@@ -119,89 +186,261 @@ export default function DashboardPage() {
     return Array.from(keys).slice(0, 7);
   }, [trendData]);
 
-  const COLORS = ['#ff9900', '#146eb4', '#232f3e', '#e74c3c', '#27ae60', '#8b5cf6', '#06b6d4'];
-
-  // News icon based on source_channel
-  const getNewsIcon = (channel: string) => {
-    if (channel === 'AI Insight') return { icon: '🤖', color: 'bg-purple-100 text-purple-700 border-purple-300' };
-    if (channel === 'Policy') return { icon: '📋', color: 'bg-blue-100 text-[#146eb4] border-blue-300' };
-    if (channel === 'Alert') return { icon: '⚠️', color: 'bg-red-100 text-red-700 border-red-300' };
-    return { icon: '📰', color: 'bg-gray-100 text-gray-700 border-gray-300' };
-  };
-
   // Follow global language for news title/summary
   const getNewsTitle = (item: NewsRow) => {
-    const translated = (item as Record<string, unknown>).content_translated as { title?: string } | null;
+    const translated = (item as Record<string, unknown>).content_translated as {
+      title?: string;
+    } | null;
     if (i18n.language === 'en' && translated?.title) return translated.title;
     return item.title;
   };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center py-12">
-        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-[#ff9900] border-r-transparent" />
-      </div>
-    );
-  }
+  if (loading) return <SpinnerBlock />;
+
+  const hasTrendData = trendData.length > 1 && trendKeys.length > 0;
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-[#232f3e] mb-6">{t('dashboard.title')}</h1>
+      {/* Page header per ui-design-system sec 9.1 */}
+      <div className="mb-8">
+        <h1 className="text-2xl font-semibold text-foreground">
+          {t('dashboard.title')}
+        </h1>
+      </div>
 
-      {/* Trend Chart - FULL WIDTH, TOP POSITION */}
-      {trendData.length > 1 && trendKeys.length > 0 && (
-        <section className="mb-8">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-xl font-bold text-[#232f3e]">📈 {t('dashboard.trendView', 'Trend View')}</h2>
-            <div className="flex rounded-lg border border-gray-200 overflow-hidden shadow-sm">
-              <button
-                onClick={() => setTrendModuleIndex(0)}
-                className={`px-4 py-2 text-sm font-medium transition-colors ${
-                  trendModuleIndex === 0
-                    ? 'bg-[#232f3e] text-white'
-                    : 'bg-white text-[#232f3e] hover:bg-gray-50'
-                }`}
-              >
-                Latest Suspension Trends
-              </button>
-              <button
-                onClick={() => setTrendModuleIndex(1)}
-                className={`px-4 py-2 text-sm font-medium transition-colors ${
-                  trendModuleIndex === 1
-                    ? 'bg-[#232f3e] text-white'
-                    : 'bg-white text-[#232f3e] hover:bg-gray-50'
-                }`}
-              >
-                Latest Listing Takedown Trends
-              </button>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Main column — reports + summary tables */}
+        <div className="space-y-6 lg:col-span-2">
+          {/* Recent Reports */}
+          <section aria-labelledby="recent-reports-heading">
+            <SectionHeading
+              id="recent-reports-heading"
+              icon={FileText}
+              title={t('dashboard.recentReports')}
+            />
+            {reports.length === 0 ? (
+              <EmptyBlock icon={FileText} label={t('dashboard.noData')} />
+            ) : (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {reports.map((r) => (
+                  <button
+                    type="button"
+                    key={r.id}
+                    onClick={() => router.push(`/reports/${r.id}`)}
+                    className="group flex flex-col rounded-lg border border-border bg-card p-4 text-left shadow-sm transition-colors hover:border-border-strong hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                  >
+                    <h3 className="truncate text-sm font-semibold text-foreground">
+                      {r.title}
+                    </h3>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      {r.week_label && (
+                        <Badge variant="outline">{r.week_label}</Badge>
+                      )}
+                      <span className="text-xs text-foreground-muted">
+                        {r.date_range}
+                      </span>
+                    </div>
+                    <span className="mt-1 text-xs text-foreground-subtle">
+                      {r.published_at
+                        ? new Date(r.published_at).toLocaleDateString()
+                        : ''}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Module 1 Summary */}
+          {module1 &&
+            (isMarkdownModule(module1)
+              ? (module1.topTopics ?? []).length > 0
+              : !!module1Table) && (
+              <section aria-labelledby="module1-heading">
+                <SectionHeading
+                  id="module1-heading"
+                  icon={TrendingUp}
+                  title={t('dashboard.module1Summary')}
+                />
+                <div className="overflow-x-auto rounded-lg border border-border bg-card p-4 shadow-sm">
+                  {isMarkdownModule(module1) ? (
+                    <TopTopicsTable topics={module1.topTopics!} />
+                  ) : (
+                    module1Table && <TableRenderer table={module1Table} />
+                  )}
+                </div>
+              </section>
+            )}
+
+          {/* Module 2 Summary */}
+          {module2 &&
+            (isMarkdownModule(module2)
+              ? (module2.topTopics ?? []).length > 0
+              : !!module2Table) && (
+              <section aria-labelledby="module2-heading">
+                <SectionHeading
+                  id="module2-heading"
+                  icon={TrendingUp}
+                  title={t('dashboard.module2Summary')}
+                />
+                <div className="overflow-x-auto rounded-lg border border-border bg-card p-4 shadow-sm">
+                  {isMarkdownModule(module2) ? (
+                    <TopTopicsTable topics={module2.topTopics!} />
+                  ) : (
+                    module2Table && <TableRenderer table={module2Table} />
+                  )}
+                </div>
+              </section>
+            )}
+        </div>
+
+        {/* Sidebar — news */}
+        <div className="space-y-6">
+          {/* Hot News (Top 3) — subtle primary tint, same row chrome as Recent News */}
+          {hotNews.length > 0 && (
+            <section aria-labelledby="hot-news-heading">
+              <div className="mb-3 flex items-center justify-between">
+                <SectionHeading
+                  id="hot-news-heading"
+                  icon={Flame}
+                  title="Hot News"
+                  accent
+                />
+                <Button
+                  variant="link"
+                  size="sm"
+                  onClick={() => router.push('/news')}
+                >
+                  {t('common.viewAll')}
+                </Button>
+              </div>
+              <ul className="space-y-2">
+                {hotNews.map((item) => (
+                  <NewsRowItem
+                    key={item.id}
+                    item={item}
+                    title={getNewsTitle(item)}
+                    emphasis
+                    onClick={() => router.push(`/news/${item.id}`)}
+                  />
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {/* Recent News */}
+          {historyNews.length > 0 && (
+            <section aria-labelledby="recent-news-heading">
+              <SectionHeading
+                id="recent-news-heading"
+                icon={Archive}
+                title="Recent News"
+              />
+              <ul className="space-y-2">
+                {historyNews.map((item) => (
+                  <NewsRowItem
+                    key={item.id}
+                    item={item}
+                    title={getNewsTitle(item)}
+                    onClick={() => router.push(`/news/${item.id}`)}
+                  />
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
+      </div>
+
+      {/* Trend Chart — full-width, bottom position.
+          Supporting reference, not a hero. Compact height per power
+          "viewport budget" + design-guidelines sec 5.2 Info Hierarchy. */}
+      {hasTrendData && (
+        <section aria-labelledby="trend-heading" className="mt-10">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <SectionHeading
+              id="trend-heading"
+              icon={TrendingUp}
+              title={t('dashboard.trendView', 'Trend View')}
+            />
+            <div
+              role="tablist"
+              aria-label="Trend module selector"
+              className="inline-flex overflow-hidden rounded-md border border-border bg-card text-sm shadow-sm"
+            >
+              {[
+                { idx: 0, label: 'Suspension Trends' },
+                { idx: 1, label: 'Listing Takedown' },
+              ].map((tab) => (
+                <button
+                  type="button"
+                  key={tab.idx}
+                  role="tab"
+                  aria-selected={trendModuleIndex === tab.idx}
+                  onClick={() => setTrendModuleIndex(tab.idx)}
+                  className={cn(
+                    'px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
+                    trendModuleIndex === tab.idx
+                      ? 'bg-muted text-foreground'
+                      : 'text-foreground-muted hover:bg-muted hover:text-foreground'
+                  )}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-            <ResponsiveContainer width="100%" height={500}>
-              <LineChart data={trendData} margin={{ top: 20, right: 40, left: 20, bottom: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="name" tick={{ fontSize: 13, fill: '#232f3e' }} />
+          <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
+            <ResponsiveContainer width="100%" height={360}>
+              <LineChart
+                data={trendData}
+                margin={{ top: 16, right: 24, left: 12, bottom: 8 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fontSize: 12, fill: 'var(--foreground-muted)' }}
+                  stroke="var(--border-strong)"
+                />
                 <YAxis
                   reversed
                   domain={[1, 'auto']}
-                  tick={{ fontSize: 13, fill: '#232f3e' }}
-                  label={{ value: 'Rank', angle: -90, position: 'insideLeft', style: { fontSize: 13, fill: '#232f3e' } }}
+                  tick={{ fontSize: 12, fill: 'var(--foreground-muted)' }}
+                  stroke="var(--border-strong)"
+                  label={{
+                    value: 'Rank',
+                    angle: -90,
+                    position: 'insideLeft',
+                    style: {
+                      fontSize: 12,
+                      fill: 'var(--foreground-muted)',
+                    },
+                  }}
                   allowDecimals={false}
                 />
                 <Tooltip
-                  contentStyle={{ borderRadius: 8, border: '1px solid #d5dbdb', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}
-                  formatter={(value: number, name: string) => [`#${value}`, name]}
+                  contentStyle={{
+                    borderRadius: 8,
+                    border: '1px solid var(--border)',
+                    backgroundColor: 'var(--card)',
+                    boxShadow:
+                      '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
+                    fontSize: 12,
+                  }}
+                  formatter={(value: number, name: string) => [
+                    `#${value}`,
+                    name,
+                  ]}
                 />
-                <Legend wrapperStyle={{ fontSize: 12, paddingTop: 10 }} />
+                <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
                 {trendKeys.map((key, i) => (
                   <Line
                     key={key}
                     type="monotone"
                     dataKey={key}
-                    stroke={COLORS[i % COLORS.length]}
-                    strokeWidth={2.5}
-                    dot={{ r: 5, strokeWidth: 2 }}
-                    activeDot={{ r: 7 }}
+                    stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                    strokeWidth={2}
+                    dot={{ r: 3, strokeWidth: 1.5 }}
+                    activeDot={{ r: 5 }}
                   />
                 ))}
               </LineChart>
@@ -210,161 +449,113 @@ export default function DashboardPage() {
         </section>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main content - 2 cols */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Recent Reports */}
-          <section>
-            <h2 className="text-lg font-bold text-[#232f3e] mb-3">📄 {t('dashboard.recentReports')}</h2>
-            {reports.length === 0 ? (
-              <p className="text-gray-500 text-sm">{t('dashboard.noData')}</p>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {reports.map((r) => (
-                  <button
-                    key={r.id}
-                    onClick={() => router.push(`/reports/${r.id}`)}
-                    className="text-left bg-white rounded-lg border border-gray-200 p-4 hover:border-[#ff9900] hover:shadow-md transition-all"
-                  >
-                    <h3 className="font-semibold text-[#232f3e] text-sm truncate">{r.title}</h3>
-                    <div className="flex items-center gap-2 mt-2">
-                      {r.week_label && (
-                        <span className="inline-block rounded bg-[#ff9900]/10 text-[#ff9900] px-1.5 py-0.5 text-[10px] font-bold">
-                          {r.week_label}
-                        </span>
-                      )}
-                      <p className="text-xs text-gray-500">{r.date_range}</p>
-                    </div>
-                    <p className="text-xs text-gray-400 mt-1">
-                      {r.published_at ? new Date(r.published_at).toLocaleDateString() : ''}
-                    </p>
-                  </button>
-                ))}
-              </div>
-            )}
-          </section>
-
-          {/* Module 1 Summary Table */}
-          {module1 && (isMarkdownModule(module1) ? (module1.topTopics ?? []).length > 0 : !!module1Table) && (
-            <section>
-              <h2 className="text-lg font-bold text-[#232f3e] mb-3">📊 {t('dashboard.module1Summary')}</h2>
-              <div className="bg-white rounded-lg border border-gray-200 p-4 overflow-x-auto shadow-sm">
-                {isMarkdownModule(module1) ? (
-                  <TopTopicsTable topics={module1.topTopics!} />
-                ) : (
-                  module1Table && <TableRenderer table={module1Table} />
-                )}
-              </div>
-            </section>
-          )}
-
-          {/* Module 2 Summary Table */}
-          {module2 && (isMarkdownModule(module2) ? (module2.topTopics ?? []).length > 0 : !!module2Table) && (
-            <section>
-              <h2 className="text-lg font-bold text-[#232f3e] mb-3">📊 {t('dashboard.module2Summary')}</h2>
-              <div className="bg-white rounded-lg border border-gray-200 p-4 overflow-x-auto shadow-sm">
-                {isMarkdownModule(module2) ? (
-                  <TopTopicsTable topics={module2.topTopics!} />
-                ) : (
-                  module2Table && <TableRenderer table={module2Table} />
-                )}
-              </div>
-            </section>
-          )}
-        </div>
-
-        {/* Sidebar - News */}
-        <div className="space-y-6">
-          {/* HOT News (Top 3) */}
-          {hotNews.length > 0 && (
-            <section>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-lg font-bold text-[#232f3e]">
-                  🔥 <span>Hot News</span>
-                </h2>
-                <button
-                  onClick={() => router.push('/news')}
-                  className="text-xs text-[#146eb4] hover:underline"
-                >
-                  {t('common.viewAll')}
-                </button>
-              </div>
-              <div className="space-y-2">
-                {hotNews.map((item, idx) => {
-                  const { icon, color } = getNewsIcon(item.source_channel);
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => router.push(`/news/${item.id}`)}
-                      className="w-full text-left bg-gradient-to-br from-[#fff9f0] to-white rounded-lg border-2 border-[#ff9900]/30 p-3 hover:border-[#ff9900] hover:shadow-md transition-all relative"
-                    >
-                      <div className="absolute -top-1 -left-1 bg-[#ff9900] text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shadow">
-                        {idx + 1}
-                      </div>
-                      <div className="flex items-start gap-2 pl-5">
-                        <span className="text-lg leading-none">{icon}</span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            {item.is_pinned && (
-                              <span className="inline-block rounded-full bg-red-100 text-red-700 px-1.5 py-0.5 text-[10px] font-bold border border-red-300">
-                                📌 Pinned
-                              </span>
-                            )}
-                            <span className={`inline-block rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${color}`}>
-                              {item.source_channel}
-                            </span>
-                          </div>
-                          <h3 className="font-semibold text-[#232f3e] text-sm mt-1 line-clamp-2">{getNewsTitle(item)}</h3>
-                          <p className="text-xs text-gray-400 mt-1">
-                            {new Date(item.published_at).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-          )}
-
-          {/* History News */}
-          {historyNews.length > 0 && (
-            <section>
-              <h2 className="text-lg font-bold text-[#232f3e] mb-3">📚 Recent News</h2>
-              <div className="space-y-2">
-                {historyNews.map((item) => {
-                  const { icon, color } = getNewsIcon(item.source_channel);
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => router.push(`/news/${item.id}`)}
-                      className="w-full text-left bg-white rounded-lg border border-gray-200 p-3 hover:border-[#146eb4] hover:shadow transition-all"
-                    >
-                      <div className="flex items-start gap-2">
-                        <span className="text-base leading-none mt-0.5">{icon}</span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className={`inline-block rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${color}`}>
-                              {item.source_channel}
-                            </span>
-                          </div>
-                          <h3 className="font-medium text-[#232f3e] text-sm mt-1 line-clamp-2">{getNewsTitle(item)}</h3>
-                          <p className="text-xs text-gray-400 mt-1">
-                            {new Date(item.published_at).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-          )}
-        </div>
-      </div>
-
-      {/* Footer disclaimer */}
       <DisclaimerBanner className="mt-10" />
     </div>
+  );
+}
+
+// ─────────── Local sub-components ───────────
+
+function SectionHeading({
+  id,
+  icon: Icon,
+  title,
+  accent = false,
+}: {
+  id?: string;
+  icon: typeof FileText;
+  title: string;
+  accent?: boolean;
+}) {
+  return (
+    <h2
+      id={id}
+      className={cn(
+        'mb-3 flex items-center gap-2 text-lg font-semibold',
+        accent ? 'text-foreground' : 'text-foreground'
+      )}
+    >
+      <Icon
+        className={cn(
+          'h-5 w-5',
+          accent ? 'text-primary' : 'text-foreground-muted'
+        )}
+        strokeWidth={1.75}
+        aria-hidden
+      />
+      {title}
+    </h2>
+  );
+}
+
+function EmptyBlock({
+  icon: Icon,
+  label,
+}: {
+  icon: typeof FileText;
+  label: string;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-card py-10 text-center">
+      <Icon
+        className="mb-2 h-8 w-8 text-foreground-subtle"
+        strokeWidth={1.5}
+        aria-hidden
+      />
+      <p className="text-sm text-foreground-muted">{label}</p>
+    </div>
+  );
+}
+
+interface NewsRowItemProps {
+  item: NewsRow;
+  title: string;
+  emphasis?: boolean;
+  onClick: () => void;
+}
+
+function NewsRowItem({ item, title, emphasis = false, onClick }: NewsRowItemProps) {
+  const { Icon, tone } = getChannelIcon(item.source_channel);
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onClick}
+        className={cn(
+          'group flex w-full items-start gap-2.5 rounded-lg border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
+          emphasis
+            ? 'border-primary/20 bg-primary-soft/40 hover:border-primary/40'
+            : 'border-border bg-card hover:border-border-strong hover:bg-muted/40'
+        )}
+      >
+        <Icon
+          className={cn('mt-0.5 h-4 w-4 flex-shrink-0', tone)}
+          strokeWidth={1.75}
+          aria-hidden
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {item.is_pinned && (
+              <Badge variant="danger">
+                <Pin className="h-2.5 w-2.5" strokeWidth={2} />
+                Pinned
+              </Badge>
+            )}
+            <Badge variant="outline">{item.source_channel}</Badge>
+          </div>
+          <p className="mt-1 line-clamp-2 text-sm font-medium text-foreground">
+            {title}
+          </p>
+          <p className="mt-0.5 text-xs text-foreground-subtle">
+            {new Date(item.published_at).toLocaleDateString()}
+          </p>
+        </div>
+        <ChevronRight
+          className="mt-1 h-3.5 w-3.5 flex-shrink-0 text-foreground-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-foreground-muted"
+          strokeWidth={1.75}
+          aria-hidden
+        />
+      </button>
+    </li>
   );
 }
