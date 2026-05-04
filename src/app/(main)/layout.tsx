@@ -5,11 +5,25 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
+import { ChevronDown, Menu, X } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRole } from '@/hooks/useRole';
 import { DomainProvider, useDomain } from '@/contexts/DomainContext';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import NotificationUI from '@/components/NotificationUI';
+import { cn } from '@/lib/utils';
+
+/**
+ * Main app layout + top navigation.
+ *
+ * Design: see `.kiro/steering/ui-design-system.md` §9.3 (Nav bar). White
+ * background, border-b, h-14. Active route = bottom underline in primary
+ * color (not filled pill). Hover = text color change, never bg change.
+ *
+ * Power reference: design-system-scaffold `ui-guidelines.md` → "App Surfaces"
+ * (Linear-style restraint) and `design-guidelines.md` §3.12 (Clear
+ * Affordances), §5.6 (Navigation Systems), §5.11 (Landmarks and Orientation).
+ */
 
 function NavBar() {
   const { t } = useTranslation();
@@ -34,40 +48,53 @@ function NavBar() {
     pathname === href || pathname.startsWith(href + '/');
 
   return (
-    <nav className="bg-[#232f3e] text-white">
+    <nav className="sticky top-0 z-40 border-b border-border bg-card">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-14 items-center justify-between">
+        <div className="flex h-14 items-center justify-between gap-4">
           {/* Left: Logo + Domain Switcher */}
           <div className="flex items-center gap-4">
-            <Link href="/dashboard" className="text-lg font-bold text-[#ff9900]">
+            <Link
+              href="/dashboard"
+              className="text-base font-semibold text-primary hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded"
+            >
               Radar Report Platform
             </Link>
 
-            {/* Domain Switcher */}
-            <div className="relative hidden sm:block">
+            {/* Domain Switcher — desktop + mobile (always visible, not hidden in hamburger) */}
+            <div className="relative">
               <button
-                onClick={() => setDomainDropdownOpen(!domainDropdownOpen)}
-                className="flex items-center gap-1 rounded px-2 py-1 text-sm hover:bg-white/10"
+                type="button"
+                onClick={() => setDomainDropdownOpen((v) => !v)}
+                className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                aria-haspopup="menu"
+                aria-expanded={domainDropdownOpen}
+                aria-label="Switch domain"
               >
-                <span>{currentDomain?.name ?? 'Select Domain'}</span>
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
+                <span className="max-w-[120px] truncate font-medium text-foreground">
+                  {currentDomain?.name ?? 'Select Domain'}
+                </span>
+                <ChevronDown className="h-3.5 w-3.5" strokeWidth={1.75} />
               </button>
               {domainDropdownOpen && (
-                <div className="absolute left-0 top-full z-50 mt-1 w-48 rounded bg-white py-1 shadow-lg">
+                <div
+                  role="menu"
+                  className="absolute left-0 top-full z-50 mt-1 w-48 rounded-md border border-border bg-popover py-1 shadow-md"
+                >
                   {domains.map((domain) => (
                     <button
+                      type="button"
                       key={domain.id}
+                      role="menuitem"
                       onClick={() => {
                         switchDomain(domain.id);
                         setDomainDropdownOpen(false);
                       }}
-                      className={`block w-full px-4 py-2 text-left text-sm ${
+                      className={cn(
+                        'block w-full px-3 py-1.5 text-left text-sm transition-colors',
                         domain.id === currentDomain?.id
-                          ? 'bg-gray-100 font-semibold text-[#232f3e]'
-                          : 'text-gray-700 hover:bg-gray-50'
-                      }`}
+                          ? 'bg-muted font-medium text-foreground'
+                          : 'text-foreground-muted hover:bg-muted hover:text-foreground'
+                      )}
                     >
                       {domain.name}
                     </button>
@@ -79,49 +106,67 @@ function NavBar() {
 
           {/* Center: Nav Links (desktop) */}
           <div className="hidden sm:flex sm:items-center sm:gap-1">
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${
-                  isActive(link.href)
-                    ? 'bg-white/15 text-[#ff9900]'
-                    : 'text-gray-300 hover:bg-white/10 hover:text-white'
-                }`}
-              >
-                {link.label}
-              </Link>
-            ))}
+            {navLinks.map((link) => {
+              const active = isActive(link.href);
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  aria-current={active ? 'page' : undefined}
+                  className={cn(
+                    'relative rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
+                    active
+                      ? 'text-foreground'
+                      : 'text-foreground-muted hover:text-foreground'
+                  )}
+                >
+                  {link.label}
+                  {/* Active underline — 2px, primary, anchored to bottom of navbar */}
+                  {active && (
+                    <span
+                      aria-hidden
+                      className="absolute inset-x-3 -bottom-[1px] h-0.5 bg-primary"
+                    />
+                  )}
+                </Link>
+              );
+            })}
           </div>
 
           {/* Right: Language, Notifications, User Menu */}
-          <div className="flex items-center gap-3">
-            {/* Language Switcher */}
+          <div className="flex items-center gap-2">
             <LanguageSwitcher />
-
-            {/* Notifications */}
             <NotificationUI />
 
-            {/* User Menu */}
+            {/* User Menu — desktop */}
             <div className="relative hidden sm:block">
               <button
-                onClick={() => setUserMenuOpen(!userMenuOpen)}
-                className="flex items-center gap-1 rounded px-2 py-1 text-sm text-gray-300 hover:bg-white/10 hover:text-white"
+                type="button"
+                onClick={() => setUserMenuOpen((v) => !v)}
+                className="flex items-center gap-1 rounded-md px-2 py-1.5 text-xs text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                aria-haspopup="menu"
+                aria-expanded={userMenuOpen}
+                aria-label="User menu"
               >
-                <span className="max-w-[120px] truncate">{user?.email ?? ''}</span>
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
+                <span className="max-w-[140px] truncate">{user?.email ?? ''}</span>
+                <ChevronDown className="h-3.5 w-3.5" strokeWidth={1.75} />
               </button>
               {userMenuOpen && (
-                <div className="absolute right-0 top-full z-50 mt-1 w-48 rounded bg-white py-1 shadow-lg">
-                  <div className="border-b px-4 py-2 text-xs text-gray-500">{user?.email}</div>
+                <div
+                  role="menu"
+                  className="absolute right-0 top-full z-50 mt-1 w-56 rounded-md border border-border bg-popover py-1 shadow-md"
+                >
+                  <div className="border-b border-border px-3 py-2 text-xs text-foreground-muted">
+                    {user?.email}
+                  </div>
                   <button
+                    type="button"
+                    role="menuitem"
                     onClick={() => {
                       setUserMenuOpen(false);
                       signOut();
                     }}
-                    className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                    className="block w-full px-3 py-1.5 text-left text-sm text-foreground-muted transition-colors hover:bg-muted hover:text-foreground"
                   >
                     Sign Out
                   </button>
@@ -131,16 +176,17 @@ function NavBar() {
 
             {/* Mobile Hamburger */}
             <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="rounded p-1.5 text-gray-300 hover:bg-white/10 hover:text-white sm:hidden"
+              type="button"
+              onClick={() => setMobileMenuOpen((v) => !v)}
+              className="rounded-md p-1.5 text-foreground-muted transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 sm:hidden"
+              aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={mobileMenuOpen}
             >
-              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                {mobileMenuOpen ? (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                )}
-              </svg>
+              {mobileMenuOpen ? (
+                <X className="h-5 w-5" strokeWidth={1.75} />
+              ) : (
+                <Menu className="h-5 w-5" strokeWidth={1.75} />
+              )}
             </button>
           </div>
         </div>
@@ -148,54 +194,38 @@ function NavBar() {
 
       {/* Mobile Menu */}
       {mobileMenuOpen && (
-        <div className="border-t border-white/10 sm:hidden">
-          <div className="space-y-1 px-4 py-3">
-            {/* Domain Switcher (mobile) */}
-            <div className="border-b border-white/10 pb-2 mb-2">
-              <p className="mb-1 text-xs text-gray-400">Domain</p>
-              {domains.map((domain) => (
-                <button
-                  key={domain.id}
-                  onClick={() => {
-                    switchDomain(domain.id);
-                    setMobileMenuOpen(false);
-                  }}
-                  className={`block w-full rounded px-3 py-1.5 text-left text-sm ${
-                    domain.id === currentDomain?.id
-                      ? 'bg-white/15 text-[#ff9900]'
-                      : 'text-gray-300 hover:bg-white/10'
-                  }`}
+        <div className="border-t border-border bg-card sm:hidden">
+          <div className="mx-auto max-w-7xl space-y-1 px-4 py-3 sm:px-6">
+            {navLinks.map((link) => {
+              const active = isActive(link.href);
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  aria-current={active ? 'page' : undefined}
+                  className={cn(
+                    'block rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                    active
+                      ? 'bg-muted text-foreground'
+                      : 'text-foreground-muted hover:bg-muted hover:text-foreground'
+                  )}
                 >
-                  {domain.name}
-                </button>
-              ))}
-            </div>
-
-            {/* Nav Links (mobile) */}
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={() => setMobileMenuOpen(false)}
-                className={`block rounded px-3 py-2 text-sm font-medium ${
-                  isActive(link.href)
-                    ? 'bg-white/15 text-[#ff9900]'
-                    : 'text-gray-300 hover:bg-white/10'
-                }`}
-              >
-                {link.label}
-              </Link>
-            ))}
+                  {link.label}
+                </Link>
+              );
+            })}
 
             {/* User info + Sign Out (mobile) */}
-            <div className="border-t border-white/10 pt-2 mt-2">
-              <p className="px-3 py-1 text-xs text-gray-400">{user?.email}</p>
+            <div className="mt-2 border-t border-border pt-2">
+              <p className="px-3 py-1 text-xs text-foreground-muted">{user?.email}</p>
               <button
+                type="button"
                 onClick={() => {
                   setMobileMenuOpen(false);
                   signOut();
                 }}
-                className="block w-full rounded px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/10"
+                className="block w-full rounded-md px-3 py-2 text-left text-sm text-foreground-muted transition-colors hover:bg-muted hover:text-foreground"
               >
                 Sign Out
               </button>
@@ -211,8 +241,8 @@ export default function MainLayout({ children }: { children: ReactNode }) {
   return (
     <DomainProvider>
       <NavBar />
-      <main className="flex-1 bg-gray-50">
-        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <main className="flex-1 bg-background">
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           {children}
         </div>
       </main>

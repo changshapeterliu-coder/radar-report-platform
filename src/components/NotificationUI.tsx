@@ -3,9 +3,19 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
+import { Bell, FileText, Newspaper } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database';
+
+/**
+ * Notification bell + dropdown, living in the top navbar.
+ *
+ * Design: `.kiro/steering/ui-design-system.md` §1 (tokens) + §10 keep-list
+ * (restyle colors only). Functional behavior (realtime subscription,
+ * mark-as-read, routing) is preserved verbatim — this is a pure restyle.
+ */
 
 type NotificationRow = Database['public']['Tables']['notifications']['Row'];
 
@@ -120,33 +130,35 @@ export default function NotificationUI() {
   return (
     <div className="relative" ref={dropdownRef}>
       <button
-        onClick={() => setOpen(!open)}
-        className="relative rounded p-1.5 text-gray-300 hover:bg-white/10 hover:text-white"
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="relative rounded-md p-1.5 text-foreground-muted transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
         aria-label={t('notifications.title')}
+        aria-haspopup="menu"
+        aria-expanded={open}
       >
-        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-          />
-        </svg>
+        <Bell className="h-5 w-5" strokeWidth={1.75} />
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+          <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold text-white">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-lg bg-white shadow-lg border border-gray-200">
-          <div className="flex items-center justify-between border-b px-4 py-3">
-            <h3 className="font-semibold text-[#232f3e] text-sm">{t('notifications.title')}</h3>
+        <div
+          role="menu"
+          className="absolute right-0 top-full z-50 mt-2 w-80 rounded-md border border-border bg-popover shadow-md"
+        >
+          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <h3 className="text-sm font-semibold text-foreground">
+              {t('notifications.title')}
+            </h3>
             {unreadCount > 0 && (
               <button
+                type="button"
                 onClick={handleMarkAllRead}
-                className="text-xs text-[#146eb4] hover:underline"
+                className="text-xs text-info hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded"
               >
                 {t('notifications.markAllRead')}
               </button>
@@ -155,34 +167,53 @@ export default function NotificationUI() {
 
           <div className="max-h-80 overflow-y-auto">
             {notifications.length === 0 ? (
-              <p className="px-4 py-6 text-center text-sm text-gray-400">
+              <p className="px-4 py-6 text-center text-sm text-foreground-subtle">
                 {t('notifications.noNotifications')}
               </p>
             ) : (
               notifications.map((notif) => (
                 <button
+                  type="button"
+                  role="menuitem"
                   key={notif.id}
                   onClick={() => handleNotificationClick(notif)}
-                  className={`w-full text-left px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors ${
-                    !notif.is_read ? 'bg-blue-50/50' : ''
-                  }`}
+                  className={cn(
+                    'flex w-full items-start gap-2 border-b border-border px-4 py-3 text-left transition-colors hover:bg-muted',
+                    !notif.is_read && 'bg-primary-soft/40'
+                  )}
                 >
-                  <div className="flex items-start gap-2">
-                    <span className="mt-0.5 text-sm">
-                      {notif.type === 'report' ? '📄' : '📰'}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-sm truncate ${!notif.is_read ? 'font-semibold text-[#232f3e]' : 'text-gray-700'}`}>
-                        {notif.title}
-                      </p>
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        {new Date(notif.created_at).toLocaleString()}
-                      </p>
-                    </div>
-                    {!notif.is_read && (
-                      <span className="mt-1.5 h-2 w-2 rounded-full bg-[#146eb4] flex-shrink-0" />
-                    )}
+                  {notif.type === 'report' ? (
+                    <FileText
+                      className="mt-0.5 h-4 w-4 flex-shrink-0 text-foreground-muted"
+                      strokeWidth={1.75}
+                    />
+                  ) : (
+                    <Newspaper
+                      className="mt-0.5 h-4 w-4 flex-shrink-0 text-foreground-muted"
+                      strokeWidth={1.75}
+                    />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p
+                      className={cn(
+                        'truncate text-sm',
+                        !notif.is_read
+                          ? 'font-semibold text-foreground'
+                          : 'text-foreground-muted'
+                      )}
+                    >
+                      {notif.title}
+                    </p>
+                    <p className="mt-0.5 text-xs text-foreground-subtle">
+                      {new Date(notif.created_at).toLocaleString()}
+                    </p>
                   </div>
+                  {!notif.is_read && (
+                    <span
+                      aria-label="Unread"
+                      className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-primary"
+                    />
+                  )}
                 </button>
               ))
             )}

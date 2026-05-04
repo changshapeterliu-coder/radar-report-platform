@@ -4,6 +4,15 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/hooks/useAuth';
 import { createClient } from '@/lib/supabase/client';
 import { useMemo, useState, useRef, useEffect } from 'react';
+import { Globe, ChevronDown, Check } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+/**
+ * Language switcher, living in the top navbar.
+ *
+ * Design: `.kiro/steering/ui-design-system.md` §10 keep-list — UX preserved,
+ * colors migrated from #232f3e / #ff9900 hex hardcode to design tokens.
+ */
 
 export function LanguageSwitcher() {
   const { i18n } = useTranslation();
@@ -45,41 +54,56 @@ export function LanguageSwitcher() {
   return (
     <div className="relative" ref={dropdownRef}>
       <button
-        onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 rounded px-2 py-1.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white"
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-foreground-muted transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
         aria-label="Language"
+        aria-haspopup="menu"
+        aria-expanded={open}
       >
-        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
-        </svg>
-        <span className="hidden sm:inline">Language: {currentLabel}</span>
-        <span className="sm:hidden">{currentLabel}</span>
-        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
+        <Globe className="h-4 w-4" strokeWidth={1.75} />
+        <span className="hidden sm:inline">{currentLabel}</span>
+        <ChevronDown className="h-3 w-3" strokeWidth={1.75} />
       </button>
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-1 w-40 rounded bg-white py-1 shadow-lg border border-gray-200">
-          <div className="px-3 py-1.5 text-[10px] text-gray-400 uppercase tracking-wider font-semibold">
+        <div
+          role="menu"
+          className="absolute right-0 top-full z-50 mt-1 w-40 rounded-md border border-border bg-popover py-1 shadow-md"
+        >
+          <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-foreground-subtle">
             Language
           </div>
           <button
+            type="button"
+            role="menuitem"
             onClick={() => selectLanguage('zh')}
-            className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm ${
-              currentLang === 'zh' ? 'bg-gray-50 font-semibold text-[#232f3e]' : 'text-gray-700 hover:bg-gray-50'
-            }`}
+            className={cn(
+              'flex w-full items-center justify-between px-3 py-1.5 text-left text-sm transition-colors',
+              currentLang === 'zh'
+                ? 'bg-muted font-medium text-foreground'
+                : 'text-foreground-muted hover:bg-muted hover:text-foreground'
+            )}
           >
             <span>中文</span>
-            {currentLang === 'zh' && <span className="text-[#ff9900]">✓</span>}
+            {currentLang === 'zh' && (
+              <Check className="h-3.5 w-3.5 text-primary" strokeWidth={2} />
+            )}
           </button>
           <button
+            type="button"
+            role="menuitem"
             onClick={() => selectLanguage('en')}
-            className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm ${
-              currentLang === 'en' ? 'bg-gray-50 font-semibold text-[#232f3e]' : 'text-gray-700 hover:bg-gray-50'
-            }`}
+            className={cn(
+              'flex w-full items-center justify-between px-3 py-1.5 text-left text-sm transition-colors',
+              currentLang === 'en'
+                ? 'bg-muted font-medium text-foreground'
+                : 'text-foreground-muted hover:bg-muted hover:text-foreground'
+            )}
           >
             <span>English</span>
-            {currentLang === 'en' && <span className="text-[#ff9900]">✓</span>}
+            {currentLang === 'en' && (
+              <Check className="h-3.5 w-3.5 text-primary" strokeWidth={2} />
+            )}
           </button>
         </div>
       )}
