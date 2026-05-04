@@ -1,5 +1,6 @@
 'use client';
 
+import { Badge } from '@/components/ui/badge';
 import type {
   ReportModule,
   ReportTable,
@@ -14,44 +15,66 @@ import MarkdownRenderer from './MarkdownRenderer';
 import TopTopicsTable from './TopTopicsTable';
 import { isMarkdownModule } from '@/lib/validators/report-schema';
 
-/* ─── Badge helpers ─── */
+/**
+ * ReportRenderer — dispatches a ReportModule to the right inner renderer
+ * (v4 Markdown-hybrid vs legacy v1-v3 blocks) and delegates content rendering.
+ *
+ * Design refs:
+ * - ui-design-system.md sec 1 (tokens), sec 3.3 (card conventions),
+ *   sec 4.3 (Badge variants)
+ * - power design-guidelines.md sec 5.1 Content Primacy, sec 6.1 Readability
+ */
 
-function badgeColor(level: 'high' | 'medium' | 'low') {
+// ─── Badge variant mapping ───
+
+/**
+ * Map a severity-ish level to the Badge primitive variant. Used by cell
+ * badges inside AI-produced tables.
+ */
+function badgeVariantFor(
+  level: 'high' | 'medium' | 'low'
+): 'danger' | 'warning' | 'info' {
   switch (level) {
     case 'high':
-      return 'bg-red-50 text-red-700 border border-red-200';
+      return 'danger';
     case 'medium':
-      return 'bg-yellow-50 text-yellow-700 border border-yellow-200';
+      return 'warning';
     case 'low':
-      return 'bg-blue-50 text-[#146eb4] border border-blue-200';
+      return 'info';
   }
 }
 
-function riskColor(label: string) {
+/**
+ * Heuristic mapping for free-form cell badge labels (from pre-v4 reports).
+ * Keeps parity with the old `riskColor` helper.
+ */
+function riskVariant(label: string): 'danger' | 'warning' | 'info' {
   const l = label.toLowerCase();
-  if (l.includes('high') || l.includes('severity') || l.includes('chain'))
-    return 'bg-red-50 text-red-700 border border-red-200';
-  if (l.includes('medium') || l.includes('recovery'))
-    return 'bg-yellow-50 text-yellow-700 border border-yellow-200';
-  return 'bg-blue-50 text-[#146eb4] border border-blue-200';
+  if (l.includes('high') || l.includes('severity') || l.includes('chain')) {
+    return 'danger';
+  }
+  if (l.includes('medium') || l.includes('recovery')) return 'warning';
+  return 'info';
 }
 
-/* ─── Cell ─── */
+// ─── Cell ───
 
 function CellContent({ cell }: { cell: TableCell }) {
   return (
     <>
       <span className="text-sm">{cell.text}</span>
       {cell.badge && (
-        <span className={`ml-2 inline-block rounded-md px-2 py-0.5 text-[11px] font-medium ${badgeColor(cell.badge.level)}`}>
-          {cell.badge.text}
+        <span className="ml-2">
+          <Badge variant={badgeVariantFor(cell.badge.level)}>
+            {cell.badge.text}
+          </Badge>
         </span>
       )}
     </>
   );
 }
 
-/* ─── Row normalization (accept array-of-arrays OR { cells: [...] }) ─── */
+// ─── Row normalization (accept array-of-arrays OR { cells: [...] }) ───
 
 function normalizeCell(raw: unknown): TableCell {
   try {
@@ -66,9 +89,10 @@ function normalizeCell(raw: unknown): TableCell {
           typeof (badgeRaw as Record<string, unknown>).text === 'string'
         ) {
           const b = badgeRaw as Record<string, unknown>;
-          const level = b.level === 'high' || b.level === 'medium' || b.level === 'low'
-            ? (b.level as 'high' | 'medium' | 'low')
-            : 'low';
+          const level =
+            b.level === 'high' || b.level === 'medium' || b.level === 'low'
+              ? (b.level as 'high' | 'medium' | 'low')
+              : 'low';
           return {
             text: obj.text,
             badge: { text: String(b.text), level },
@@ -76,7 +100,6 @@ function normalizeCell(raw: unknown): TableCell {
         }
         return { text: obj.text };
       }
-      // Object without `text` field — stringify as fallback so we still show something.
       try {
         return { text: JSON.stringify(raw) };
       } catch {
@@ -91,18 +114,14 @@ function normalizeCell(raw: unknown): TableCell {
 
 function normalizeRow(raw: unknown): { cells: TableCell[] } {
   try {
-    // Canonical shape: { cells: [...] }
     if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
       const obj = raw as Record<string, unknown>;
       if (Array.isArray(obj.cells)) {
         return { cells: obj.cells.map(normalizeCell) };
       }
-      // Object but no cells array (or cells is null/undefined/non-array).
-      // Treat the object's own values as cells.
       const vals = Object.values(obj);
       return { cells: vals.map(normalizeCell) };
     }
-    // AI-produced shape: plain array of values
     if (Array.isArray(raw)) {
       return { cells: raw.map(normalizeCell) };
     }
@@ -112,24 +131,27 @@ function normalizeRow(raw: unknown): { cells: TableCell[] } {
   }
 }
 
-/* ─── Table ─── */
+// ─── Table ───
 
 function TableRenderer({ table }: { table: ReportTable }) {
   const headers = Array.isArray(table.headers) ? table.headers : [];
-  const normalizedRows = (Array.isArray(table.rows) ? table.rows : []).map(normalizeRow);
+  const normalizedRows = (Array.isArray(table.rows) ? table.rows : []).map(
+    normalizeRow
+  );
 
   if (headers.length === 0 && normalizedRows.length === 0) return null;
 
   return (
-    <div className="my-5 rounded-lg overflow-hidden border border-gray-200">
+    <div className="my-5 overflow-hidden rounded-lg border border-border">
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <thead>
-            <tr className="bg-gray-50">
+            <tr className="bg-muted/40">
               {headers.map((header, i) => (
                 <th
                   key={i}
-                  className="text-left px-4 py-3 font-semibold text-[#232f3e] border-b border-gray-200"
+                  scope="col"
+                  className="border-b border-border px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-foreground-muted"
                 >
                   {header}
                 </th>
@@ -138,9 +160,12 @@ function TableRenderer({ table }: { table: ReportTable }) {
           </thead>
           <tbody>
             {normalizedRows.map((row, ri) => (
-              <tr key={ri} className="hover:bg-gray-50/50">
+              <tr key={ri} className="hover:bg-muted/40">
                 {row.cells.map((cell, ci) => (
-                  <td key={ci} className="px-4 py-3 border-b border-gray-100 text-gray-800">
+                  <td
+                    key={ci}
+                    className="border-b border-border px-4 py-3 text-foreground"
+                  >
                     <CellContent cell={cell} />
                   </td>
                 ))}
@@ -153,34 +178,35 @@ function TableRenderer({ table }: { table: ReportTable }) {
   );
 }
 
-/* ─── Quote (legacy, used in AnalysisSection) ─── */
+// ─── Quote (legacy) ───
 
 function QuoteRenderer({ quote }: { quote: Quote }) {
   return (
-    <blockquote className="border-l-2 border-gray-300 pl-4 py-1 my-4">
-      <p className="text-[15px] leading-relaxed text-gray-700 italic">{quote.text}</p>
-      <span className="block mt-2 text-xs text-gray-500">— {quote.source}</span>
+    <blockquote className="my-4 border-l-2 border-border-strong py-1 pl-4">
+      <p className="text-[15px] italic leading-relaxed text-foreground-muted">
+        {quote.text}
+      </p>
+      <span className="mt-2 block text-xs text-foreground-subtle">
+        — {quote.source}
+      </span>
     </blockquote>
   );
 }
 
-/* ─── KeyPoint (legacy) ─── */
+// ─── KeyPoint (legacy) ───
 
 function KeyPointRenderer({ point }: { point: KeyPoint }) {
   return (
     <li className="mb-3">
-      <span className="font-semibold text-[#232f3e]">{point.label}</span>
-      <span className="text-gray-400 mx-1.5">·</span>
-      <span className="text-gray-700">{point.content}</span>
+      <span className="font-semibold text-foreground">{point.label}</span>
+      <span className="mx-1.5 text-foreground-subtle">·</span>
+      <span className="text-foreground">{point.content}</span>
       {point.impactTags.length > 0 && (
         <div className="mt-1.5 flex flex-wrap gap-1.5">
           {point.impactTags.map((tag, i) => (
-            <span
-              key={i}
-              className="inline-block rounded-md bg-blue-50 text-[#146eb4] border border-blue-200 px-2 py-0.5 text-[11px] font-medium"
-            >
+            <Badge key={i} variant="info">
               {tag}
-            </span>
+            </Badge>
           ))}
         </div>
       )}
@@ -188,12 +214,14 @@ function KeyPointRenderer({ point }: { point: KeyPoint }) {
   );
 }
 
-/* ─── AnalysisSection (legacy) ─── */
+// ─── AnalysisSection (legacy) ───
 
 function AnalysisSectionRenderer({ section }: { section: AnalysisSection }) {
   return (
-    <div className="my-6 pb-5 border-b border-gray-100 last:border-b-0">
-      <h3 className="text-lg font-semibold text-[#232f3e] mb-4">{section.title}</h3>
+    <div className="my-6 border-b border-border pb-5 last:border-b-0">
+      <h3 className="mb-4 text-lg font-semibold text-foreground">
+        {section.title}
+      </h3>
 
       {section.quotes.map((q, i) => (
         <QuoteRenderer key={i} quote={q} />
@@ -210,44 +238,39 @@ function AnalysisSectionRenderer({ section }: { section: AnalysisSection }) {
   );
 }
 
-/* ─── HighlightBox (legacy) ─── */
+// ─── HighlightBox (legacy) ───
 
 function HighlightBoxRenderer({ box }: { box: HighlightBox }) {
   return (
-    <div className="border-l-2 border-[#146eb4] pl-4 py-1 my-4">
-      <p className="text-xs text-[#146eb4] font-medium mb-1">{box.title}</p>
-      <p className="text-[15px] leading-relaxed text-[#232f3e]">{box.content}</p>
+    <div className="my-4 rounded-md border-l-2 border-info bg-info-bg py-2 pl-4">
+      <p className="mb-1 text-xs font-medium text-info-fg">{box.title}</p>
+      <p className="text-[15px] leading-relaxed text-foreground">{box.content}</p>
     </div>
   );
 }
 
-/* ─── Module Card ─── */
+// ─── Module Card ───
 
 function ModuleCard({ module }: { module: ReportModule }) {
-  // v4 Markdown-hybrid dispatch: if the module has a `markdown` field,
-  // render via MarkdownRenderer + TopTopicsTable (new path). Otherwise
-  // fall back to the legacy blocks/tables/analysisSections/highlightBoxes
-  // renderer for pre-v4 drafts.
   if (isMarkdownModule(module)) {
     return <MarkdownModuleCard module={module} />;
   }
   return <LegacyModuleCard module={module} />;
 }
 
-/* ─── v4 Markdown Module Card ─── */
-
 function MarkdownModuleCard({ module }: { module: ReportModule }) {
-  const hasTopTopics = Array.isArray(module.topTopics) && module.topTopics.length > 0;
+  const hasTopTopics =
+    Array.isArray(module.topTopics) && module.topTopics.length > 0;
   return (
-    <div className="bg-white rounded-lg border border-gray-200 mb-8 overflow-hidden">
-      <div className="px-6 sm:px-10 py-5 border-b border-gray-200">
-        <h2 className="text-xl font-bold text-[#232f3e]">{module.title}</h2>
+    <div className="mb-8 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+      <div className="border-b border-border px-6 py-5 sm:px-10">
+        <h2 className="text-xl font-semibold text-foreground">{module.title}</h2>
         {module.subtitle && (
-          <p className="text-sm text-gray-500 mt-1">{module.subtitle}</p>
+          <p className="mt-1 text-sm text-foreground-muted">{module.subtitle}</p>
         )}
       </div>
-      <div className="px-6 sm:px-10 py-8">
-        <div className="max-w-[820px] mx-auto">
+      <div className="px-6 py-8 sm:px-10">
+        <div className="mx-auto max-w-[820px]">
           {hasTopTopics && <TopTopicsTable topics={module.topTopics!} />}
           <MarkdownRenderer source={module.markdown ?? ''} />
         </div>
@@ -256,57 +279,57 @@ function MarkdownModuleCard({ module }: { module: ReportModule }) {
   );
 }
 
-/* ─── Legacy Module Card (v1-v3 compatible) ─── */
-
 function LegacyModuleCard({ module }: { module: ReportModule }) {
   const hasBlocks = Array.isArray(module.blocks) && module.blocks.length > 0;
-  const hasLegacyParagraphs = Array.isArray(module.paragraphs) && module.paragraphs.length > 0;
+  const hasLegacyParagraphs =
+    Array.isArray(module.paragraphs) && module.paragraphs.length > 0;
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 mb-8 overflow-hidden">
-      {/* Simple header */}
-      <div className="px-6 sm:px-10 py-5 border-b border-gray-200">
-        <h2 className="text-xl font-bold text-[#232f3e]">{module.title}</h2>
+    <div className="mb-8 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+      <div className="border-b border-border px-6 py-5 sm:px-10">
+        <h2 className="text-xl font-semibold text-foreground">{module.title}</h2>
         {module.subtitle && (
-          <p className="text-sm text-gray-500 mt-1">{module.subtitle}</p>
+          <p className="mt-1 text-sm text-foreground-muted">{module.subtitle}</p>
         )}
       </div>
 
-      {/* Body — max-width constrained for readability */}
-      <div className="px-6 sm:px-10 py-8">
-        <div className="max-w-[680px] mx-auto space-y-5">
+      <div className="px-6 py-8 sm:px-10">
+        <div className="mx-auto max-w-[680px] space-y-5">
           {/* Tables first — overview at top */}
           {(module.tables ?? []).map((t, i) => (
             <TableRenderer key={i} table={t} />
           ))}
 
-          {/* New: blocks */}
-          {hasBlocks && module.blocks!.map((block, i) => (
-            <BlockRenderer key={i} block={block} />
-          ))}
+          {hasBlocks &&
+            module.blocks!.map((block, i) => (
+              <BlockRenderer key={i} block={block} />
+            ))}
 
-          {/* Legacy: paragraphs fallback (for old reports) */}
-          {!hasBlocks && hasLegacyParagraphs && module.paragraphs!.map((p, i) => (
-            <p key={i} className="text-[15px] leading-[1.85] text-gray-800">{p}</p>
-          ))}
+          {!hasBlocks &&
+            hasLegacyParagraphs &&
+            module.paragraphs!.map((p, i) => (
+              <p
+                key={i}
+                className="text-[15px] leading-[1.85] text-foreground"
+              >
+                {p}
+              </p>
+            ))}
 
-          {/* Legacy analysis sections — optional */}
           {(module.analysisSections ?? []).map((s, i) => (
             <AnalysisSectionRenderer key={i} section={s} />
           ))}
 
-          {/* Legacy highlight boxes — optional */}
           {(module.highlightBoxes ?? []).map((h, i) => (
             <HighlightBoxRenderer key={i} box={h} />
           ))}
 
-          {/* Empty module friendly message */}
           {!hasBlocks &&
             !hasLegacyParagraphs &&
             (module.tables ?? []).length === 0 &&
             (module.analysisSections ?? []).length === 0 &&
             (module.highlightBoxes ?? []).length === 0 && (
-              <p className="text-sm text-gray-400 italic text-center py-8">
+              <p className="py-8 text-center text-sm italic text-foreground-subtle">
                 本周该模块暂无显著发现 / No notable findings this period
               </p>
             )}
@@ -316,7 +339,7 @@ function LegacyModuleCard({ module }: { module: ReportModule }) {
   );
 }
 
-/* ─── Main Export ─── */
+// ─── Main Export ───
 
 export interface ReportRendererProps {
   module: ReportModule;
@@ -326,4 +349,14 @@ export default function ReportRenderer({ module }: ReportRendererProps) {
   return <ModuleCard module={module} />;
 }
 
-export { badgeColor, riskColor, CellContent, TableRenderer, QuoteRenderer, KeyPointRenderer, AnalysisSectionRenderer, HighlightBoxRenderer, ModuleCard };
+export {
+  badgeVariantFor,
+  riskVariant,
+  CellContent,
+  TableRenderer,
+  QuoteRenderer,
+  KeyPointRenderer,
+  AnalysisSectionRenderer,
+  HighlightBoxRenderer,
+  ModuleCard,
+};

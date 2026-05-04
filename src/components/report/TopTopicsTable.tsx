@@ -1,3 +1,5 @@
+import { Check } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import type { TopTopic } from '@/types/report';
 
 /**
@@ -8,26 +10,20 @@ import type { TopTopic } from '@/types/report';
  *   Rank / Topic / 热度 (Voice Volume) / Keywords / 卖家讨论 / 严重度
  *
  * Rank column respects the `cross_engine_confirmed` hint:
- *   - rank "1 ✓" renders bold + green tick (cross-engine)
- *   - rank "1"    renders normal (single-engine observation)
+ *   - confirmed  -> rank + green lucide Check (cross-engine)
+ *   - unconfirmed -> rank plain (single-engine)
+ *
+ * Severity uses the Badge primitive's semantic variants (aligned to
+ * ui-design-system.md sec 1.3 — high = danger, medium = warning, low = info).
  */
 
-const SEVERITY_STYLES: Record<TopTopic['severity'], {
-  label: string;
-  className: string;
-}> = {
-  high: {
-    label: '高',
-    className: 'bg-red-50 text-red-700 border-red-200',
-  },
-  medium: {
-    label: '中',
-    className: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-  },
-  low: {
-    label: '低',
-    className: 'bg-blue-50 text-[#146eb4] border-blue-200',
-  },
+const SEVERITY_VARIANT: Record<
+  TopTopic['severity'],
+  { label: string; variant: 'danger' | 'warning' | 'info' }
+> = {
+  high: { label: '高', variant: 'danger' },
+  medium: { label: '中', variant: 'warning' },
+  low: { label: '低', variant: 'info' },
 };
 
 function RankBadge({
@@ -39,12 +35,13 @@ function RankBadge({
 }) {
   if (confirmed) {
     return (
-      <span className="font-bold text-[#232f3e]">
-        {rank.replace(/\s*✓\s*/, '')} <span className="text-green-600">✓</span>
+      <span className="inline-flex items-center gap-1 font-semibold text-foreground">
+        {rank.replace(/\s*✓\s*/, '')}
+        <Check className="h-3.5 w-3.5 text-success" strokeWidth={2.25} aria-label="Cross-engine confirmed" />
       </span>
     );
   }
-  return <span className="text-gray-700">{rank}</span>;
+  return <span className="text-foreground-muted">{rank}</span>;
 }
 
 export interface TopTopicsTableProps {
@@ -53,65 +50,85 @@ export interface TopTopicsTableProps {
   caption?: string;
 }
 
-export default function TopTopicsTable({ topics, caption }: TopTopicsTableProps) {
+export default function TopTopicsTable({
+  topics,
+  caption,
+}: TopTopicsTableProps) {
   if (!topics || topics.length === 0) return null;
   return (
-    <div className="my-5 rounded-lg overflow-hidden border border-gray-200">
+    <div className="my-5 overflow-hidden rounded-lg border border-border">
       {caption && (
-        <div className="bg-gray-50 border-b border-gray-200 px-4 py-2 text-sm font-semibold text-[#232f3e]">
+        <div className="border-b border-border bg-muted/40 px-4 py-2 text-sm font-semibold text-foreground">
           {caption}
         </div>
       )}
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <thead>
-            <tr className="bg-gray-50">
-              <th className="text-left px-4 py-3 font-semibold text-[#232f3e] border-b border-gray-200 w-16">
+            <tr className="bg-muted/40">
+              <th
+                scope="col"
+                className="w-16 border-b border-border px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-foreground-muted"
+              >
                 Rank
               </th>
-              <th className="text-left px-4 py-3 font-semibold text-[#232f3e] border-b border-gray-200">
+              <th
+                scope="col"
+                className="border-b border-border px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-foreground-muted"
+              >
                 Topic
               </th>
-              <th className="text-left px-4 py-3 font-semibold text-[#232f3e] border-b border-gray-200 w-20">
+              <th
+                scope="col"
+                className="w-20 border-b border-border px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-foreground-muted"
+              >
                 热度
               </th>
-              <th className="text-left px-4 py-3 font-semibold text-[#232f3e] border-b border-gray-200">
+              <th
+                scope="col"
+                className="border-b border-border px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-foreground-muted"
+              >
                 Keywords
               </th>
-              <th className="text-left px-4 py-3 font-semibold text-[#232f3e] border-b border-gray-200">
+              <th
+                scope="col"
+                className="border-b border-border px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-foreground-muted"
+              >
                 卖家讨论
               </th>
-              <th className="text-left px-4 py-3 font-semibold text-[#232f3e] border-b border-gray-200 w-20">
+              <th
+                scope="col"
+                className="w-20 border-b border-border px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-foreground-muted"
+              >
                 严重度
               </th>
             </tr>
           </thead>
           <tbody>
             {topics.map((t, i) => {
-              const sev = SEVERITY_STYLES[t.severity];
+              const sev = SEVERITY_VARIANT[t.severity];
               return (
-                <tr key={i} className="hover:bg-gray-50/50">
-                  <td className="px-4 py-3 border-b border-gray-100">
-                    <RankBadge rank={t.rank} confirmed={t.cross_engine_confirmed} />
+                <tr key={i} className="hover:bg-muted/40">
+                  <td className="border-b border-border px-4 py-3">
+                    <RankBadge
+                      rank={t.rank}
+                      confirmed={t.cross_engine_confirmed}
+                    />
                   </td>
-                  <td className="px-4 py-3 border-b border-gray-100 text-gray-800 font-medium">
+                  <td className="border-b border-border px-4 py-3 font-medium text-foreground">
                     {t.topic}
                   </td>
-                  <td className="px-4 py-3 border-b border-gray-100 text-gray-800">
+                  <td className="border-b border-border px-4 py-3 font-mono text-foreground">
                     {t.voice_volume.toFixed(1)}
                   </td>
-                  <td className="px-4 py-3 border-b border-gray-100 text-gray-700 text-xs">
+                  <td className="border-b border-border px-4 py-3 text-xs text-foreground-muted">
                     {t.keywords.join('、')}
                   </td>
-                  <td className="px-4 py-3 border-b border-gray-100 text-gray-800">
+                  <td className="border-b border-border px-4 py-3 leading-relaxed text-foreground">
                     {t.seller_discussion}
                   </td>
-                  <td className="px-4 py-3 border-b border-gray-100">
-                    <span
-                      className={`inline-block rounded-md px-2 py-0.5 text-[11px] font-medium border ${sev.className}`}
-                    >
-                      {sev.label}
-                    </span>
+                  <td className="border-b border-border px-4 py-3">
+                    <Badge variant={sev.variant}>{sev.label}</Badge>
                   </td>
                 </tr>
               );

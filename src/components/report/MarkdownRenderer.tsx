@@ -5,40 +5,66 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import type { ReactNode } from 'react';
+import {
+  Lightbulb,
+  AlertTriangle,
+  CheckCircle2,
+  BarChart3,
+  Quote as QuoteIcon,
+} from 'lucide-react';
 
 /**
  * MarkdownRenderer — the v4 content body renderer.
  *
- * Parses Markdown (GFM-flavoured) to HTML, with three extensions:
+ * Parses Markdown (GFM-flavoured) to HTML with three extensions:
  *
- * 1. GitHub-style admonition blockquotes:
- *    > [!INSIGHT]
- *    > ...key takeaway text...
+ * 1. GitHub-style admonition blockquotes render as colored callouts:
+ *      > [!INSIGHT]
+ *      > ...key takeaway text...
  *
- *    Supported types: INSIGHT / WARNING / RECOMMENDATION / STAT / QUOTE.
- *    Each renders with a colored left-border + label header, matching the
- *    v3 block styles we had in the old JSON-block renderer.
+ *    Types: INSIGHT / WARNING / RECOMMENDATION / STAT / QUOTE.
  *
- * 2. Unicode emoji severity badges render as-is (🔴 高 / 🟡 中 / 🔵 低).
- *    Our Assembler prompt is the one that decides to emit these.
+ * 2. Typography uses our tokens (ui-design-system.md sec 1) and bilingual
+ *    line-height rules (sec 2.2 Chinese paragraphs get leading-relaxed).
  *
- * 3. Raw HTML is allowed but sanitized — AI-produced HTML is therefore
- *    safe to render. This lets the Assembler use inline
- *    <span class="badge-high">...</span> if it wants to, without XSS risk.
+ * 3. Raw HTML is allowed but sanitized — AI-produced inline spans stay safe.
  */
 
 type CalloutType = 'insight' | 'warning' | 'recommendation' | 'stat' | 'quote';
 
-const CALLOUT_COLORS: Record<CalloutType, {
-  border: string;
-  label: string;
-  icon: string;
-}> = {
-  insight: { border: 'border-[#ff9900]', label: 'text-[#ff9900]', icon: '💡' },
-  warning: { border: 'border-red-400', label: 'text-red-500', icon: '⚠️' },
-  recommendation: { border: 'border-green-500', label: 'text-green-600', icon: '✅' },
-  stat: { border: 'border-[#146eb4]', label: 'text-[#146eb4]', icon: '📊' },
-  quote: { border: 'border-gray-300', label: 'text-gray-500', icon: '💬' },
+interface CalloutPalette {
+  containerClass: string;
+  labelClass: string;
+  Icon: typeof Lightbulb;
+}
+
+// Icons replace the emoji from the earlier version (ui-design-system sec 4.4).
+const CALLOUT_PALETTE: Record<CalloutType, CalloutPalette> = {
+  insight: {
+    containerClass: 'border-primary bg-primary-soft/40',
+    labelClass: 'text-primary',
+    Icon: Lightbulb,
+  },
+  warning: {
+    containerClass: 'border-danger bg-danger-bg',
+    labelClass: 'text-danger-fg',
+    Icon: AlertTriangle,
+  },
+  recommendation: {
+    containerClass: 'border-success bg-success-bg',
+    labelClass: 'text-success-fg',
+    Icon: CheckCircle2,
+  },
+  stat: {
+    containerClass: 'border-info bg-info-bg',
+    labelClass: 'text-info-fg',
+    Icon: BarChart3,
+  },
+  quote: {
+    containerClass: 'border-border-strong',
+    labelClass: 'text-foreground-subtle',
+    Icon: QuoteIcon,
+  },
 };
 
 const CALLOUT_LABELS: Record<CalloutType, string> = {
@@ -60,28 +86,29 @@ const sanitizeSchema = {
   },
 };
 
-/**
- * Custom blockquote renderer: detects `[!TYPE]` admonition header as the
- * first line and branches to a colored callout. Falls back to a plain
- * styled blockquote for regular `>` usage.
- */
 function BlockquoteRenderer({ children }: { children?: ReactNode }) {
   const info = extractAdmonitionType(children);
   if (info) {
-    const palette = CALLOUT_COLORS[info.type];
+    const palette = CALLOUT_PALETTE[info.type];
+    const Icon = palette.Icon;
     return (
-      <div className={`border-l-2 ${palette.border} pl-4 py-1 my-4`}>
-        <p className={`text-xs font-medium mb-1 ${palette.label}`}>
-          {palette.icon} {CALLOUT_LABELS[info.type]}
+      <div
+        className={`my-4 rounded-md border-l-2 py-2 pl-4 ${palette.containerClass}`}
+      >
+        <p
+          className={`mb-1 flex items-center gap-1.5 text-xs font-medium ${palette.labelClass}`}
+        >
+          <Icon className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+          {CALLOUT_LABELS[info.type]}
         </p>
-        <div className="text-[15px] leading-relaxed text-[#232f3e] space-y-1">
+        <div className="space-y-1 text-[15px] leading-relaxed text-foreground">
           {info.rest}
         </div>
       </div>
     );
   }
   return (
-    <blockquote className="border-l-2 border-gray-300 pl-4 py-1 my-4 text-gray-700 italic">
+    <blockquote className="my-4 border-l-2 border-border-strong py-1 pl-4 italic text-foreground-muted">
       {children}
     </blockquote>
   );
@@ -91,16 +118,11 @@ function BlockquoteRenderer({ children }: { children?: ReactNode }) {
  * Walks the first-paragraph children of a blockquote looking for a
  * literal "[!TYPE]" token. If found, returns the type + the rest of the
  * quote content (with the admonition tag stripped).
- *
- * ReactMarkdown renders `> [!INSIGHT]` as:
- *   <blockquote><p>[!INSIGHT]\n...rest...</p></blockquote>
- * so we inspect children[0].props.children[0] as a string.
  */
 function extractAdmonitionType(
   children: ReactNode
 ): { type: CalloutType; rest: ReactNode } | null {
   const arr = Array.isArray(children) ? children : [children];
-  // The blockquote's first real child is typically a <p> element.
   const firstParaIdx = arr.findIndex(
     (n) =>
       n !== null &&
@@ -122,8 +144,6 @@ function extractAdmonitionType(
   if (!match) return null;
   const type = match[1].toLowerCase() as CalloutType;
   const stripped = firstText.slice(match[0].length);
-  // Rebuild the first paragraph without the admonition tag, preserving
-  // any other inline children (e.g. bold, links).
   const newFirstPara = {
     ...firstPara,
     props: {
@@ -131,33 +151,47 @@ function extractAdmonitionType(
       children: stripped ? [stripped, ...paraArr.slice(1)] : paraArr.slice(1),
     },
   } as typeof firstPara;
-  const rest = [...arr.slice(0, firstParaIdx), newFirstPara, ...arr.slice(firstParaIdx + 1)];
+  const rest = [
+    ...arr.slice(0, firstParaIdx),
+    newFirstPara,
+    ...arr.slice(firstParaIdx + 1),
+  ];
   return { type, rest };
 }
 
 const components: Components = {
   h1: ({ children }) => (
-    <h1 className="text-2xl font-bold text-[#232f3e] mt-8 mb-3">{children}</h1>
+    <h1 className="mt-8 mb-3 text-2xl font-semibold text-foreground">
+      {children}
+    </h1>
   ),
   h2: ({ children }) => (
-    <h2 className="text-xl font-bold text-[#232f3e] mt-7 mb-3">{children}</h2>
+    <h2 className="mt-7 mb-3 text-xl font-semibold text-foreground">
+      {children}
+    </h2>
   ),
   h3: ({ children }) => (
-    <h3 className="text-lg font-semibold text-[#232f3e] mt-6 mb-2">{children}</h3>
+    <h3 className="mt-6 mb-2 text-lg font-semibold text-foreground">
+      {children}
+    </h3>
   ),
   h4: ({ children }) => (
-    <h4 className="text-base font-semibold text-[#232f3e] mt-4 mb-2">{children}</h4>
+    <h4 className="mt-4 mb-2 text-base font-semibold text-foreground">
+      {children}
+    </h4>
   ),
   p: ({ children }) => (
-    <p className="text-[15px] leading-[1.85] text-gray-800 my-3">{children}</p>
+    <p className="my-3 text-[15px] leading-[1.85] text-foreground">
+      {children}
+    </p>
   ),
   ul: ({ children }) => (
-    <ul className="list-disc list-outside pl-5 space-y-1.5 text-[15px] text-gray-800 my-3 marker:text-gray-400">
+    <ul className="my-3 list-outside list-disc space-y-1.5 pl-5 text-[15px] leading-relaxed text-foreground marker:text-foreground-subtle">
       {children}
     </ul>
   ),
   ol: ({ children }) => (
-    <ol className="list-decimal list-outside pl-5 space-y-1.5 text-[15px] text-gray-800 my-3 marker:text-gray-400">
+    <ol className="my-3 list-outside list-decimal space-y-1.5 pl-5 text-[15px] leading-relaxed text-foreground marker:text-foreground-subtle">
       {children}
     </ol>
   ),
@@ -167,40 +201,51 @@ const components: Components = {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="text-[#146eb4] hover:underline"
+      className="text-info hover:underline"
     >
       {children}
     </a>
   ),
   strong: ({ children }) => (
-    <strong className="font-semibold text-[#232f3e]">{children}</strong>
+    <strong className="font-semibold text-foreground">{children}</strong>
   ),
-  em: ({ children }) => <em className="italic text-gray-700">{children}</em>,
+  em: ({ children }) => (
+    <em className="italic text-foreground-muted">{children}</em>
+  ),
   code: ({ children }) => (
-    <code className="bg-gray-100 rounded px-1 py-0.5 text-[13px] font-mono text-[#232f3e]">
+    <code className="rounded bg-muted px-1 py-0.5 font-mono text-[13px] text-foreground">
       {children}
     </code>
   ),
-  hr: () => <hr className="my-6 border-gray-200" />,
+  hr: () => <hr className="my-6 border-border" />,
   blockquote: BlockquoteRenderer,
   // GFM tables
   table: ({ children }) => (
-    <div className="my-5 rounded-lg overflow-hidden border border-gray-200">
+    <div className="my-5 overflow-hidden rounded-lg border border-border">
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">{children}</table>
       </div>
     </div>
   ),
-  thead: ({ children }) => <thead className="bg-gray-50">{children}</thead>,
+  thead: ({ children }) => (
+    <thead className="bg-muted/40">{children}</thead>
+  ),
   th: ({ children }) => (
-    <th className="text-left px-4 py-3 font-semibold text-[#232f3e] border-b border-gray-200">
+    <th
+      scope="col"
+      className="border-b border-border px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-foreground-muted"
+    >
       {children}
     </th>
   ),
   td: ({ children }) => (
-    <td className="px-4 py-3 border-b border-gray-100 text-gray-800">{children}</td>
+    <td className="border-b border-border px-4 py-3 text-foreground">
+      {children}
+    </td>
   ),
-  tr: ({ children }) => <tr className="hover:bg-gray-50/50">{children}</tr>,
+  tr: ({ children }) => (
+    <tr className="hover:bg-muted/40">{children}</tr>
+  ),
 };
 
 export interface MarkdownRendererProps {
@@ -216,7 +261,7 @@ export default function MarkdownRenderer({
 }: MarkdownRendererProps) {
   if (!source || source.trim().length === 0) {
     return (
-      <p className="text-sm text-gray-400 italic text-center py-8">
+      <p className="py-8 text-center text-sm italic text-foreground-subtle">
         本周该模块暂无显著发现 / No notable findings this period
       </p>
     );
