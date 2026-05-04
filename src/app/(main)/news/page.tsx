@@ -3,9 +3,25 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
+import { Pin, Newspaper } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useDomain } from '@/contexts/DomainContext';
+import { Badge } from '@/components/ui/badge';
+import { SpinnerBlock } from '@/components/ui/spinner';
 import type { Database } from '@/types/database';
+
+/**
+ * News list page.
+ *
+ * Design refs:
+ * - ui-design-system.md §9.1 (page header), §3.3 (card conventions)
+ * - power design-guidelines.md §5.3 Scannability, §5.4 List Design
+ * - power ui-guidelines.md "App Surfaces" — utility copy, divider-separated
+ *   rows over independent cards
+ *
+ * Pinned items still surface visually (Pin icon + Hot badge) but use the
+ * same row chrome as regular items — no "two worlds" effect.
+ */
 
 type NewsRow = Database['public']['Tables']['news']['Row'];
 
@@ -39,61 +55,82 @@ export default function NewsPage() {
     fetchNews();
   }, [supabase, currentDomainId]);
 
-  // Helper to get display title/summary based on global lang
+  // Prefer EN translation when UI language is English; otherwise fall back
+  // to the original (assumed Chinese).
   const getDisplay = (item: NewsRow) => {
-    const translated = (item as Record<string, unknown>).content_translated as { title?: string; summary?: string } | null;
+    const translated = (item as Record<string, unknown>).content_translated as {
+      title?: string;
+      summary?: string;
+    } | null;
     const useTranslated = i18n.language === 'en' && translated;
     return {
       title: useTranslated && translated.title ? translated.title : item.title,
-      summary: useTranslated && translated.summary ? translated.summary : item.summary,
+      summary:
+        useTranslated && translated.summary ? translated.summary : item.summary,
     };
   };
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-[#232f3e] mb-6">{t('news.title')}</h1>
+      <div className="mb-8">
+        <h1 className="text-2xl font-semibold text-foreground">
+          {t('news.title')}
+        </h1>
+        <p className="mt-1 text-sm text-foreground-muted">
+          {news.length > 0
+            ? `${news.length} ${news.length === 1 ? 'item' : 'items'}`
+            : ''}
+        </p>
+      </div>
 
       {loading ? (
-        <div className="flex justify-center py-12">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-[#ff9900] border-r-transparent" />
-        </div>
+        <SpinnerBlock />
       ) : news.length === 0 ? (
-        <p className="text-center text-gray-500 py-12">{t('news.noNews')}</p>
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-card py-16 text-center">
+          <Newspaper
+            className="mb-3 h-10 w-10 text-foreground-subtle"
+            strokeWidth={1.5}
+          />
+          <p className="text-sm text-foreground-muted">{t('news.noNews')}</p>
+        </div>
       ) : (
-        <div className="space-y-3">
+        <ul className="divide-y divide-border rounded-lg border border-border bg-card">
           {news.map((item) => {
             const display = getDisplay(item);
             return (
-            <button
-              key={item.id}
-              onClick={() => router.push(`/news/${item.id}`)}
-              className="w-full text-left bg-white rounded-lg border border-gray-200 p-4 hover:border-[#ff9900] hover:shadow transition-all"
-            >
-              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-semibold text-[#232f3e]">{display.title}</h3>
-                    {item.is_pinned && (
-                      <span className="inline-block rounded-full bg-red-100 text-red-700 border border-red-300 px-2 py-0.5 text-xs font-bold">
-                        {t('news.pinned')}
-                      </span>
+              <li key={item.id}>
+                <button
+                  type="button"
+                  onClick={() => router.push(`/news/${item.id}`)}
+                  className="group flex w-full items-start justify-between gap-4 px-4 py-4 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-[-2px] sm:px-6"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-sm font-semibold text-foreground">
+                        {display.title}
+                      </h3>
+                      {item.is_pinned && (
+                        <Badge variant="danger">
+                          <Pin className="h-3 w-3" strokeWidth={2} />
+                          {t('news.pinned')}
+                        </Badge>
+                      )}
+                      <Badge variant="outline">{item.source_channel}</Badge>
+                    </div>
+                    {display.summary && (
+                      <p className="mt-1.5 text-sm leading-relaxed text-foreground-muted line-clamp-2">
+                        {display.summary}
+                      </p>
                     )}
-                    <span className="inline-block rounded-full bg-gray-100 text-gray-600 border border-gray-300 px-2 py-0.5 text-xs">
-                      {item.source_channel}
-                    </span>
                   </div>
-                  {display.summary && (
-                    <p className="text-sm text-gray-600 mt-1 line-clamp-2">{display.summary}</p>
-                  )}
-                </div>
-                <p className="text-xs text-gray-400 whitespace-nowrap">
-                  {new Date(item.published_at).toLocaleDateString()}
-                </p>
-              </div>
-            </button>
+                  <span className="whitespace-nowrap text-xs text-foreground-subtle">
+                    {new Date(item.published_at).toLocaleDateString()}
+                  </span>
+                </button>
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
     </div>
   );

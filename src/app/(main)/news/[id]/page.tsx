@@ -3,12 +3,29 @@
 import { useEffect, useState, useMemo, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
+import { ArrowLeft, Pin } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { SpinnerBlock } from '@/components/ui/spinner';
 import type { Database } from '@/types/database';
+
+/**
+ * News detail page.
+ *
+ * Design refs:
+ * - ui-design-system.md §2.2 (Chinese paragraphs need leading-relaxed)
+ * - power design-guidelines.md §6.1 Readability, §6.3 Minimalist Design
+ * - power ui-guidelines.md "Copy" — utility copy over marketing voice
+ */
 
 type NewsRow = Database['public']['Tables']['news']['Row'];
 
-export default function NewsDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default function NewsDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = use(params);
   const { t, i18n } = useTranslation();
   const router = useRouter();
@@ -38,56 +55,75 @@ export default function NewsDetailPage({ params }: { params: Promise<{ id: strin
   }, [supabase, id]);
 
   if (loading) {
-    return (
-      <div className="flex justify-center py-12">
-        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-[#ff9900] border-r-transparent" />
-      </div>
-    );
+    return <SpinnerBlock />;
   }
 
   if (error || !news) {
     return (
-      <div className="text-center py-12">
-        <p className="text-xl font-semibold text-[#232f3e]">{t('common.error')}</p>
-        <p className="mt-2 text-gray-500">{error ?? 'News not found'}</p>
+      <div className="py-16 text-center">
+        <p className="text-lg font-semibold text-foreground">
+          {t('common.error')}
+        </p>
+        <p className="mt-2 text-sm text-foreground-muted">
+          {error ?? 'News not found'}
+        </p>
+        <Button
+          variant="outline"
+          className="mt-6"
+          onClick={() => router.back()}
+        >
+          <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
+          {t('common.back')}
+        </Button>
       </div>
     );
   }
 
-  // Follow global language: use translated version if available and lang is EN
-  // Assumption: original news written in ZH, translated to EN
-  const translated = (news as Record<string, unknown>).content_translated as { title?: string; summary?: string; content?: string } | null;
-  const displayTitle = i18n.language === 'en' && translated?.title ? translated.title : news.title;
-  const displayContent = i18n.language === 'en' && translated?.content ? translated.content : news.content;
+  // Prefer EN translation when UI language is English
+  const translated = (news as Record<string, unknown>).content_translated as {
+    title?: string;
+    summary?: string;
+    content?: string;
+  } | null;
+  const displayTitle =
+    i18n.language === 'en' && translated?.title ? translated.title : news.title;
+  const displayContent =
+    i18n.language === 'en' && translated?.content
+      ? translated.content
+      : news.content;
 
   return (
-    <div>
-      <button
+    <div className="mx-auto max-w-3xl">
+      <Button
+        variant="ghost"
+        size="sm"
         onClick={() => router.back()}
-        className="mb-4 text-sm text-[#146eb4] hover:underline flex items-center gap-1"
+        className="mb-4 -ml-2"
       >
-        ← {t('common.back')}
-      </button>
+        <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
+        {t('common.back')}
+      </Button>
 
-      <article className="bg-white rounded-lg border border-gray-200 p-6">
-        <div className="flex items-center gap-2 mb-2 flex-wrap">
+      <article className="rounded-lg border border-border bg-card p-6 sm:p-8">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
           {news.is_pinned && (
-            <span className="inline-block rounded-full bg-red-100 text-red-700 border border-red-300 px-2 py-0.5 text-xs font-bold">
+            <Badge variant="danger">
+              <Pin className="h-3 w-3" strokeWidth={2} />
               {t('news.pinned')}
-            </span>
+            </Badge>
           )}
-          <span className="inline-block rounded-full bg-gray-100 text-gray-600 border border-gray-300 px-2 py-0.5 text-xs">
-            {news.source_channel}
-          </span>
+          <Badge variant="outline">{news.source_channel}</Badge>
         </div>
 
-        <h1 className="text-2xl font-bold text-[#232f3e] mb-2">{displayTitle}</h1>
+        <h1 className="text-2xl font-semibold leading-tight text-foreground">
+          {displayTitle}
+        </h1>
 
-        <p className="text-sm text-gray-400 mb-6">
+        <p className="mt-2 text-xs text-foreground-subtle">
           {new Date(news.published_at).toLocaleDateString()}
         </p>
 
-        <div className="prose max-w-none text-gray-700 whitespace-pre-wrap">
+        <div className="mt-6 whitespace-pre-wrap text-base leading-relaxed text-foreground">
           {displayContent}
         </div>
       </article>
