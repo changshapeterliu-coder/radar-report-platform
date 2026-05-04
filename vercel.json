@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/_health",
+      "schedule": "*/4 * * * *"
+    }
+  ]
+}
