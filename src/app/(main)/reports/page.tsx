@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { getDisplayReportTitle } from '@/lib/content-display';
 import type { Database } from '@/types/database';
 
 /**
@@ -30,7 +31,7 @@ type ReportRow = Database['public']['Tables']['reports']['Row'];
 const PAGE_SIZE = 10;
 
 export default function ReportsPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const router = useRouter();
   const { currentDomainId } = useDomain();
   const supabase = useMemo(() => createClient(), []);
@@ -193,7 +194,7 @@ export default function ReportsPage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-sm font-semibold text-foreground">
-                      {report.title}
+                      {getDisplayReportTitle(report, i18n.language)}
                     </h3>
                     <Badge variant={report.type === 'regular' ? 'info' : 'primary'}>
                       {report.type === 'regular'

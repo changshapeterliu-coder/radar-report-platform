@@ -11,7 +11,6 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Printer } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import type { ReportContent } from '@/types/report';
 import type { Database } from '@/types/database';
 import ReportRenderer from '@/components/report/ReportRenderer';
 import ModuleTabs from '@/components/report/ModuleTabs';
@@ -19,6 +18,11 @@ import DisclaimerBanner from '@/components/DisclaimerBanner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { SpinnerBlock } from '@/components/ui/spinner';
+import {
+  getDisplayReportContent,
+  getDisplayReportTitle,
+  getDisplayReportDateRange,
+} from '@/lib/content-display';
 
 /**
  * Report viewer page.
@@ -122,17 +126,10 @@ export default function ReportViewerPage({
     );
   }
 
-  const originalContent = report.content as ReportContent;
-  const translatedContent = (report as Record<string, unknown>)
-    .content_translated as ReportContent | null;
+  const displayContent = getDisplayReportContent(report, i18n.language);
+  const displayTitle = getDisplayReportTitle(report, i18n.language);
+  const displayDateRange = getDisplayReportDateRange(report, i18n.language);
 
-  const currentLang = i18n.language;
-  const displayContent =
-    currentLang === 'en' && translatedContent
-      ? translatedContent
-      : originalContent;
-
-  const content = originalContent;
   const modules = displayContent?.modules ?? [];
   const activeModule = modules[activeTab];
 
@@ -143,16 +140,14 @@ export default function ReportViewerPage({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <h1 className="text-xl font-semibold text-foreground">
-              {displayContent?.title ?? content.title ?? report.title}
+              {displayTitle || report.title}
             </h1>
             <div className="mt-1.5 flex flex-wrap items-center gap-2">
               <Badge variant={report.type === 'regular' ? 'info' : 'primary'}>
                 {report.type === 'regular' ? 'Regular' : 'Topic'}
               </Badge>
               <span className="text-xs text-foreground-muted">
-                {displayContent?.dateRange ??
-                  content.dateRange ??
-                  report.date_range}
+                {displayDateRange || report.date_range}
               </span>
             </div>
           </div>

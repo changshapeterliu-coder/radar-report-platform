@@ -7,6 +7,7 @@ import { AdminGuard } from '@/components/AdminGuard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { SpinnerBlock } from '@/components/ui/spinner';
+import { ReTranslateButton } from '@/components/admin/ReTranslateButton';
 import { cn } from '@/lib/utils';
 
 export default function EditNewsPage({
@@ -175,7 +176,7 @@ export default function EditNewsPage({
           </div>
         </div>
 
-        <div className="mt-6 flex gap-3">
+        <div className="mt-6 flex flex-wrap items-center gap-3">
           <Button onClick={handleSave} disabled={saving}>
             {saving ? 'Saving...' : 'Save Changes'}
           </Button>
@@ -185,6 +186,7 @@ export default function EditNewsPage({
           >
             Cancel
           </Button>
+          <ReTranslateButton entity="news" id={id} className="ml-auto" />
         </div>
       </div>
     </AdminGuard>

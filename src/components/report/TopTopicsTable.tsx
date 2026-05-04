@@ -1,4 +1,7 @@
+'use client';
+
 import { Check } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import type { TopTopic } from '@/types/report';
 
@@ -7,7 +10,7 @@ import type { TopTopic } from '@/types/report';
  * TopTopic[] (v4 schema), not from AI-produced table JSON.
  *
  * Columns (fixed):
- *   Rank / Topic / 热度 (Voice Volume) / Keywords / 卖家讨论 / 严重度
+ *   Rank / Topic / Voice Volume / Keywords / Seller Discussion / Severity
  *
  * Rank column respects the `cross_engine_confirmed` hint:
  *   - confirmed  -> rank + green lucide Check (cross-engine)
@@ -15,15 +18,19 @@ import type { TopTopic } from '@/types/report';
  *
  * Severity uses the Badge primitive's semantic variants (aligned to
  * ui-design-system.md sec 1.3 — high = danger, medium = warning, low = info).
+ *
+ * All column labels + severity pill labels go through i18n so the UI follows
+ * the global zh/en language switch (Principle 3, user rule: language toggle
+ * is the single system switch).
  */
 
 const SEVERITY_VARIANT: Record<
   TopTopic['severity'],
-  { label: string; variant: 'danger' | 'warning' | 'info' }
+  { labelKey: string; variant: 'danger' | 'warning' | 'info' }
 > = {
-  high: { label: '高', variant: 'danger' },
-  medium: { label: '中', variant: 'warning' },
-  low: { label: '低', variant: 'info' },
+  high: { labelKey: 'report.topTopics.severityHigh', variant: 'danger' },
+  medium: { labelKey: 'report.topTopics.severityMedium', variant: 'warning' },
+  low: { labelKey: 'report.topTopics.severityLow', variant: 'info' },
 };
 
 function RankBadge({
@@ -54,6 +61,7 @@ export default function TopTopicsTable({
   topics,
   caption,
 }: TopTopicsTableProps) {
+  const { t } = useTranslation();
   if (!topics || topics.length === 0) return null;
   return (
     <div className="my-5 overflow-hidden rounded-lg border border-border">
@@ -70,65 +78,65 @@ export default function TopTopicsTable({
                 scope="col"
                 className="w-16 border-b border-border px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-foreground-muted"
               >
-                Rank
+                {t('report.topTopics.rank')}
               </th>
               <th
                 scope="col"
                 className="border-b border-border px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-foreground-muted"
               >
-                Topic
+                {t('report.topTopics.topic')}
               </th>
               <th
                 scope="col"
                 className="w-20 border-b border-border px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-foreground-muted"
               >
-                热度
+                {t('report.topTopics.voiceVolume')}
               </th>
               <th
                 scope="col"
                 className="border-b border-border px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-foreground-muted"
               >
-                Keywords
+                {t('report.topTopics.keywords')}
               </th>
               <th
                 scope="col"
                 className="border-b border-border px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-foreground-muted"
               >
-                卖家讨论
+                {t('report.topTopics.sellerDiscussion')}
               </th>
               <th
                 scope="col"
                 className="w-20 border-b border-border px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-foreground-muted"
               >
-                严重度
+                {t('report.topTopics.severity')}
               </th>
             </tr>
           </thead>
           <tbody>
-            {topics.map((t, i) => {
-              const sev = SEVERITY_VARIANT[t.severity];
+            {topics.map((topicRow, i) => {
+              const sev = SEVERITY_VARIANT[topicRow.severity];
               return (
                 <tr key={i} className="hover:bg-muted/40">
                   <td className="border-b border-border px-4 py-3">
                     <RankBadge
-                      rank={t.rank}
-                      confirmed={t.cross_engine_confirmed}
+                      rank={topicRow.rank}
+                      confirmed={topicRow.cross_engine_confirmed}
                     />
                   </td>
                   <td className="border-b border-border px-4 py-3 font-medium text-foreground">
-                    {t.topic}
+                    {topicRow.topic}
                   </td>
                   <td className="border-b border-border px-4 py-3 font-mono text-foreground">
-                    {t.voice_volume.toFixed(1)}
+                    {topicRow.voice_volume.toFixed(1)}
                   </td>
                   <td className="border-b border-border px-4 py-3 text-xs text-foreground-muted">
-                    {t.keywords.join('、')}
+                    {topicRow.keywords.join('、')}
                   </td>
                   <td className="border-b border-border px-4 py-3 leading-relaxed text-foreground">
-                    {t.seller_discussion}
+                    {topicRow.seller_discussion}
                   </td>
                   <td className="border-b border-border px-4 py-3">
-                    <Badge variant={sev.variant}>{sev.label}</Badge>
+                    <Badge variant={sev.variant}>{t(sev.labelKey)}</Badge>
                   </td>
                 </tr>
               );

@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useDomain } from '@/contexts/DomainContext';
 import { Badge } from '@/components/ui/badge';
 import { SpinnerBlock } from '@/components/ui/spinner';
+import { getDisplayNewsFields } from '@/lib/content-display';
 import type { Database } from '@/types/database';
 
 /**
@@ -55,20 +56,12 @@ export default function NewsPage() {
     fetchNews();
   }, [supabase, currentDomainId]);
 
-  // Prefer EN translation when UI language is English; otherwise fall back
-  // to the original (assumed Chinese).
-  const getDisplay = (item: NewsRow) => {
-    const translated = (item as Record<string, unknown>).content_translated as {
-      title?: string;
-      summary?: string;
-    } | null;
-    const useTranslated = i18n.language === 'en' && translated;
-    return {
-      title: useTranslated && translated.title ? translated.title : item.title,
-      summary:
-        useTranslated && translated.summary ? translated.summary : item.summary,
-    };
-  };
+  // Prefer EN translation when UI language is English via shared helper.
+  const getDisplay = (item: NewsRow) =>
+    getDisplayNewsFields(
+      item as unknown as Parameters<typeof getDisplayNewsFields>[0],
+      i18n.language
+    );
 
   return (
     <div>

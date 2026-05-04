@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { SpinnerBlock } from '@/components/ui/spinner';
+import { getDisplayNewsFields } from '@/lib/content-display';
 import type { Database } from '@/types/database';
 
 /**
@@ -79,18 +80,13 @@ export default function NewsDetailPage({
     );
   }
 
-  // Prefer EN translation when UI language is English
-  const translated = (news as Record<string, unknown>).content_translated as {
-    title?: string;
-    summary?: string;
-    content?: string;
-  } | null;
-  const displayTitle =
-    i18n.language === 'en' && translated?.title ? translated.title : news.title;
-  const displayContent =
-    i18n.language === 'en' && translated?.content
-      ? translated.content
-      : news.content;
+  // Pick the right language version via shared helper
+  const display = getDisplayNewsFields(
+    news as unknown as Parameters<typeof getDisplayNewsFields>[0],
+    i18n.language
+  );
+  const displayTitle = display.title;
+  const displayContent = display.content;
 
   return (
     <div className="mx-auto max-w-3xl">

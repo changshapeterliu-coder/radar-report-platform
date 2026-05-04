@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { inngest } from '@/lib/inngest/client';
 import type { ReportContent } from '@/types/report';
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -198,54 +199,18 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     );
   }
 
-  // Auto-translate report content in background
-  // Detect language and translate to the other
-  const content = report.content;
-  if (content) {
-    const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-    if (OPENROUTER_API_KEY) {
-      // Detect if content is mostly English or Chinese, translate to the other
-      const titleText = typeof content === 'object' && content !== null && 'title' in content ? String((content as Record<string, unknown>).title) : '';
-      const isEnglish = /^[a-zA-Z0-9\s.,!?:;'"()-]+$/.test(titleText.slice(0, 50));
-      const targetLang = isEnglish ? 'zh' : 'en';
-      const langName = targetLang === 'zh' ? 'Chinese (Simplified)' : 'English';
-
-      try {
-        const translateRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-          },
-          body: JSON.stringify({
-            model: 'openrouter/auto',
-            messages: [
-              {
-                role: 'system',
-                content: `Translate the given JSON report content to ${langName}. Keep the exact same JSON structure — only translate text values. Do NOT translate JSON keys. Return ONLY valid JSON.`,
-              },
-              {
-                role: 'user',
-                content: `Translate to ${langName}:\n\n${JSON.stringify(content)}`,
-              },
-            ],
-            response_format: { type: 'json_object' },
-          }),
-        });
-
-        if (translateRes.ok) {
-          const translateData = await translateRes.json();
-          const translatedContent = JSON.parse(translateData?.choices?.[0]?.message?.content || '{}');
-          if (translatedContent.title && Array.isArray(translatedContent.modules)) {
-            await supabase
-              .from('reports')
-              .update({ content_translated: translatedContent })
-              .eq('id', id);
-          }
-        }
-      } catch {
-        // Translation failed silently — not blocking publish
-      }
+  // Enqueue async translation via Inngest. The `report-translate` function
+  // reads the row, calls OpenRouter with retry, and writes `content_translated`
+  // back. Non-blocking — publish returns immediately; failures are retried by
+  // Inngest and recoverable via the admin "Re-translate" button.
+  if (report.content) {
+    try {
+      await inngest.send({
+        name: 'report/translate',
+        data: { reportId: id },
+      });
+    } catch {
+      // Inngest enqueue failure should NOT block publish.
     }
   }
 

@@ -37,6 +37,10 @@ import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database';
 import type { ReportContent, ReportTable, ReportModule } from '@/types/report';
 import { isMarkdownModule } from '@/lib/validators/report-schema';
+import {
+  getDisplayReportContent,
+  getDisplayNewsFields,
+} from '@/lib/content-display';
 
 /**
  * Dashboard landing page.
@@ -142,9 +146,12 @@ export default function DashboardPage() {
     fetchData();
   }, [fetchData]);
 
-  // Extract summary tables from latest report
+  // Extract summary tables from latest report — pick translated content
+  // when UI language is English so Module1/Module2 tables follow the switch.
   const latestReport = reports[0] ?? null;
-  const latestContent = latestReport?.content as ReportContent | null;
+  const latestContent: ReportContent | null = latestReport
+    ? getDisplayReportContent(latestReport, i18n.language)
+    : null;
   const module1: ReportModule | null = latestContent?.modules?.[0] ?? null;
   const module2: ReportModule | null = latestContent?.modules?.[1] ?? null;
   const module1Table: ReportTable | null = module1?.tables?.[0] ?? null;
@@ -186,14 +193,9 @@ export default function DashboardPage() {
     return Array.from(keys).slice(0, 7);
   }, [trendData]);
 
-  // Follow global language for news title/summary
-  const getNewsTitle = (item: NewsRow) => {
-    const translated = (item as Record<string, unknown>).content_translated as {
-      title?: string;
-    } | null;
-    if (i18n.language === 'en' && translated?.title) return translated.title;
-    return item.title;
-  };
+  // Follow global language for news title/summary via shared helper
+  const getNewsTitle = (item: NewsRow) =>
+    getDisplayNewsFields(item, i18n.language).title;
 
   if (loading) return <SpinnerBlock />;
 

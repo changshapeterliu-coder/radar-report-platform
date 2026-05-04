@@ -4,6 +4,8 @@ import { dailyAlertTick } from './daily-alert-tick';
 import { dailyAlertRun } from './daily-alert-run';
 import { dailyAlertTranslateTopic } from './daily-alert-translate-topic';
 import { dailyAlertTranslateCanonical } from './daily-alert-translate-canonical';
+import { reportTranslate } from './report-translate';
+import { newsTranslate } from './news-translate';
 
 export {
   scheduleTick,
@@ -12,6 +14,8 @@ export {
   dailyAlertRun,
   dailyAlertTranslateTopic,
   dailyAlertTranslateCanonical,
+  reportTranslate,
+  newsTranslate,
 };
 
 /**
@@ -31,4 +35,7 @@ export const functions = [
   dailyAlertRun,
   dailyAlertTranslateTopic,
   dailyAlertTranslateCanonical,
+  // Unified content translation (reports + news)
+  reportTranslate,
+  newsTranslate,
 ];

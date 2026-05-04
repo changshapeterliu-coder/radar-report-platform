@@ -206,6 +206,32 @@ const zh = {
       placeholdersHint: '必须包含占位符：',
     },
   },
+  report: {
+    topTopics: {
+      rank: '排名',
+      topic: '话题',
+      voiceVolume: '热度',
+      keywords: '关键词',
+      sellerDiscussion: '卖家讨论',
+      severity: '严重度',
+      severityHigh: '高',
+      severityMedium: '中',
+      severityLow: '低',
+    },
+    callout: {
+      insight: '核心洞察',
+      warning: '风险提示',
+      recommendation: '建议行动',
+      stat: '量化观察',
+      quote: '卖家原声',
+    },
+    emptyModule: '本周该模块暂无显著发现',
+  },
+  adminActions: {
+    reTranslate: '重新翻译',
+    reTranslateQueued: '已排队翻译',
+    reTranslateError: '翻译排队失败',
+  },
 } as const;
 
 export default zh;

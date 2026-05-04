@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Lightbulb,
   AlertTriangle,
@@ -67,12 +68,12 @@ const CALLOUT_PALETTE: Record<CalloutType, CalloutPalette> = {
   },
 };
 
-const CALLOUT_LABELS: Record<CalloutType, string> = {
-  insight: '核心洞察',
-  warning: '风险提示',
-  recommendation: '建议行动',
-  stat: '量化观察',
-  quote: '卖家原声',
+const CALLOUT_LABEL_KEYS: Record<CalloutType, string> = {
+  insight: 'report.callout.insight',
+  warning: 'report.callout.warning',
+  recommendation: 'report.callout.recommendation',
+  stat: 'report.callout.stat',
+  quote: 'report.callout.quote',
 };
 
 // rehype-sanitize schema: allow our custom admonition + GFM table classes.
@@ -87,6 +88,7 @@ const sanitizeSchema = {
 };
 
 function BlockquoteRenderer({ children }: { children?: ReactNode }) {
+  const { t } = useTranslation();
   const info = extractAdmonitionType(children);
   if (info) {
     const palette = CALLOUT_PALETTE[info.type];
@@ -99,7 +101,7 @@ function BlockquoteRenderer({ children }: { children?: ReactNode }) {
           className={`mb-1 flex items-center gap-1.5 text-xs font-medium ${palette.labelClass}`}
         >
           <Icon className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-          {CALLOUT_LABELS[info.type]}
+          {t(CALLOUT_LABEL_KEYS[info.type])}
         </p>
         <div className="space-y-1 text-[15px] leading-relaxed text-foreground">
           {info.rest}
@@ -259,10 +261,11 @@ export default function MarkdownRenderer({
   source,
   className,
 }: MarkdownRendererProps) {
+  const { t } = useTranslation();
   if (!source || source.trim().length === 0) {
     return (
       <p className="py-8 text-center text-sm italic text-foreground-subtle">
-        本周该模块暂无显著发现 / No notable findings this period
+        {t('report.emptyModule')}
       </p>
     );
   }

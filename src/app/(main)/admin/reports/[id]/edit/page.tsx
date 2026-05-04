@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { SpinnerBlock } from '@/components/ui/spinner';
+import { ReTranslateButton } from '@/components/admin/ReTranslateButton';
 import type { ReportContent } from '@/types/report';
 import type { Database } from '@/types/database';
 
@@ -276,7 +277,7 @@ export default function EditReportPage({
         <ContentEditor value={content} onChange={setContent} reportType={type} />
 
         {/* Actions */}
-        <div className="mt-6 flex gap-3">
+        <div className="mt-6 flex flex-wrap items-center gap-3">
           <Button onClick={handleSave} disabled={saving}>
             {saving ? 'Saving...' : 'Save Changes'}
           </Button>
@@ -286,6 +287,7 @@ export default function EditReportPage({
           >
             Cancel
           </Button>
+          <ReTranslateButton entity="report" id={id} className="ml-auto" />
         </div>
       </div>
     </AdminGuard>

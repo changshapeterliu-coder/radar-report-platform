@@ -206,6 +206,32 @@ const en = {
       placeholdersHint: 'Required placeholders:',
     },
   },
+  report: {
+    topTopics: {
+      rank: 'Rank',
+      topic: 'Topic',
+      voiceVolume: 'Voice Volume',
+      keywords: 'Keywords',
+      sellerDiscussion: 'Seller Discussion',
+      severity: 'Severity',
+      severityHigh: 'High',
+      severityMedium: 'Medium',
+      severityLow: 'Low',
+    },
+    callout: {
+      insight: 'Key Insight',
+      warning: 'Warning',
+      recommendation: 'Recommendation',
+      stat: 'Key Stat',
+      quote: 'Seller Voice',
+    },
+    emptyModule: 'No notable findings this period',
+  },
+  adminActions: {
+    reTranslate: 'Re-translate',
+    reTranslateQueued: 'Translation queued',
+    reTranslateError: 'Re-translate failed',
+  },
 } as const;
 
 export default en;
