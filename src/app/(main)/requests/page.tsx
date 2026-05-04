@@ -1,10 +1,60 @@
-﻿'use client';
+'use client';
 
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
+import { CheckCircle2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 
-const MARKETPLACES = ['WW (Worldwide)', 'US', 'CA', 'MX', 'BR', 'UK', 'DE', 'FR', 'IT', 'ES', 'NL', 'SE', 'PL', 'JP', 'AU', 'SG', 'IN', 'AE', 'SA', 'TR'];
-const SELLER_ORIGINS = ['CN (China)', 'US', 'UK', 'DE', 'JP', 'IN', 'KR', 'WW (All Origins)', 'Other'];
+/**
+ * Report topic request form.
+ *
+ * Design refs:
+ * - ui-design-system.md sec 4.5 (form inputs), 9.1 (page header)
+ * - power design-guidelines.md 4.1 Labeling, 4.4 Field Design, 3.5 Error Recovery
+ *
+ * Fixed along the way: an orphan text node rendering outside the form,
+ * an unused fetch response variable, and a deprecated FormEvent import.
+ */
+
+const MARKETPLACES = [
+  'WW (Worldwide)',
+  'US',
+  'CA',
+  'MX',
+  'BR',
+  'UK',
+  'DE',
+  'FR',
+  'IT',
+  'ES',
+  'NL',
+  'SE',
+  'PL',
+  'JP',
+  'AU',
+  'SG',
+  'IN',
+  'AE',
+  'SA',
+  'TR',
+];
+
+const SELLER_ORIGINS = [
+  'CN (China)',
+  'US',
+  'UK',
+  'DE',
+  'JP',
+  'IN',
+  'KR',
+  'WW (All Origins)',
+  'Other',
+];
+
+type Status = 'idle' | 'submitting' | 'success' | 'error';
 
 export default function RequestPage() {
   const { user } = useAuth();
@@ -13,10 +63,10 @@ export default function RequestPage() {
   const [description, setDescription] = useState('');
   const [marketplace, setMarketplace] = useState('WW (Worldwide)');
   const [sellerOrigin, setSellerOrigin] = useState('CN (China)');
-  const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
+  const [status, setStatus] = useState<Status>('idle');
   const [errorMessage, setErrorMessage] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
     if (!topic.trim()) return;
@@ -25,28 +75,19 @@ export default function RequestPage() {
     setErrorMessage('');
 
     try {
-      const descriptionParts = [
-        description.trim(),
-        `Marketplace: ${marketplace}`,
-        `Seller Origin: ${sellerOrigin}`,
-      ].filter(Boolean).join('\n');
-
       const res = await fetch('/api/requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           topic: topic.trim(),
-          description: descriptionParts || undefined,
-          requesterEmail: user?.email || '',
-          requesterName: user?.user_metadata?.full_name || user?.email || '',
+          description: description.trim() || undefined,
+          marketplace,
+          sellerOrigin,
         }),
       });
-
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.message || 'Failed to submit request');
+        throw new Error(`Submit failed (${res.status})`);
       }
-
       setStatus('success');
       setTopic('');
       setDescription('');
@@ -54,57 +95,79 @@ export default function RequestPage() {
       setSellerOrigin('CN (China)');
     } catch (err) {
       setStatus('error');
-      setErrorMessage(err instanceof Error ? err.message : 'Something went wrong');
+      setErrorMessage(
+        err instanceof Error ? err.message : 'Something went wrong'
+      );
     }
   };
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h1 className="mb-6 text-2xl font-bold text-[#232f3e]">Request a Report Topic</h1>
-      <p className="mb-8 text-gray-600">
-        Have a topic you&apos;d like us to cover? Submit your request below and our team will review it.
-      </p>
+      <div className="mb-8">
+        <h1 className="text-2xl font-semibold text-foreground">
+          Request a Report Topic
+        </h1>
+        <p className="mt-1 text-sm text-foreground-muted">
+          Have a topic you&apos;d like us to cover? Submit your request below
+          and our team will review it.
+        </p>
+      </div>
 
       {status === 'success' ? (
-        <div className="rounded-lg border border-green-200 bg-green-50 p-6 text-center">
-          <svg className="mx-auto mb-3 h-12 w-12 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <h2 className="mb-2 text-lg font-semibold text-green-800">Request Submitted</h2>
-          <p className="mb-4 text-green-700">Your report topic request has been sent to the admin team.</p>
-          <button
+        <div className="flex flex-col items-center justify-center rounded-lg border border-success/20 bg-success-bg p-8 text-center">
+          <CheckCircle2
+            className="mb-3 h-10 w-10 text-success"
+            strokeWidth={1.75}
+          />
+          <h2 className="text-base font-semibold text-success-fg">
+            Request Submitted
+          </h2>
+          <p className="mt-1 text-sm text-success-fg/80">
+            Your report topic request has been sent to the admin team.
+          </p>
+          <Button
+            variant="outline"
+            className="mt-6"
             onClick={() => setStatus('idle')}
-            className="rounded-lg bg-[#ff9900] px-4 py-2 text-sm font-medium text-white hover:bg-[#e88b00] transition-colors"
           >
             Submit Another Request
-          </button>
+          </Button>
         </div>
       ) : (
-        <form onSubmit={handleSubmit} className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+        <form
+          onSubmit={handleSubmit}
+          className="rounded-lg border border-border bg-card p-6 shadow-sm"
+        >
           {status === 'error' && (
-            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div className="mb-4 rounded-md border border-danger/20 bg-danger-bg px-4 py-3 text-sm text-danger-fg">
               {errorMessage}
             </div>
           )}
 
           <div className="mb-5">
-            <label htmlFor="topic" className="mb-1.5 block text-sm font-medium text-gray-700">
-              Topic <span className="text-red-500">*</span>
+            <label
+              htmlFor="topic"
+              className="mb-1.5 block text-sm font-medium text-foreground"
+            >
+              Topic <span className="text-danger">*</span>
             </label>
-            <input
+            <Input
               id="topic"
               type="text"
               required
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
               placeholder="e.g., Account Health Dashboard Changes in Q2"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-[#ff9900] focus:outline-none focus:ring-1 focus:ring-[#ff9900]"
             />
           </div>
 
           <div className="mb-5">
-            <label htmlFor="description" className="mb-1.5 block text-sm font-medium text-gray-700">
-              Description <span className="text-gray-400">(optional)</span>
+            <label
+              htmlFor="description"
+              className="mb-1.5 block text-sm font-medium text-foreground"
+            >
+              Description{' '}
+              <span className="text-foreground-subtle">(optional)</span>
             </label>
             <textarea
               id="description"
@@ -112,54 +175,70 @@ export default function RequestPage() {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Provide additional context or specific areas you'd like covered..."
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-[#ff9900] focus:outline-none focus:ring-1 focus:ring-[#ff9900]"
+              className={cn(
+                'flex w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground placeholder:text-foreground-subtle',
+                'transition-colors resize-y',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:border-border-strong',
+                'disabled:cursor-not-allowed disabled:opacity-50'
+              )}
             />
           </div>
 
-          <div className="mb-5 grid grid-cols-2 gap-4">
+          <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label htmlFor="marketplace" className="mb-1.5 block text-sm font-medium text-gray-700">
+              <label
+                htmlFor="marketplace"
+                className="mb-1.5 block text-sm font-medium text-foreground"
+              >
                 Marketplace
               </label>
-              <select
+              <Select
                 id="marketplace"
                 value={marketplace}
                 onChange={(e) => setMarketplace(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-[#ff9900] focus:outline-none focus:ring-1 focus:ring-[#ff9900]"
               >
                 {MARKETPLACES.map((mp) => (
-                  <option key={mp} value={mp}>{mp}</option>
+                  <option key={mp} value={mp}>
+                    {mp}
+                  </option>
                 ))}
-              </select>
+              </Select>
             </div>
             <div>
-              <label htmlFor="sellerOrigin" className="mb-1.5 block text-sm font-medium text-gray-700">
+              <label
+                htmlFor="sellerOrigin"
+                className="mb-1.5 block text-sm font-medium text-foreground"
+              >
                 Seller Origin
               </label>
-              <select
+              <Select
                 id="sellerOrigin"
                 value={sellerOrigin}
                 onChange={(e) => setSellerOrigin(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-[#ff9900] focus:outline-none focus:ring-1 focus:ring-[#ff9900]"
               >
                 {SELLER_ORIGINS.map((so) => (
-                  <option key={so} value={so}>{so}</option>
+                  <option key={so} value={so}>
+                    {so}
+                  </option>
                 ))}
-              </select>
+              </Select>
             </div>
           </div>
 
-          <div className="mb-5 rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-600">
-            Submitting as <span className="font-medium text-gray-900">{user?.email || '\u2014'}</span>
+          <div className="mb-5 rounded-md bg-muted px-4 py-3 text-sm text-foreground-muted">
+            Submitting as{' '}
+            <span className="font-medium text-foreground">
+              {user?.email || '-'}
+            </span>
           </div>
 
-          <button
+          <Button
             type="submit"
             disabled={status === 'submitting' || !topic.trim()}
-            className="w-full rounded-lg bg-[#ff9900] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#e88b00] disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full"
           >
             {status === 'submitting' ? 'Submitting...' : 'Submit Request'}
-          </button>
+          </Button>
         </form>
       )}
     </div>
