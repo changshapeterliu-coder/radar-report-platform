@@ -4,6 +4,14 @@ import { useTranslation } from 'react-i18next';
 import { resolveText } from '@/lib/daily-alert/i18n-fallback';
 import { FallbackIndicator } from './FallbackIndicator';
 
+/**
+ * "Class / 类别" supplementary line on each TopicCard.
+ * Topics sharing a canonical_topic_key within the same day render this line
+ * identically (shared-description invariant, Requirement 8.7).
+ *
+ * Design refs: ui-design-system.md sec 2.2 (leading-relaxed Chinese).
+ */
+
 export interface CanonicalClassLineProps {
   canonical: {
     canonical_topic_key: string;
@@ -15,14 +23,16 @@ export interface CanonicalClassLineProps {
   lang: 'zh' | 'en';
 }
 
-/**
- * Renders the "Class / 类别" supplementary line on each TopicCard.
- * Topics sharing a canonical_topic_key within the same day render this line
- * identically (shared-description invariant, Requirement 8.7).
- */
-export function CanonicalClassLine({ canonical, lang }: CanonicalClassLineProps) {
+export function CanonicalClassLine({
+  canonical,
+  lang,
+}: CanonicalClassLineProps) {
   const { t } = useTranslation();
-  const title = resolveText(canonical.canonical_title_zh, canonical.canonical_title_en, lang);
+  const title = resolveText(
+    canonical.canonical_title_zh,
+    canonical.canonical_title_en,
+    lang
+  );
   const desc = resolveText(
     canonical.canonical_description_zh,
     canonical.canonical_description_en,
@@ -30,14 +40,16 @@ export function CanonicalClassLine({ canonical, lang }: CanonicalClassLineProps)
   );
 
   return (
-    <div className="text-sm text-gray-600 border-l-2 border-gray-300 pl-3 py-0.5">
+    <div className="border-l-2 border-border-strong pl-3 py-0.5 text-sm text-foreground-muted">
       <div>
-        <span className="font-medium text-[#232f3e]">{t('alerts.canonical.label')}</span>
-        <span className="mx-1.5 text-gray-400">·</span>
+        <span className="font-medium text-foreground">
+          {t('alerts.canonical.label')}
+        </span>
+        <span className="mx-1.5 text-foreground-subtle">·</span>
         <span>{title.text}</span>
         {title.needsFallbackIndicator && <FallbackIndicator />}
       </div>
-      <p className="mt-0.5 text-gray-500 leading-relaxed">
+      <p className="mt-0.5 leading-relaxed text-foreground-subtle">
         {desc.text}
         {desc.needsFallbackIndicator && <FallbackIndicator />}
       </p>
