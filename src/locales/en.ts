@@ -7,6 +7,7 @@ const en = {
     signOut: 'Sign Out',
     selectDomain: 'Select Domain',
     alerts: 'Daily Alerts',
+    requests: 'Requests',
   },
   auth: {
     login: 'Login',

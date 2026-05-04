@@ -36,12 +36,12 @@ function NavBar() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   const navLinks = [
-    { href: '/dashboard', label: 'Dashboard' },
-    { href: '/reports', label: 'Reports' },
-    { href: '/news', label: 'News' },
+    { href: '/dashboard', label: t('nav.dashboard') },
+    { href: '/reports', label: t('nav.reports') },
+    { href: '/news', label: t('nav.news') },
     { href: '/alerts', label: t('nav.alerts') },
-    { href: '/requests', label: 'Request' },
-    ...(isAdmin ? [{ href: '/admin', label: 'Admin' }] : []),
+    { href: '/requests', label: t('nav.requests') },
+    ...(isAdmin ? [{ href: '/admin', label: t('nav.admin') }] : []),
   ];
 
   const isActive = (href: string) =>
@@ -68,10 +68,10 @@ function NavBar() {
                 className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                 aria-haspopup="menu"
                 aria-expanded={domainDropdownOpen}
-                aria-label="Switch domain"
+                aria-label={t('nav.selectDomain')}
               >
                 <span className="max-w-[120px] truncate font-medium text-foreground">
-                  {currentDomain?.name ?? 'Select Domain'}
+                  {currentDomain?.name ?? t('nav.selectDomain')}
                 </span>
                 <ChevronDown className="h-3.5 w-3.5" strokeWidth={1.75} />
               </button>
@@ -168,7 +168,7 @@ function NavBar() {
                     }}
                     className="block w-full px-3 py-1.5 text-left text-sm text-foreground-muted transition-colors hover:bg-muted hover:text-foreground"
                   >
-                    Sign Out
+                    {t('nav.signOut')}
                   </button>
                 </div>
               )}
@@ -227,7 +227,7 @@ function NavBar() {
                 }}
                 className="block w-full rounded-md px-3 py-2 text-left text-sm text-foreground-muted transition-colors hover:bg-muted hover:text-foreground"
               >
-                Sign Out
+                {t('nav.signOut')}
               </button>
             </div>
           </div>

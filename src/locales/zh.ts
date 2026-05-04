@@ -7,6 +7,7 @@ const zh = {
     signOut: '退出登录',
     selectDomain: '选择领域',
     alerts: '每日预警',
+    requests: '需求反馈',
   },
   auth: {
     login: '登录',
