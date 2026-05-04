@@ -2,15 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 export interface RawOutputRow {
   id: string;
   failure_reason: string | null;
-  /**
-   * raw_output is excluded from the runs list query for payload size. V1 MVP
-   * shows only the failure_reason here; a follow-up spec can add a per-id
-   * detail endpoint that includes the full raw_output field.
-   */
   raw_output?: string | null;
 }
 
@@ -60,37 +57,44 @@ export function ViewRawOutputModal({ row, onClose }: ViewRawOutputModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4"
+      className="fixed inset-0 z-40 flex items-center justify-center bg-foreground/40 px-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="raw-output-title"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-3xl max-h-[80vh] flex flex-col rounded-lg border border-gray-200 bg-white shadow-xl"
+        className="flex max-h-[80vh] w-full max-w-3xl flex-col rounded-lg border border-border bg-card shadow-md"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex items-center justify-between px-5 py-3 border-b border-gray-200">
-          <h2 id="raw-output-title" className="text-base font-semibold text-[#232f3e]">
+        <header className="flex items-center justify-between border-b border-border px-5 py-3">
+          <h2
+            id="raw-output-title"
+            className="text-base font-semibold text-foreground"
+          >
             {t('adminDailyAlert.runs.viewRaw.title')}
           </h2>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={onClose}
             aria-label={t('common.close')}
-            className="text-gray-400 hover:text-gray-700 text-2xl leading-none"
           >
-            ×
-          </button>
+            <X className="h-4 w-4" strokeWidth={1.75} />
+          </Button>
         </header>
 
-        <div className="flex-1 overflow-auto px-5 py-4 space-y-3">
-          <p className="text-xs text-gray-500 font-mono">Run ID: {row.id}</p>
+        <div className="flex-1 space-y-3 overflow-auto px-5 py-4">
+          <p className="font-mono text-xs text-foreground-subtle">
+            Run ID: {row.id}
+          </p>
 
           {row.failure_reason && (
             <div>
-              <p className="text-xs font-semibold text-red-700 mb-1">Failure Reason</p>
-              <pre className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800 whitespace-pre-wrap break-words">
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-danger-fg">
+                Failure Reason
+              </p>
+              <pre className="whitespace-pre-wrap break-words rounded-md border border-danger/20 bg-danger-bg px-3 py-2 text-xs text-danger-fg">
                 {row.failure_reason}
               </pre>
             </div>
@@ -98,39 +102,33 @@ export function ViewRawOutputModal({ row, onClose }: ViewRawOutputModalProps) {
 
           {row.raw_output ? (
             <div>
-              <p className="text-xs font-semibold text-gray-600 mb-1">raw_output</p>
-              <pre className="rounded border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-800 whitespace-pre-wrap break-words max-h-[50vh] overflow-auto">
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-foreground-muted">
+                raw_output
+              </p>
+              <pre className="max-h-[50vh] overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-muted/60 px-3 py-2 text-xs text-foreground">
                 {row.raw_output}
               </pre>
             </div>
           ) : (
             !row.failure_reason && (
-              <p className="text-sm text-gray-500 italic">
+              <p className="text-sm italic text-foreground-muted">
                 {t('adminDailyAlert.runs.viewRaw.empty')}
               </p>
             )
           )}
         </div>
 
-        <footer className="flex items-center justify-end gap-2 px-5 py-3 border-t border-gray-200">
+        <footer className="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
           {hasContent && (
-            <button
-              type="button"
-              onClick={handleCopy}
-              className="rounded border border-gray-300 px-3 py-1.5 text-xs font-medium text-[#232f3e] hover:bg-gray-50"
-            >
+            <Button variant="outline" size="sm" onClick={handleCopy}>
               {copied
                 ? t('adminDailyAlert.runs.viewRaw.copied')
                 : t('adminDailyAlert.runs.viewRaw.copy')}
-            </button>
+            </Button>
           )}
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded bg-[#232f3e] px-3 py-1.5 text-xs font-medium text-white hover:bg-black"
-          >
+          <Button size="sm" onClick={onClose}>
             {t('common.close')}
-          </button>
+          </Button>
         </footer>
       </div>
     </div>

@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { CheckCircle2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { DEFAULT_PROMPTS, type PromptType } from './default-prompts';
 
 const LABELS: Record<PromptType, string> = {
@@ -33,7 +35,10 @@ export interface PromptTemplateEditorProps {
   promptType: PromptType;
 }
 
-export function PromptTemplateEditor({ domainId, promptType }: PromptTemplateEditorProps) {
+export function PromptTemplateEditor({
+  domainId,
+  promptType,
+}: PromptTemplateEditorProps) {
   const defaultText = DEFAULT_PROMPTS[promptType];
 
   const [currentText, setCurrentText] = useState('');
@@ -120,74 +125,67 @@ export function PromptTemplateEditor({ domainId, promptType }: PromptTemplateEdi
   };
 
   if (loading) {
-    return <p className="text-sm text-gray-500">Loading {LABELS[promptType]}...</p>;
+    return (
+      <p className="text-sm text-foreground-muted">
+        Loading {LABELS[promptType]}...
+      </p>
+    );
   }
+
+  const placeholders = isSynthesizer
+    ? SYNTHESIZER_REQUIRED_PLACEHOLDERS
+    : promptType === 'shared_deep_dive'
+      ? DEEP_DIVE_PLACEHOLDERS
+      : HOT_RADAR_PLACEHOLDERS;
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-base font-semibold text-[#232f3e]">{LABELS[promptType]}</h3>
-        <button
-          type="button"
-          onClick={handleReset}
-          className="rounded border border-gray-300 px-3 py-1.5 text-xs font-medium text-[#232f3e] hover:bg-gray-50"
-        >
+        <h3 className="text-base font-semibold text-foreground">
+          {LABELS[promptType]}
+        </h3>
+        <Button variant="outline" size="sm" onClick={handleReset}>
           Reset to Default
-        </button>
+        </Button>
       </div>
 
       <textarea
         value={currentText}
         onChange={(e) => setCurrentText(e.target.value)}
         rows={rows}
-        className="w-full rounded border border-gray-300 px-3 py-2 text-sm font-mono resize-y focus:border-[#ff9900] focus:outline-none"
         spellCheck={false}
+        className="w-full resize-y rounded-md border border-input bg-card px-3 py-2 font-mono text-sm text-foreground transition-colors placeholder:text-foreground-subtle focus-visible:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
       />
 
-      {isSynthesizer ? (
-        <p className="text-xs text-gray-500">
-          Required placeholders: <code className="font-mono">{'{gemini_output}'}</code>{' '}
-          <code className="font-mono">{'{kimi_output}'}</code>
-        </p>
-      ) : promptType === 'shared_deep_dive' ? (
-        <p className="text-xs text-gray-500">
-          Supported placeholders:{' '}
-          {DEEP_DIVE_PLACEHOLDERS.map((ph, i) => (
-            <span key={ph}>
-              <code className="font-mono">{ph}</code>
-              {i < DEEP_DIVE_PLACEHOLDERS.length - 1 ? ' ' : ''}
-            </span>
-          ))}
-        </p>
-      ) : (
-        <p className="text-xs text-gray-500">
-          Supported placeholders:{' '}
-          {HOT_RADAR_PLACEHOLDERS.map((ph, i) => (
-            <span key={ph}>
-              <code className="font-mono">{ph}</code>
-              {i < HOT_RADAR_PLACEHOLDERS.length - 1 ? ' ' : ''}
-            </span>
-          ))}
-        </p>
-      )}
+      <p className="text-xs text-foreground-muted">
+        {isSynthesizer ? 'Required placeholders: ' : 'Supported placeholders: '}
+        {placeholders.map((ph, i) => (
+          <span key={ph}>
+            <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px] text-foreground">
+              {ph}
+            </code>
+            {i < placeholders.length - 1 ? ' ' : ''}
+          </span>
+        ))}
+      </p>
 
       {hasMissingRequired && (
-        <p className="text-xs text-red-600">
+        <p className="text-xs text-danger-fg">
           Missing required placeholder: {missingPlaceholders.join(', ')}
         </p>
       )}
 
       <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={saving || hasMissingRequired}
-          className="rounded bg-[#ff9900] px-4 py-2 text-sm font-medium text-white hover:bg-[#e88b00] disabled:opacity-50"
-        >
+        <Button onClick={handleSave} disabled={saving || hasMissingRequired}>
           {saving ? 'Saving...' : 'Save'}
-        </button>
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        {success && <p className="text-sm text-green-600">Saved ✓</p>}
+        </Button>
+        {error && <p className="text-sm text-danger-fg">{error}</p>}
+        {success && (
+          <p className="flex items-center gap-1 text-sm text-success-fg">
+            <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+            Saved
+          </p>
+        )}
       </div>
     </div>
   );

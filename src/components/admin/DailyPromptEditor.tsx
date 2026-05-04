@@ -2,24 +2,26 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { Toast, type ToastState } from '@/components/ui/Toast';
 
-export type DailyPromptType = 'daily_scan_prompt' | 'daily_canonicalization_prompt';
+export type DailyPromptType =
+  | 'daily_scan_prompt'
+  | 'daily_canonicalization_prompt';
 
 export interface DailyPromptEditorProps {
   promptType: DailyPromptType;
-  /**
-   * Pre-fetched {current, defaults} values so sibling editors share one
-   * network round-trip. When omitted the component fetches its own data.
-   */
   initialCurrent?: string | null;
   initialDefault?: string;
 }
 
 const REQUIRED_PLACEHOLDERS: Record<DailyPromptType, readonly string[]> = {
   daily_scan_prompt: ['{coverage_window_start}', '{coverage_window_end}'],
-  daily_canonicalization_prompt: ['{scanned_topics_json}', '{existing_canonicals_json}'],
+  daily_canonicalization_prompt: [
+    '{scanned_topics_json}',
+    '{existing_canonicals_json}',
+  ],
 };
 
 interface PromptsResponse {
@@ -32,13 +34,7 @@ interface PromptsResponse {
 }
 
 /**
- * Admin-only textarea editor for a single daily-alert prompt template.
- * - Loads both prompts + defaults once from GET /api/admin/daily-alert-prompts
- *   (if not provided via props)
- * - Client-side placeholder validation before PUT
- * - "Reset to default" with confirm modal
- *
- * Spec: Requirement 12.1, 12.5, 12.6 (placeholder enforcement, reset action).
+ * Admin-only editor for a daily-alert prompt template.
  */
 export function DailyPromptEditor({
   promptType,
@@ -59,11 +55,12 @@ export function DailyPromptEditor({
       : t('adminDailyAlert.prompt.canonicalizationTitle');
 
   const requiredPlaceholders = REQUIRED_PLACEHOLDERS[promptType];
-  const missingPlaceholders = requiredPlaceholders.filter((p) => !currentText.includes(p));
+  const missingPlaceholders = requiredPlaceholders.filter(
+    (p) => !currentText.includes(p)
+  );
   const hasMissing = missingPlaceholders.length > 0;
 
   useEffect(() => {
-    // Use pre-fetched data when provided
     if (initialDefault !== undefined) {
       setDefaultText(initialDefault);
       setCurrentText(initialCurrent ?? initialDefault);
@@ -75,7 +72,9 @@ export function DailyPromptEditor({
     const load = async () => {
       setLoading(true);
       try {
-        const res = await fetch('/api/admin/daily-alert-prompts', { cache: 'no-store' });
+        const res = await fetch('/api/admin/daily-alert-prompts', {
+          cache: 'no-store',
+        });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const body = (await res.json()) as { data: PromptsResponse };
         if (cancelled) return;
@@ -122,14 +121,22 @@ export function DailyPromptEditor({
         }
       );
       if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { message?: string };
+        const body = (await res.json().catch(() => ({}))) as {
+          message?: string;
+        };
         throw new Error(body.message || `HTTP ${res.status}`);
       }
-      setToast({ kind: 'success', text: t('adminDailyAlert.prompt.savedToast') });
+      setToast({
+        kind: 'success',
+        text: t('adminDailyAlert.prompt.savedToast'),
+      });
     } catch (e) {
       setToast({
         kind: 'error',
-        text: e instanceof Error ? e.message : t('adminDailyAlert.prompt.errorToast'),
+        text:
+          e instanceof Error
+            ? e.message
+            : t('adminDailyAlert.prompt.errorToast'),
       });
     } finally {
       setSaving(false);
@@ -144,8 +151,8 @@ export function DailyPromptEditor({
   if (loading) {
     return (
       <section className="space-y-3">
-        <h3 className="text-base font-semibold text-[#232f3e]">{title}</h3>
-        <p className="text-sm text-gray-500">{t('common.loading')}</p>
+        <h3 className="text-base font-semibold text-foreground">{title}</h3>
+        <p className="text-sm text-foreground-muted">{t('common.loading')}</p>
       </section>
     );
   }
@@ -153,14 +160,14 @@ export function DailyPromptEditor({
   return (
     <section className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-base font-semibold text-[#232f3e]">{title}</h3>
-        <button
-          type="button"
+        <h3 className="text-base font-semibold text-foreground">{title}</h3>
+        <Button
+          variant="outline"
+          size="sm"
           onClick={() => setResetOpen(true)}
-          className="rounded border border-gray-300 px-3 py-1.5 text-xs font-medium text-[#232f3e] hover:bg-gray-50"
         >
           {t('adminDailyAlert.prompt.reset')}
-        </button>
+        </Button>
       </div>
 
       <textarea
@@ -168,27 +175,32 @@ export function DailyPromptEditor({
         onChange={(e) => setCurrentText(e.target.value)}
         rows={24}
         spellCheck={false}
-        className="w-full rounded border border-gray-300 px-3 py-2 text-sm font-mono resize-y focus:border-[#ff9900] focus:outline-none"
+        className="w-full resize-y rounded-md border border-input bg-card px-3 py-2 font-mono text-sm text-foreground transition-colors placeholder:text-foreground-subtle focus-visible:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
       />
 
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-foreground-muted">
         {t('adminDailyAlert.prompt.placeholdersHint')}{' '}
-        {requiredPlaceholders.map((ph, i) => (
-          <span key={ph}>
-            <code
-              className={`font-mono ${
-                currentText.includes(ph) ? 'text-gray-700' : 'text-red-600 font-bold'
-              }`}
-            >
-              {ph}
-            </code>
-            {i < requiredPlaceholders.length - 1 ? ' ' : ''}
-          </span>
-        ))}
+        {requiredPlaceholders.map((ph, i) => {
+          const present = currentText.includes(ph);
+          return (
+            <span key={ph}>
+              <code
+                className={`rounded px-1 py-0.5 font-mono text-[11px] ${
+                  present
+                    ? 'bg-muted text-foreground'
+                    : 'bg-danger-bg font-semibold text-danger-fg'
+                }`}
+              >
+                {ph}
+              </code>
+              {i < requiredPlaceholders.length - 1 ? ' ' : ''}
+            </span>
+          );
+        })}
       </p>
 
       {hasMissing && (
-        <p className="text-xs text-red-600">
+        <p className="text-xs text-danger-fg">
           {t('adminDailyAlert.prompt.validationMissingPlaceholders').replace(
             '{missing}',
             missingPlaceholders.join(', ')
@@ -196,14 +208,9 @@ export function DailyPromptEditor({
         </p>
       )}
 
-      <button
-        type="button"
-        onClick={handleSave}
-        disabled={saving || hasMissing}
-        className="rounded bg-[#ff9900] px-4 py-2 text-sm font-medium text-white hover:bg-[#e88b00] disabled:opacity-50"
-      >
+      <Button onClick={handleSave} disabled={saving || hasMissing}>
         {saving ? '...' : t('adminDailyAlert.prompt.save')}
-      </button>
+      </Button>
 
       <ConfirmModal
         open={resetOpen}

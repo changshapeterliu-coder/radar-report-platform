@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Plus, Sparkles, X } from 'lucide-react';
 import type {
   ReportContent,
   ReportModule,
@@ -16,6 +17,9 @@ import type {
 import ReportRenderer from '@/components/report/ReportRenderer';
 import MarkdownContentEditor from './MarkdownContentEditor';
 import { isV4Content } from '@/lib/validators/report-schema';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
 
 /* ─── Helpers ─── */
 
@@ -81,7 +85,12 @@ function TableEditor({
     onChange({ ...table, rows });
   };
 
-  const updateCellBadge = (ri: number, ci: number, badgeText: string, level: 'high' | 'medium' | 'low') => {
+  const updateCellBadge = (
+    ri: number,
+    ci: number,
+    badgeText: string,
+    level: 'high' | 'medium' | 'low'
+  ) => {
     const rows = table.rows.map((r, idx) =>
       idx === ri
         ? {
@@ -124,54 +133,62 @@ function TableEditor({
   };
 
   return (
-    <div className="border rounded p-3 mb-3 bg-gray-50">
+    <div className="mb-3 rounded-md border border-border bg-muted/50 p-3">
       <div className="overflow-x-auto">
-        <table className="w-full text-sm border-collapse">
+        <table className="w-full border-collapse text-sm">
           <thead>
             <tr>
               {table.headers.map((h, i) => (
                 <th key={i} className="p-1">
-                  <div className="flex gap-1">
-                    <input
+                  <div className="flex items-center gap-1">
+                    <Input
                       value={h}
                       onChange={(e) => updateHeader(i, e.target.value)}
-                      className="w-full rounded border px-2 py-1 text-xs font-bold"
+                      className="h-8 text-xs font-semibold"
                       placeholder="Header"
                     />
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-foreground-muted hover:text-danger-fg"
                       onClick={() => removeColumn(i)}
-                      className="text-red-400 hover:text-red-600 text-xs px-1"
+                      aria-label="Remove column"
                       title="Remove column"
                     >
-                      ×
-                    </button>
+                      <X className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    </Button>
                   </div>
                 </th>
               ))}
-              <th className="p-1 w-8" />
+              <th className="w-8 p-1" />
             </tr>
           </thead>
           <tbody>
             {table.rows.map((row, ri) => (
               <tr key={ri}>
                 {row.cells.map((cell, ci) => (
-                  <td key={ci} className="p-1">
-                    <input
+                  <td key={ci} className="p-1 align-top">
+                    <Input
                       value={cell.text}
                       onChange={(e) => updateCell(ri, ci, e.target.value)}
-                      className="w-full rounded border px-2 py-1 text-xs"
+                      className="h-8 text-xs"
                       placeholder="Cell text"
                     />
-                    <div className="flex gap-1 mt-0.5">
-                      <input
+                    <div className="mt-1 flex gap-1">
+                      <Input
                         value={cell.badge?.text ?? ''}
                         onChange={(e) =>
-                          updateCellBadge(ri, ci, e.target.value, cell.badge?.level ?? 'medium')
+                          updateCellBadge(
+                            ri,
+                            ci,
+                            e.target.value,
+                            cell.badge?.level ?? 'medium'
+                          )
                         }
-                        className="flex-1 rounded border px-1 py-0.5 text-[10px]"
+                        className="h-7 flex-1 text-[11px]"
                         placeholder="Badge"
                       />
-                      <select
+                      <Select
                         value={cell.badge?.level ?? 'medium'}
                         onChange={(e) =>
                           updateCellBadge(
@@ -181,40 +198,42 @@ function TableEditor({
                             e.target.value as 'high' | 'medium' | 'low'
                           )
                         }
-                        className="rounded border text-[10px] px-1"
+                        className="h-7 w-20 text-[11px]"
                       >
                         <option value="high">High</option>
                         <option value="medium">Med</option>
                         <option value="low">Low</option>
-                      </select>
+                      </Select>
                     </div>
                   </td>
                 ))}
                 <td className="p-1">
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-foreground-muted hover:text-danger-fg"
                     onClick={() => removeRow(ri)}
-                    className="text-red-400 hover:text-red-600 text-xs"
+                    aria-label="Remove row"
                   >
-                    ×
-                  </button>
+                    <X className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  </Button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <div className="flex gap-2 mt-2">
-        <button onClick={addRow} className="text-xs text-[#146eb4] hover:underline">
-          + Row
-        </button>
-        <button onClick={addColumn} className="text-xs text-[#146eb4] hover:underline">
-          + Column
-        </button>
+      <div className="mt-2 flex gap-2">
+        <Button variant="link" size="sm" onClick={addRow}>
+          <Plus className="h-3.5 w-3.5" strokeWidth={2} /> Row
+        </Button>
+        <Button variant="link" size="sm" onClick={addColumn}>
+          <Plus className="h-3.5 w-3.5" strokeWidth={2} /> Column
+        </Button>
       </div>
     </div>
   );
 }
-
 
 function AnalysisSectionEditor({
   section,
@@ -230,7 +249,11 @@ function AnalysisSectionEditor({
     onChange({ ...section, quotes });
   };
 
-  const updateKeyPoint = (i: number, field: keyof KeyPoint, val: string | string[]) => {
+  const updateKeyPoint = (
+    i: number,
+    field: keyof KeyPoint,
+    val: string | string[]
+  ) => {
     const keyPoints = section.keyPoints.map((kp, idx) =>
       idx === i ? { ...kp, [field]: val } : kp
     );
@@ -238,96 +261,115 @@ function AnalysisSectionEditor({
   };
 
   return (
-    <div className="border rounded p-3 mb-3 bg-gray-50">
-      <input
+    <div className="mb-3 rounded-md border border-border bg-muted/50 p-3">
+      <Input
         value={section.title}
         onChange={(e) => onChange({ ...section, title: e.target.value })}
-        className="w-full rounded border px-2 py-1 text-sm font-semibold mb-2"
+        className="mb-3 h-9 text-sm font-semibold"
         placeholder="Analysis section title"
       />
 
       {/* Quotes */}
-      <p className="text-xs font-bold text-gray-500 mb-1">Quotes</p>
+      <p className="mb-1 text-xs font-semibold text-foreground-muted">Quotes</p>
       {section.quotes.map((q, i) => (
-        <div key={i} className="flex gap-2 mb-1">
-          <input
+        <div key={i} className="mb-1 flex gap-2">
+          <Input
             value={q.text}
             onChange={(e) => updateQuote(i, 'text', e.target.value)}
-            className="flex-1 rounded border px-2 py-1 text-xs"
+            className="h-8 flex-1 text-xs"
             placeholder="Quote text"
           />
-          <input
+          <Input
             value={q.source}
             onChange={(e) => updateQuote(i, 'source', e.target.value)}
-            className="w-32 rounded border px-2 py-1 text-xs"
+            className="h-8 w-32 text-xs"
             placeholder="Source"
           />
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-foreground-muted hover:text-danger-fg"
             onClick={() =>
-              onChange({ ...section, quotes: section.quotes.filter((_, idx) => idx !== i) })
+              onChange({
+                ...section,
+                quotes: section.quotes.filter((_, idx) => idx !== i),
+              })
             }
-            className="text-red-400 hover:text-red-600 text-xs"
+            aria-label="Remove quote"
           >
-            ×
-          </button>
+            <X className="h-3.5 w-3.5" strokeWidth={1.75} />
+          </Button>
         </div>
       ))}
-      <button
-        onClick={() => onChange({ ...section, quotes: [...section.quotes, emptyQuote()] })}
-        className="text-xs text-[#146eb4] hover:underline mb-2"
+      <Button
+        variant="link"
+        size="sm"
+        className="mb-2"
+        onClick={() =>
+          onChange({ ...section, quotes: [...section.quotes, emptyQuote()] })
+        }
       >
-        + Quote
-      </button>
+        <Plus className="h-3.5 w-3.5" strokeWidth={2} /> Quote
+      </Button>
 
       {/* Key Points */}
-      <p className="text-xs font-bold text-gray-500 mb-1 mt-2">Key Points</p>
+      <p className="mb-1 mt-2 text-xs font-semibold text-foreground-muted">
+        Key Points
+      </p>
       {section.keyPoints.map((kp, i) => (
-        <div key={i} className="flex gap-2 mb-1 flex-wrap">
-          <input
+        <div key={i} className="mb-1 flex flex-wrap gap-2">
+          <Input
             value={kp.label}
             onChange={(e) => updateKeyPoint(i, 'label', e.target.value)}
-            className="w-28 rounded border px-2 py-1 text-xs"
+            className="h-8 w-28 text-xs"
             placeholder="Label"
           />
-          <input
+          <Input
             value={kp.content}
             onChange={(e) => updateKeyPoint(i, 'content', e.target.value)}
-            className="flex-1 rounded border px-2 py-1 text-xs"
+            className="h-8 flex-1 text-xs"
             placeholder="Content"
           />
-          <input
+          <Input
             value={kp.impactTags.join(', ')}
             onChange={(e) =>
               updateKeyPoint(
                 i,
                 'impactTags',
-                e.target.value.split(',').map((t) => t.trim()).filter(Boolean)
+                e.target.value
+                  .split(',')
+                  .map((t) => t.trim())
+                  .filter(Boolean)
               )
             }
-            className="w-40 rounded border px-2 py-1 text-xs"
+            className="h-8 w-40 text-xs"
             placeholder="Tags (comma-sep)"
           />
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-foreground-muted hover:text-danger-fg"
             onClick={() =>
               onChange({
                 ...section,
                 keyPoints: section.keyPoints.filter((_, idx) => idx !== i),
               })
             }
-            className="text-red-400 hover:text-red-600 text-xs"
+            aria-label="Remove key point"
           >
-            ×
-          </button>
+            <X className="h-3.5 w-3.5" strokeWidth={1.75} />
+          </Button>
         </div>
       ))}
-      <button
+      <Button
+        variant="link"
+        size="sm"
         onClick={() =>
           onChange({ ...section, keyPoints: [...section.keyPoints, emptyKeyPoint()] })
         }
-        className="text-xs text-[#146eb4] hover:underline"
       >
-        + Key Point
-      </button>
+        <Plus className="h-3.5 w-3.5" strokeWidth={2} /> Key Point
+      </Button>
     </div>
   );
 }
@@ -340,17 +382,17 @@ function HighlightBoxEditor({
   onChange: (b: HighlightBox) => void;
 }) {
   return (
-    <div className="flex gap-2 mb-2">
-      <input
+    <div className="mb-2 flex gap-2">
+      <Input
         value={box.title}
         onChange={(e) => onChange({ ...box, title: e.target.value })}
-        className="w-40 rounded border px-2 py-1 text-xs"
+        className="h-8 w-40 text-xs"
         placeholder="Title"
       />
-      <input
+      <Input
         value={box.content}
         onChange={(e) => onChange({ ...box, content: e.target.value })}
-        className="flex-1 rounded border px-2 py-1 text-xs"
+        className="h-8 flex-1 text-xs"
         placeholder="Content"
       />
     </div>
@@ -390,55 +432,71 @@ function ModuleEditor({
   };
 
   return (
-    <div className="border rounded-lg p-4 mb-4 bg-white">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="font-bold text-[#232f3e]">Module {index + 1}</h3>
-        <button onClick={onRemove} className="text-red-500 hover:text-red-700 text-sm">
+    <div className="mb-4 rounded-lg border border-border bg-card p-4 shadow-sm">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-base font-semibold text-foreground">
+          Module {index + 1}
+        </h3>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-danger-fg hover:bg-danger-bg hover:text-danger-fg"
+          onClick={onRemove}
+        >
           Remove Module
-        </button>
+        </Button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
-        <input
+      <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <Input
           value={module.title}
           onChange={(e) => onChange({ ...module, title: e.target.value })}
-          className="rounded border px-3 py-2 text-sm"
           placeholder="Module title"
         />
-        <input
+        <Input
           value={module.subtitle ?? ''}
           onChange={(e) => onChange({ ...module, subtitle: e.target.value })}
-          className="rounded border px-3 py-2 text-sm"
           placeholder="Subtitle (optional)"
         />
       </div>
 
       {/* Tables */}
-      <p className="text-sm font-bold text-gray-600 mb-1">Tables</p>
+      <p className="mb-1 text-sm font-semibold text-foreground-muted">Tables</p>
       {(module.tables ?? []).map((table, ti) => (
         <div key={ti} className="relative">
           <TableEditor table={table} onChange={(t) => updateTable(ti, t)} />
           {(module.tables ?? []).length > 1 && (
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
+              className="absolute right-1 top-1 text-danger-fg hover:bg-danger-bg hover:text-danger-fg"
               onClick={() =>
-                onChange({ ...module, tables: (module.tables ?? []).filter((_, i) => i !== ti) })
+                onChange({
+                  ...module,
+                  tables: (module.tables ?? []).filter((_, i) => i !== ti),
+                })
               }
-              className="absolute top-1 right-1 text-red-400 hover:text-red-600 text-xs"
             >
               Remove Table
-            </button>
+            </Button>
           )}
         </div>
       ))}
-      <button
-        onClick={() => onChange({ ...module, tables: [...(module.tables ?? []), emptyTable()] })}
-        className="text-xs text-[#146eb4] hover:underline mb-3"
+      <Button
+        variant="link"
+        size="sm"
+        className="mb-3"
+        onClick={() =>
+          onChange({ ...module, tables: [...(module.tables ?? []), emptyTable()] })
+        }
       >
-        + Table
-      </button>
+        <Plus className="h-3.5 w-3.5" strokeWidth={2} /> Table
+      </Button>
 
       {/* Analysis Sections */}
-      <p className="text-sm font-bold text-gray-600 mb-1">Analysis Sections</p>
+      <p className="mb-1 text-sm font-semibold text-foreground-muted">
+        Analysis Sections
+      </p>
       {(module.analysisSections ?? []).map((section, si) => (
         <div key={si} className="relative">
           <AnalysisSectionEditor
@@ -446,63 +504,83 @@ function ModuleEditor({
             onChange={(s) => updateSection(si, s)}
           />
           {(module.analysisSections ?? []).length > 1 && (
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
+              className="absolute right-1 top-1 text-danger-fg hover:bg-danger-bg hover:text-danger-fg"
               onClick={() =>
                 onChange({
                   ...module,
-                  analysisSections: (module.analysisSections ?? []).filter((_, i) => i !== si),
+                  analysisSections: (module.analysisSections ?? []).filter(
+                    (_, i) => i !== si
+                  ),
                 })
               }
-              className="absolute top-1 right-1 text-red-400 hover:text-red-600 text-xs"
             >
               Remove
-            </button>
+            </Button>
           )}
         </div>
       ))}
-      <button
+      <Button
+        variant="link"
+        size="sm"
+        className="mb-3"
         onClick={() =>
           onChange({
             ...module,
-            analysisSections: [...(module.analysisSections ?? []), emptyAnalysisSection()],
+            analysisSections: [
+              ...(module.analysisSections ?? []),
+              emptyAnalysisSection(),
+            ],
           })
         }
-        className="text-xs text-[#146eb4] hover:underline mb-3"
       >
-        + Analysis Section
-      </button>
+        <Plus className="h-3.5 w-3.5" strokeWidth={2} /> Analysis Section
+      </Button>
 
       {/* Highlight Boxes */}
-      <p className="text-sm font-bold text-gray-600 mb-1">Highlight Boxes</p>
+      <p className="mb-1 text-sm font-semibold text-foreground-muted">
+        Highlight Boxes
+      </p>
       {(module.highlightBoxes ?? []).map((box, hi) => (
         <div key={hi} className="flex items-start gap-1">
           <div className="flex-1">
             <HighlightBoxEditor box={box} onChange={(b) => updateHighlight(hi, b)} />
           </div>
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
+            className="mt-1 h-7 w-7 text-foreground-muted hover:text-danger-fg"
             onClick={() =>
               onChange({
                 ...module,
-                highlightBoxes: (module.highlightBoxes ?? []).filter((_, i) => i !== hi),
+                highlightBoxes: (module.highlightBoxes ?? []).filter(
+                  (_, i) => i !== hi
+                ),
               })
             }
-            className="text-red-400 hover:text-red-600 text-xs mt-1"
+            aria-label="Remove highlight box"
           >
-            ×
-          </button>
+            <X className="h-3.5 w-3.5" strokeWidth={1.75} />
+          </Button>
         </div>
       ))}
-      <button
+      <Button
+        variant="link"
+        size="sm"
         onClick={() =>
           onChange({
             ...module,
-            highlightBoxes: [...(module.highlightBoxes ?? []), emptyHighlightBox()],
+            highlightBoxes: [
+              ...(module.highlightBoxes ?? []),
+              emptyHighlightBox(),
+            ],
           })
         }
-        className="text-xs text-[#146eb4] hover:underline"
       >
-        + Highlight Box
-      </button>
+        <Plus className="h-3.5 w-3.5" strokeWidth={2} /> Highlight Box
+      </Button>
     </div>
   );
 }
@@ -545,26 +623,31 @@ function SmartPasteSection({
   };
 
   return (
-    <div className="mb-6 rounded-lg border-2 border-dashed border-[#ff9900] bg-orange-50 p-4">
-      <h3 className="text-sm font-bold text-[#232f3e] mb-2">🤖 Smart Paste — AI 智能格式化</h3>
-      <p className="text-xs text-gray-500 mb-2">
-        Paste your raw report text below and let AI structure it into modules, tables, and analysis sections.
+    <div className="mb-6 rounded-lg border border-primary/40 bg-primary-soft p-4">
+      <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold text-foreground">
+        <Sparkles className="h-4 w-4 text-primary" strokeWidth={1.75} aria-hidden />
+        Smart Paste · AI 智能格式化
+      </h3>
+      <p className="mb-2 text-xs text-foreground-muted">
+        Paste your raw report text below and let AI structure it into modules,
+        tables, and analysis sections.
       </p>
       <textarea
         value={rawText}
         onChange={(e) => setRawText(e.target.value)}
         rows={6}
-        className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-[#ff9900] focus:outline-none"
+        className="w-full resize-y rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground transition-colors placeholder:text-foreground-subtle focus-visible:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
         placeholder="Paste raw report text here (Chinese or English)…&#10;&#10;Example:&#10;账户健康雷达报告 2025-03-03 ~ 2025-03-16&#10;一、政策违规概览&#10;IP投诉 45件 高风险&#10;产品真实性 23件 中风险&#10;…"
       />
-      {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
-      <button
+      {error && <p className="mt-1 text-xs text-danger-fg">{error}</p>}
+      <Button
+        className="mt-2"
         onClick={handleFormat}
         disabled={loading || !rawText.trim()}
-        className="mt-2 rounded bg-[#ff9900] px-4 py-2 text-sm font-medium text-white hover:bg-[#e88b00] disabled:opacity-50"
       >
-        {loading ? 'AI Processing…' : '🤖 AI 智能格式化'}
-      </button>
+        <Sparkles className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+        {loading ? 'AI Processing…' : 'AI 智能格式化'}
+      </Button>
     </div>
   );
 }
@@ -577,17 +660,29 @@ export interface ContentEditorProps {
   reportType?: 'regular' | 'topic';
 }
 
-export default function ContentEditor({ value, onChange, reportType = 'regular' }: ContentEditorProps) {
+export default function ContentEditor({
+  value,
+  onChange,
+  reportType = 'regular',
+}: ContentEditorProps) {
   // v4 Markdown-hybrid drafts route to MarkdownContentEditor.
   // Pre-v4 drafts (blocks/tables/analysisSections) keep the legacy editor.
   if (isV4Content(value)) {
     return <MarkdownContentEditor value={value} onChange={onChange} />;
   }
-  return <LegacyContentEditor value={value} onChange={onChange} reportType={reportType} />;
+  return (
+    <LegacyContentEditor value={value} onChange={onChange} reportType={reportType} />
+  );
 }
 
-function LegacyContentEditor({ value, onChange, reportType = 'regular' }: ContentEditorProps) {
-  const { t } = useTranslation();
+function LegacyContentEditor({
+  value,
+  onChange,
+  reportType = 'regular',
+}: ContentEditorProps) {
+  // useTranslation is reserved here for future i18n of admin labels — kept to
+  // preserve existing import contract; not currently invoked.
+  useTranslation();
   const [showPreview, setShowPreview] = useState(false);
   const [previewModuleIndex, setPreviewModuleIndex] = useState(0);
 
@@ -615,17 +710,18 @@ function LegacyContentEditor({ value, onChange, reportType = 'regular' }: Conten
       {/* Smart Paste */}
       <SmartPasteSection reportType={reportType} onResult={onChange} />
 
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-bold text-[#232f3e]">Content Editor</h2>
-        <button
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-foreground">Content Editor</h2>
+        <Button
+          variant="link"
+          size="sm"
           onClick={() => setShowPreview(!showPreview)}
-          className="text-sm text-[#146eb4] hover:underline"
         >
           {showPreview ? 'Hide Preview' : 'Show Preview'}
-        </button>
+        </Button>
       </div>
 
-      <div className={showPreview ? 'grid grid-cols-1 lg:grid-cols-2 gap-6' : ''}>
+      <div className={showPreview ? 'grid grid-cols-1 gap-6 lg:grid-cols-2' : ''}>
         {/* Editor */}
         <div>
           {value.modules.map((mod, i) => (
@@ -638,8 +734,9 @@ function LegacyContentEditor({ value, onChange, reportType = 'regular' }: Conten
             />
           ))}
           <button
+            type="button"
             onClick={addModule}
-            className="w-full rounded border-2 border-dashed border-gray-300 py-3 text-sm text-gray-500 hover:border-[#ff9900] hover:text-[#ff9900] transition-colors"
+            className="w-full rounded-md border-2 border-dashed border-border py-3 text-sm text-foreground-muted transition-colors hover:border-primary hover:text-primary"
           >
             + Add Module
           </button>
@@ -647,19 +744,23 @@ function LegacyContentEditor({ value, onChange, reportType = 'regular' }: Conten
 
         {/* Preview */}
         {showPreview && (
-          <div className="border rounded-lg p-4 bg-gray-50 overflow-auto max-h-[80vh]">
-            <p className="text-sm font-bold text-gray-500 mb-2">Preview</p>
+          <div className="max-h-[80vh] overflow-auto rounded-lg border border-border bg-muted/50 p-4">
+            <p className="mb-2 text-sm font-semibold text-foreground-muted">
+              Preview
+            </p>
             {value.modules.length > 1 && (
-              <div className="flex gap-1 mb-3 overflow-x-auto">
+              <div className="mb-3 flex gap-1 overflow-x-auto">
                 {value.modules.map((m, i) => (
                   <button
+                    type="button"
                     key={i}
                     onClick={() => setPreviewModuleIndex(i)}
-                    className={`px-3 py-1 rounded text-xs whitespace-nowrap ${
-                      i === previewModuleIndex
-                        ? 'bg-[#232f3e] text-white'
-                        : 'bg-white border text-gray-600 hover:bg-gray-100'
-                    }`}
+                    className={
+                      'whitespace-nowrap rounded-md px-3 py-1 text-xs transition-colors ' +
+                      (i === previewModuleIndex
+                        ? 'bg-primary text-primary-foreground'
+                        : 'border border-border bg-card text-foreground-muted hover:bg-muted')
+                    }
                   >
                     {m.title || `Module ${i + 1}`}
                   </button>

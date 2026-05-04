@@ -2,11 +2,11 @@
 
 import { useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import type {
-  ReportContent,
-  ReportModule,
-  TopTopic,
-} from '@/types/report';
+import { Plus, X } from 'lucide-react';
+import type { ReportContent, ReportModule, TopTopic } from '@/types/report';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
 
 // MDEditor uses window, so it has to be client-only.
 const MDEditor = dynamic(
@@ -57,36 +57,36 @@ function TopTopicRow({
   const update = (patch: Partial<TopTopic>) => onChange({ ...topic, ...patch });
 
   return (
-    <tr>
+    <tr className="align-top">
       <td className="p-1">
-        <input
+        <Input
           value={topic.rank}
           onChange={(e) => update({ rank: e.target.value })}
-          className="w-12 rounded border px-1 py-1 text-xs text-center"
+          className="h-8 w-12 text-center text-xs"
           placeholder="1"
           aria-label={`topic-${index}-rank`}
         />
       </td>
       <td className="p-1">
-        <input
+        <Input
           value={topic.topic}
           onChange={(e) => update({ topic: e.target.value })}
-          className="w-full rounded border px-2 py-1 text-xs"
+          className="h-8 w-full text-xs"
           placeholder="topic"
         />
       </td>
       <td className="p-1">
-        <input
+        <Input
           type="number"
           step="0.1"
           min="0"
           value={topic.voice_volume}
           onChange={(e) => update({ voice_volume: Number(e.target.value) })}
-          className="w-16 rounded border px-1 py-1 text-xs text-right"
+          className="h-8 w-16 text-right text-xs"
         />
       </td>
       <td className="p-1">
-        <input
+        <Input
           value={topic.keywords.join('、')}
           onChange={(e) =>
             update({
@@ -96,51 +96,56 @@ function TopTopicRow({
                 .filter(Boolean),
             })
           }
-          className="w-full rounded border px-2 py-1 text-xs"
+          className="h-8 w-full text-xs"
           placeholder="用、分隔"
         />
       </td>
       <td className="p-1">
-        <input
+        <Input
           value={topic.seller_discussion}
           onChange={(e) => update({ seller_discussion: e.target.value })}
-          className="w-full rounded border px-2 py-1 text-xs"
+          className="h-8 w-full text-xs"
           placeholder="卖家讨论描述"
         />
       </td>
       <td className="p-1">
-        <select
+        <Select
           value={topic.severity}
           onChange={(e) =>
             update({ severity: e.target.value as TopTopic['severity'] })
           }
-          className="rounded border text-xs px-1 py-1"
+          className="h-8 w-full text-xs"
         >
           {SEVERITY_OPTIONS.map((s) => (
             <option key={s.value} value={s.value}>
               {s.label}
             </option>
           ))}
-        </select>
+        </Select>
       </td>
       <td className="p-1">
-        <label className="flex items-center gap-1 text-[11px] text-gray-600">
+        <label className="flex items-center gap-1 text-[11px] text-foreground-muted">
           <input
             type="checkbox"
             checked={!!topic.cross_engine_confirmed}
-            onChange={(e) => update({ cross_engine_confirmed: e.target.checked })}
+            onChange={(e) =>
+              update({ cross_engine_confirmed: e.target.checked })
+            }
+            className="h-3.5 w-3.5 accent-primary"
           />
           ✓
         </label>
       </td>
       <td className="p-1">
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-foreground-muted hover:text-danger-fg"
           onClick={onRemove}
-          className="text-red-400 hover:text-red-600 text-xs"
           aria-label={`remove-topic-${index}`}
         >
-          ×
-        </button>
+          <X className="h-3.5 w-3.5" strokeWidth={1.75} />
+        </Button>
       </td>
     </tr>
   );
@@ -162,28 +167,30 @@ function TopTopicsEditor({
   const add = () => onChange([...topics, emptyTopic(topics.length + 1)]);
 
   return (
-    <div className="border rounded p-3 mb-3 bg-gray-50">
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-sm font-semibold text-[#232f3e]">Top Topics</p>
-        <button onClick={add} className="text-xs text-[#146eb4] hover:underline">
-          + Add topic
-        </button>
+    <div className="mb-3 rounded-md border border-border bg-muted/50 p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-sm font-semibold text-foreground">Top Topics</p>
+        <Button variant="link" size="sm" onClick={add}>
+          <Plus className="h-3.5 w-3.5" strokeWidth={2} /> Add topic
+        </Button>
       </div>
       {topics.length === 0 ? (
-        <p className="text-xs text-gray-400">No topics — click "+ Add topic".</p>
+        <p className="text-xs text-foreground-subtle">
+          No topics — click &ldquo;+ Add topic&rdquo;.
+        </p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-xs border-collapse">
+          <table className="w-full border-collapse text-xs">
             <thead>
-              <tr className="text-gray-500">
-                <th className="p-1 text-left w-12">Rank</th>
-                <th className="p-1 text-left">Topic</th>
-                <th className="p-1 text-left w-16">热度</th>
-                <th className="p-1 text-left">Keywords</th>
-                <th className="p-1 text-left">卖家讨论</th>
-                <th className="p-1 text-left w-12">严重</th>
-                <th className="p-1 text-left w-12">双印</th>
-                <th className="p-1 w-8" />
+              <tr className="text-foreground-muted">
+                <th className="w-12 p-1 text-left font-medium">Rank</th>
+                <th className="p-1 text-left font-medium">Topic</th>
+                <th className="w-16 p-1 text-left font-medium">热度</th>
+                <th className="p-1 text-left font-medium">Keywords</th>
+                <th className="p-1 text-left font-medium">卖家讨论</th>
+                <th className="w-20 p-1 text-left font-medium">严重</th>
+                <th className="w-12 p-1 text-left font-medium">双印</th>
+                <th className="w-8 p-1" />
               </tr>
             </thead>
             <tbody>
@@ -223,29 +230,31 @@ function ModuleEditor({
     onChange({ ...module, topTopics: next });
 
   return (
-    <div className="border rounded-lg p-4 mb-4 bg-white">
-      <div className="flex items-center justify-between mb-3">
-        <input
+    <div className="mb-4 rounded-lg border border-border bg-card p-4 shadow-sm">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <Input
           value={module.title}
           onChange={(e) => onChange({ ...module, title: e.target.value })}
-          className="flex-1 mr-3 rounded border px-3 py-2 text-sm font-bold"
+          className="flex-1 text-sm font-semibold"
           placeholder="Module title"
         />
         {showRemove && (
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-danger-fg hover:bg-danger-bg hover:text-danger-fg"
             onClick={onRemove}
-            className="text-red-500 hover:text-red-700 text-sm"
           >
             Remove Module
-          </button>
+          </Button>
         )}
       </div>
 
       {/* Subtitle */}
-      <input
+      <Input
         value={module.subtitle ?? ''}
         onChange={(e) => onChange({ ...module, subtitle: e.target.value })}
-        className="w-full rounded border px-3 py-2 text-sm mb-3"
+        className="mb-3"
         placeholder="Subtitle (optional)"
       />
 
@@ -256,12 +265,18 @@ function ModuleEditor({
       />
 
       {/* Markdown body with live preview */}
-      <p className="text-sm font-semibold text-[#232f3e] mb-1">Markdown Body</p>
-      <p className="text-xs text-gray-500 mb-2">
+      <p className="mb-1 text-sm font-semibold text-foreground">Markdown Body</p>
+      <p className="mb-2 text-xs leading-relaxed text-foreground-muted">
         支持 GitHub-style 表格、引用、标题。特殊 callout:{' '}
-        <code className="bg-gray-100 rounded px-1">&gt; [!INSIGHT]</code>{' '}
-        <code className="bg-gray-100 rounded px-1">&gt; [!WARNING]</code>{' '}
-        <code className="bg-gray-100 rounded px-1">&gt; [!RECOMMENDATION]</code>
+        <code className="rounded bg-muted px-1 font-mono text-[11px] text-foreground">
+          &gt; [!INSIGHT]
+        </code>{' '}
+        <code className="rounded bg-muted px-1 font-mono text-[11px] text-foreground">
+          &gt; [!WARNING]
+        </code>{' '}
+        <code className="rounded bg-muted px-1 font-mono text-[11px] text-foreground">
+          &gt; [!RECOMMENDATION]
+        </code>
       </p>
       <div data-color-mode="light">
         <MDEditor
@@ -291,7 +306,10 @@ export default function MarkdownContentEditor({
 
   const updateModule = useCallback(
     (i: number, m: ReportModule) => {
-      onChange({ ...value, modules: modules.map((x, idx) => (idx === i ? m : x)) });
+      onChange({
+        ...value,
+        modules: modules.map((x, idx) => (idx === i ? m : x)),
+      });
     },
     [value, onChange, modules]
   );
@@ -314,7 +332,9 @@ export default function MarkdownContentEditor({
 
   return (
     <div>
-      <h2 className="text-lg font-bold text-[#232f3e] mb-4">Content Editor (Markdown)</h2>
+      <h2 className="mb-4 text-lg font-semibold text-foreground">
+        Content Editor (Markdown)
+      </h2>
       {modules.map((m, i) => (
         <ModuleEditor
           key={i}
@@ -325,8 +345,9 @@ export default function MarkdownContentEditor({
         />
       ))}
       <button
+        type="button"
         onClick={addModule}
-        className="w-full rounded border-2 border-dashed border-gray-300 py-3 text-sm text-gray-500 hover:border-[#ff9900] hover:text-[#ff9900] transition-colors"
+        className="w-full rounded-md border-2 border-dashed border-border py-3 text-sm text-foreground-muted transition-colors hover:border-primary hover:text-primary"
       >
         + Add Module
       </button>

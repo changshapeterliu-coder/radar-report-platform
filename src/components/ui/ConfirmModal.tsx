@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import type { ReactNode } from 'react';
+import { Button } from './button';
 
 export interface ConfirmModalProps {
   open: boolean;
@@ -16,14 +17,13 @@ export interface ConfirmModalProps {
 }
 
 /**
- * Semi-transparent modal backdrop + centered card with Title, body content,
- * and Cancel / Confirm buttons. Closes on:
- *   - Esc key
- *   - Backdrop click
- *   - Cancel button
+ * Semi-transparent modal backdrop + centered card with Title, body, and
+ * Cancel/Confirm buttons. Closes on Esc / backdrop click / Cancel. Locks
+ * body scroll while open.
  *
- * Locks body scroll while open. Used by TriggerDailyNowButton, RetryButton,
- * and the "Reset to default" flow in DailyPromptEditor.
+ * Design refs:
+ * - ui-design-system.md sec 3.3 (card + shadow), sec 4.2 (button hierarchy)
+ * - power design-guidelines.md sec 3.2 User Control
  */
 export function ConfirmModal({
   open,
@@ -52,14 +52,9 @@ export function ConfirmModal({
 
   if (!open) return null;
 
-  const confirmClass =
-    confirmVariant === 'danger'
-      ? 'bg-red-600 hover:bg-red-700 text-white'
-      : 'bg-[#ff9900] hover:bg-[#e88b00] text-white';
-
   return (
     <div
-      className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4"
+      className="fixed inset-0 z-40 flex items-center justify-center bg-foreground/40 px-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="confirm-modal-title"
@@ -68,30 +63,35 @@ export function ConfirmModal({
       }}
     >
       <div
-        className="w-full max-w-md rounded-lg border border-gray-200 bg-white p-6 shadow-xl"
+        className="w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-md"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 id="confirm-modal-title" className="text-lg font-semibold text-[#232f3e] mb-3">
+        <h2
+          id="confirm-modal-title"
+          className="mb-3 text-lg font-semibold text-foreground"
+        >
           {title}
         </h2>
-        <div className="text-sm text-gray-600">{body}</div>
+        <div className="text-sm leading-relaxed text-foreground-muted">
+          {body}
+        </div>
         <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="sm"
             onClick={onCancel}
             disabled={busy}
-            className="rounded border border-gray-300 px-3 py-1.5 text-sm font-medium text-[#232f3e] hover:bg-gray-50 disabled:opacity-50"
           >
             {cancelLabel}
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant={confirmVariant === 'danger' ? 'destructive' : 'default'}
+            size="sm"
             onClick={onConfirm}
             disabled={busy}
-            className={`rounded px-4 py-1.5 text-sm font-medium disabled:opacity-50 ${confirmClass}`}
           >
             {busy ? '...' : confirmLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

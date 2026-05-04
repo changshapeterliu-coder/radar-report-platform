@@ -2,13 +2,15 @@
 
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Play } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { Toast, type ToastState } from '@/components/ui/Toast';
 import { computeCoverageDate, toShanghai } from '@/lib/daily-alert/coverage-window';
 
 /**
  * Admin-only "Trigger Now" button with confirm modal. Computes the coverage
- * date client-side for display (the server recomputes authoritatively).
+ * date client-side for display (server recomputes authoritatively).
  * POST /api/admin/daily-alert-runs/trigger returns 202 on success, 409 when
  * a run is already in progress.
  */
@@ -39,10 +41,15 @@ export function TriggerDailyNowButton() {
       }
       if (res.status === 409) {
         setConfirmOpen(false);
-        setToast({ kind: 'error', text: t('alerts.trigger.alreadyInProgressToast') });
+        setToast({
+          kind: 'error',
+          text: t('alerts.trigger.alreadyInProgressToast'),
+        });
         return;
       }
-      const body = (await res.json().catch(() => ({}))) as { message?: string };
+      const body = (await res.json().catch(() => ({}))) as {
+        message?: string;
+      };
       setConfirmOpen(false);
       setToast({
         kind: 'error',
@@ -58,13 +65,10 @@ export function TriggerDailyNowButton() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setConfirmOpen(true)}
-        className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-[#232f3e] hover:border-[#ff9900] hover:text-[#ff9900]"
-      >
-        ▶ {t('alerts.trigger.button')}
-      </button>
+      <Button variant="outline" size="sm" onClick={() => setConfirmOpen(true)}>
+        <Play className="h-3.5 w-3.5" strokeWidth={2} />
+        {t('alerts.trigger.button')}
+      </Button>
 
       <ConfirmModal
         open={confirmOpen}

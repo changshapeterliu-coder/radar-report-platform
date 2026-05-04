@@ -1,6 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { CheckCircle2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
 
 type Cadence = 'weekly' | 'biweekly';
 type DayOfWeek =
@@ -44,17 +48,7 @@ const DAY_SHORT: Record<DayOfWeek, string> = {
   sunday: 'Sun',
 };
 
-/**
- * Get Asia/Shanghai wall-clock parts from a UTC instant.
- */
-function getShanghaiParts(utc: Date): {
-  year: number;
-  month: number;
-  day: number;
-  hour: number;
-  minute: number;
-  dowSun0: number; // 0=Sunday ... 6=Saturday
-} {
+function getShanghaiParts(utc: Date) {
   const fmt = new Intl.DateTimeFormat('en-US', {
     timeZone: 'Asia/Shanghai',
     hourCycle: 'h23',
@@ -69,7 +63,13 @@ function getShanghaiParts(utc: Date): {
   const get = (t: Intl.DateTimeFormatPartTypes) =>
     parts.find((p) => p.type === t)?.value ?? '';
   const wdMap: Record<string, number> = {
-    Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+    Sun: 0,
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
   };
   return {
     year: Number(get('year')),
@@ -81,18 +81,21 @@ function getShanghaiParts(utc: Date): {
   };
 }
 
-/**
- * Build the UTC instant for a given Asia/Shanghai wall-clock (Shanghai = UTC+8, no DST).
- */
-function shanghaiWallClockToUtc(y: number, m: number, d: number, hh: number, mm: number): Date {
+function shanghaiWallClockToUtc(
+  y: number,
+  m: number,
+  d: number,
+  hh: number,
+  mm: number
+): Date {
   return new Date(Date.UTC(y, m - 1, d, hh - 8, mm, 0));
 }
 
-/**
- * Compute the next Asia/Shanghai occurrence of the given day_of_week at time_of_day
- * that is strictly after "now". Returns a Date or null if inputs are invalid.
- */
-function computeNextRun(dayOfWeek: DayOfWeek, timeOfDay: string, now: Date = new Date()): Date | null {
+function computeNextRun(
+  dayOfWeek: DayOfWeek,
+  timeOfDay: string,
+  now: Date = new Date()
+): Date | null {
   if (!TIME_REGEX.test(timeOfDay)) return null;
   const [hhStr, mmStr] = timeOfDay.split(':');
   const hh = Number(hhStr);
@@ -102,20 +105,28 @@ function computeNextRun(dayOfWeek: DayOfWeek, timeOfDay: string, now: Date = new
   const targetDow = DAY_INDEX[dayOfWeek];
 
   let addDays = (targetDow - nowParts.dowSun0 + 7) % 7;
-  // If same weekday but target time already passed today, roll to next week.
   if (addDays === 0) {
-    const todayTarget = shanghaiWallClockToUtc(nowParts.year, nowParts.month, nowParts.day, hh, mm);
+    const todayTarget = shanghaiWallClockToUtc(
+      nowParts.year,
+      nowParts.month,
+      nowParts.day,
+      hh,
+      mm
+    );
     if (todayTarget.getTime() <= now.getTime()) {
       addDays = 7;
     }
   }
 
-  return shanghaiWallClockToUtc(nowParts.year, nowParts.month, nowParts.day + addDays, hh, mm);
+  return shanghaiWallClockToUtc(
+    nowParts.year,
+    nowParts.month,
+    nowParts.day + addDays,
+    hh,
+    mm
+  );
 }
 
-/**
- * Format a UTC Date as "Mon YYYY-MM-DD HH:MM Asia/Shanghai".
- */
 function formatNextRun(utc: Date, dayOfWeek: DayOfWeek): string {
   const p = getShanghaiParts(utc);
   const pad = (n: number) => (n < 10 ? `0${n}` : String(n));
@@ -152,7 +163,12 @@ export function ScheduleConfigForm({ domainId }: ScheduleConfigFormProps) {
         const json = await res.json();
         if (cancelled) return;
         const row = json?.data as
-          | { enabled: boolean; cadence: Cadence; day_of_week: DayOfWeek; time_of_day: string }
+          | {
+              enabled: boolean;
+              cadence: Cadence;
+              day_of_week: DayOfWeek;
+              time_of_day: string;
+            }
           | null;
         if (row) {
           setEnabled(Boolean(row.enabled));
@@ -219,41 +235,45 @@ export function ScheduleConfigForm({ domainId }: ScheduleConfigFormProps) {
   };
 
   if (loading) {
-    return <p className="text-sm text-gray-500">Loading schedule config...</p>;
+    return (
+      <p className="text-sm text-foreground-muted">Loading schedule config...</p>
+    );
   }
 
   return (
-    <div className="space-y-4">
-      <label className="flex items-center gap-2 text-sm text-[#232f3e]">
+    <div className="space-y-5">
+      <label className="flex items-center gap-2 text-sm text-foreground">
         <input
           type="checkbox"
           checked={enabled}
           onChange={(e) => setEnabled(e.target.checked)}
-          className="h-4 w-4"
+          className="h-4 w-4 rounded border-border-strong text-primary focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
         />
         Enable scheduled runs
       </label>
 
       <div>
-        <p className="text-sm font-medium text-gray-700 mb-2">Cadence</p>
+        <p className="mb-2 text-sm font-medium text-foreground">Cadence</p>
         <div className="flex gap-6">
-          <label className="flex items-center gap-2 text-sm text-[#232f3e]">
+          <label className="flex items-center gap-2 text-sm text-foreground">
             <input
               type="radio"
               name="cadence"
               value="weekly"
               checked={cadence === 'weekly'}
               onChange={() => setCadence('weekly')}
+              className="h-4 w-4 text-primary focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             />
             Weekly
           </label>
-          <label className="flex items-center gap-2 text-sm text-[#232f3e]">
+          <label className="flex items-center gap-2 text-sm text-foreground">
             <input
               type="radio"
               name="cadence"
               value="biweekly"
               checked={cadence === 'biweekly'}
               onChange={() => setCadence('biweekly')}
+              className="h-4 w-4 text-primary focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             />
             Biweekly
           </label>
@@ -261,61 +281,68 @@ export function ScheduleConfigForm({ domainId }: ScheduleConfigFormProps) {
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="day-of-week">
+        <label
+          htmlFor="day-of-week"
+          className="mb-1.5 block text-sm font-medium text-foreground"
+        >
           Day of Week
         </label>
-        <select
-          id="day-of-week"
-          value={dayOfWeek}
-          onChange={(e) => setDayOfWeek(e.target.value as DayOfWeek)}
-          className="rounded border border-gray-300 px-3 py-2 text-sm"
-        >
-          {DAY_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+        <div className="w-48">
+          <Select
+            id="day-of-week"
+            value={dayOfWeek}
+            onChange={(e) => setDayOfWeek(e.target.value as DayOfWeek)}
+          >
+            {DAY_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </Select>
+        </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="time-of-day">
+        <label
+          htmlFor="time-of-day"
+          className="mb-1.5 block text-sm font-medium text-foreground"
+        >
           Time of Day
         </label>
         <div className="flex items-center gap-2">
-          <input
+          <Input
             id="time-of-day"
             type="text"
             value={timeOfDay}
             onChange={(e) => setTimeOfDay(e.target.value)}
             placeholder="09:00"
-            className="w-24 rounded border border-gray-300 px-3 py-2 text-sm font-mono"
+            className="w-28 font-mono"
           />
-          <span className="text-sm text-gray-500">(Asia/Shanghai)</span>
+          <span className="text-sm text-foreground-muted">(Asia/Shanghai)</span>
         </div>
         {!timeValid && (
-          <p className="mt-1 text-xs text-red-600">
+          <p className="mt-1.5 text-xs text-danger-fg">
             Must be HH:MM (00:00–23:59).
           </p>
         )}
       </div>
 
       <div className="pt-2">
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={saving || !timeValid}
-          className="rounded bg-[#ff9900] px-4 py-2 text-sm font-medium text-white hover:bg-[#e88b00] disabled:opacity-50"
-        >
+        <Button onClick={handleSave} disabled={saving || !timeValid}>
           {saving ? 'Saving...' : 'Save Cadence'}
-        </button>
+        </Button>
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      {success && <p className="text-sm text-green-600">Saved ✓</p>}
+      {error && <p className="text-sm text-danger-fg">{error}</p>}
+      {success && (
+        <p className="flex items-center gap-1 text-sm text-success-fg">
+          <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+          Saved
+        </p>
+      )}
 
       {nextRunText && (
-        <p className="text-xs text-gray-500 pt-1">
+        <p className="pt-1 text-xs text-foreground-muted">
           Next scheduled run: {nextRunText}
         </p>
       )}

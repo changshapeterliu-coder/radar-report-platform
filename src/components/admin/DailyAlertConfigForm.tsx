@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Toast, type ToastState } from '@/components/ui/Toast';
 
 const TIME_REGEX = /^(0\d|1\d|2[0-3]):[0-5]\d$/;
@@ -32,7 +34,9 @@ export function DailyAlertConfigForm() {
     const load = async () => {
       setLoading(true);
       try {
-        const res = await fetch('/api/admin/daily-alert-configs', { cache: 'no-store' });
+        const res = await fetch('/api/admin/daily-alert-configs', {
+          cache: 'no-store',
+        });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const body = (await res.json()) as { data: ConfigRow | null };
         if (cancelled) return;
@@ -73,14 +77,22 @@ export function DailyAlertConfigForm() {
         }),
       });
       if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { message?: string };
+        const body = (await res.json().catch(() => ({}))) as {
+          message?: string;
+        };
         throw new Error(body.message || `HTTP ${res.status}`);
       }
-      setToast({ kind: 'success', text: t('adminDailyAlert.config.savedToast') });
+      setToast({
+        kind: 'success',
+        text: t('adminDailyAlert.config.savedToast'),
+      });
     } catch (e) {
       setToast({
         kind: 'error',
-        text: e instanceof Error ? e.message : t('adminDailyAlert.config.errorToast'),
+        text:
+          e instanceof Error
+            ? e.message
+            : t('adminDailyAlert.config.errorToast'),
       });
     } finally {
       setSaving(false);
@@ -88,17 +100,17 @@ export function DailyAlertConfigForm() {
   };
 
   if (loading) {
-    return <p className="text-sm text-gray-500">{t('common.loading')}</p>;
+    return <p className="text-sm text-foreground-muted">{t('common.loading')}</p>;
   }
 
   return (
-    <div className="space-y-4">
-      <label className="flex items-center gap-2 text-sm text-[#232f3e]">
+    <div className="space-y-5">
+      <label className="flex items-center gap-2 text-sm text-foreground">
         <input
           type="checkbox"
           checked={enabled}
           onChange={(e) => setEnabled(e.target.checked)}
-          className="h-4 w-4"
+          className="h-4 w-4 rounded border-border-strong text-primary focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
         />
         {t('adminDailyAlert.config.enabled')}
       </label>
@@ -106,23 +118,25 @@ export function DailyAlertConfigForm() {
       <div>
         <label
           htmlFor="daily-time-of-day"
-          className="block text-sm font-medium text-gray-700 mb-1"
+          className="mb-1.5 block text-sm font-medium text-foreground"
         >
           {t('adminDailyAlert.config.timeOfDay')}
         </label>
         <div className="flex items-center gap-2">
-          <input
+          <Input
             id="daily-time-of-day"
             type="text"
             value={timeOfDay}
             onChange={(e) => setTimeOfDay(e.target.value)}
             placeholder="06:00"
-            className="w-24 rounded border border-gray-300 px-3 py-2 text-sm font-mono focus:border-[#ff9900] focus:outline-none"
+            className="w-28 font-mono"
           />
-          <span className="text-sm text-gray-500">({PINNED_TIMEZONE})</span>
+          <span className="text-sm text-foreground-muted">
+            ({PINNED_TIMEZONE})
+          </span>
         </div>
         {!timeValid && (
-          <p className="mt-1 text-xs text-red-600">
+          <p className="mt-1.5 text-xs text-danger-fg">
             {t('adminDailyAlert.config.invalidTime')}
           </p>
         )}
@@ -131,27 +145,22 @@ export function DailyAlertConfigForm() {
       <div>
         <label
           htmlFor="daily-timezone"
-          className="block text-sm font-medium text-gray-700 mb-1"
+          className="mb-1.5 block text-sm font-medium text-foreground"
         >
           {t('adminDailyAlert.config.timezone')}
         </label>
-        <input
+        <Input
           id="daily-timezone"
           type="text"
           value={PINNED_TIMEZONE}
           disabled
-          className="w-48 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500"
+          className="w-48 bg-muted text-foreground-muted"
         />
       </div>
 
-      <button
-        type="button"
-        onClick={handleSave}
-        disabled={saving || !timeValid}
-        className="rounded bg-[#ff9900] px-4 py-2 text-sm font-medium text-white hover:bg-[#e88b00] disabled:opacity-50"
-      >
+      <Button onClick={handleSave} disabled={saving || !timeValid}>
         {saving ? '...' : t('adminDailyAlert.config.save')}
-      </button>
+      </Button>
 
       <Toast toast={toast} onDismiss={() => setToast(null)} />
     </div>
