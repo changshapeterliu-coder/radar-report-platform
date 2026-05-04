@@ -3,11 +3,13 @@
 import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 import { useTranslation } from 'react-i18next';
+import { AlertCircle } from 'lucide-react';
 import { computeCoverageDate, toShanghai } from '@/lib/daily-alert/coverage-window';
 import type { AlertsOverviewResponse } from '@/types/daily-alert';
 import { SevenDayOverviewTable } from '@/components/alerts/SevenDayOverviewTable';
 import { DayDetailPane } from '@/components/alerts/DayDetailPane';
 import { PageShiftControls } from '@/components/alerts/PageShiftControls';
+import { Button } from '@/components/ui/button';
 
 async function fetcher(url: string): Promise<AlertsOverviewResponse> {
   const res = await fetch(url);
@@ -22,13 +24,15 @@ async function fetcher(url: string): Promise<AlertsOverviewResponse> {
 /**
  * /alerts — master-detail page for the daily hot-topic alert ledger.
  *
- * Top half: 7-day overview table (keyboard-navigable). Bottom half: detail
- * pane for the selected day, which re-renders in place on row selection
- * (no route change — Requirement 8.2).
+ * Design refs:
+ * - ui-design-system.md sec 9.1 (page header — controls belong in the header's
+ *   right slot, not between the table and the detail pane — this fixes
+ *   anti-pattern 9)
+ * - power design-guidelines.md sec 3.12 Clear Affordances, sec 5.11 Landmarks
  *
+ * Top: 7-day overview table (keyboard-navigable). Bottom: detail pane that
+ * re-renders in place on row selection (no route change).
  * Default selection on first render AND after every window shift = newest row.
- *
- * Spec: Requirements 8.1–8.11.
  */
 export default function AlertsPage() {
   const { t, i18n } = useTranslation();
@@ -62,20 +66,34 @@ export default function AlertsPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold text-[#232f3e]">{t('alerts.title')}</h1>
+      {/* Page header with inline date-window controls (ui-design-system sec 9.1).
+          Controls belong next to their data (addresses anti-pattern 9: no more
+          sandwiching navigation between the table and the detail pane). */}
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground">
+            {t('alerts.title')}
+          </h1>
+        </div>
+        <PageShiftControls
+          windowEndDate={windowEndDate}
+          onShift={handleWindowShift}
+        />
       </header>
 
       {error ? (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
-          <p className="text-sm text-red-700 mb-3">{t('alerts.errorLoading')}</p>
-          <button
-            type="button"
-            onClick={() => void mutate()}
-            className="rounded border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100"
-          >
+        <div className="rounded-lg border border-danger/20 bg-danger-bg p-6 text-center">
+          <AlertCircle
+            className="mx-auto mb-2 h-8 w-8 text-danger"
+            strokeWidth={1.75}
+            aria-hidden
+          />
+          <p className="mb-4 text-sm text-danger-fg">
+            {t('alerts.errorLoading')}
+          </p>
+          <Button variant="outline" size="sm" onClick={() => void mutate()}>
             {t('alerts.retry')}
-          </button>
+          </Button>
         </div>
       ) : (
         <>
@@ -86,8 +104,6 @@ export default function AlertsPage() {
             lang={lang}
             loading={isLoading}
           />
-
-          <PageShiftControls windowEndDate={windowEndDate} onShift={handleWindowShift} />
 
           {selectedDate && (
             <section aria-label="Day detail" className="mt-2">

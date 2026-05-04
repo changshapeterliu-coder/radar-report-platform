@@ -17,10 +17,13 @@ export interface TopicPreviewListProps {
 /**
  * Pill-shaped list of the day's top topic names, inline NoveltyBadge when
  * the canonical class is first-seen. Used in the Top-Topic Preview cell.
+ *
+ * Pills use design tokens (muted/border) so they render the same way on
+ * any background the parent provides.
  */
 export function TopicPreviewList({ topics, lang }: TopicPreviewListProps) {
   if (!topics || topics.length === 0) {
-    return <span className="text-gray-400">—</span>;
+    return <span className="text-foreground-subtle">-</span>;
   }
   return (
     <ul className="flex flex-wrap gap-1.5">
@@ -29,9 +32,12 @@ export function TopicPreviewList({ topics, lang }: TopicPreviewListProps) {
         return (
           <li
             key={idx}
-            className="inline-flex items-center gap-0.5 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-0.5 text-xs"
+            className="inline-flex items-center gap-0.5 rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs text-foreground-muted"
           >
-            <span className="truncate max-w-[180px] sm:max-w-[240px]" title={name.text}>
+            <span
+              className="max-w-[180px] truncate sm:max-w-[240px]"
+              title={name.text}
+            >
               {name.text}
             </span>
             {topic.is_new_canonical && <NoveltyBadge />}

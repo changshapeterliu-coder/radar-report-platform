@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Badge } from '@/components/ui/badge';
+import { Spinner } from '@/components/ui/spinner';
+import { cn } from '@/lib/utils';
 import type { AlertsOverviewResponse } from '@/types/daily-alert';
 import { TopicPreviewList } from './TopicPreviewList';
 
@@ -28,32 +31,30 @@ const WEEKDAY_KEYS: readonly WeekdayKey[] = [
 
 function StatusChip({ status }: { status: OverviewRow['status'] }) {
   const { t } = useTranslation();
-  const classes =
+  const variant: 'success' | 'danger' | 'default' =
     status === 'published'
-      ? 'bg-green-100 text-green-800 border-green-200'
+      ? 'success'
       : status === 'failed'
-        ? 'bg-red-100 text-red-800 border-red-200'
-        : 'bg-gray-100 text-gray-600 border-gray-200';
+        ? 'danger'
+        : 'default';
   const label =
     status === 'published'
       ? t('alerts.status.published')
       : status === 'failed'
         ? t('alerts.status.failed')
         : t('alerts.status.noRun');
-  return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${classes}`}
-    >
-      {label}
-    </span>
-  );
+  return <Badge variant={variant}>{label}</Badge>;
 }
 
 /**
  * 7-day overview table with keyboard navigation:
- *   ArrowUp / ArrowDown — move selection up / down
- *   Home / End          — jump to first / last row
- *   Enter / Space       — select the focused row (also fires on click)
+ *   ArrowUp / ArrowDown - move selection up / down
+ *   Home / End          - jump to first / last row
+ *   Enter / Space       - select the focused row (also fires on click)
+ *
+ * Design refs:
+ * - ui-design-system.md sec 1.3 (semantic tokens for status)
+ * - power design-guidelines.md sec 3.12 Clear Affordances
  *
  * Responsive: collapses the Top-Topic Preview column to `hidden sm:table-cell`
  * on small screens; mobile layout shows a single combined pill list under
@@ -79,8 +80,6 @@ export function SevenDayOverviewTable({
   useEffect(() => {
     if (selectedIdx >= 0) {
       const el = rowRefs.current[selectedIdx];
-      // Only move focus if the user is already navigating with keyboard
-      // (a row is already in focus). Avoids stealing focus on every state change.
       if (el && document.activeElement instanceof HTMLTableRowElement) {
         el.focus();
       }
@@ -123,40 +122,54 @@ export function SevenDayOverviewTable({
 
   if (loading && overview.length === 0) {
     return (
-      <div className="rounded-lg border border-gray-200 bg-white p-8 text-center">
-        <div className="inline-block h-6 w-6 animate-spin rounded-full border-4 border-[#ff9900] border-r-transparent" />
-        <p className="mt-3 text-sm text-gray-500">{t('alerts.loading')}</p>
+      <div className="rounded-lg border border-border bg-card p-8 text-center">
+        <Spinner size="md" />
+        <p className="mt-3 text-sm text-foreground-muted">
+          {t('alerts.loading')}
+        </p>
       </div>
     );
   }
 
   if (overview.length === 0) {
     return (
-      <div className="rounded-lg border border-gray-200 bg-white p-8 text-center">
-        <p className="text-sm text-gray-500">{t('common.noData')}</p>
+      <div className="rounded-lg border border-border bg-card p-8 text-center">
+        <p className="text-sm text-foreground-muted">{t('common.noData')}</p>
       </div>
     );
   }
 
   return (
     <div
-      className="overflow-x-auto rounded-lg border border-gray-200 bg-white"
+      className="overflow-x-auto rounded-lg border border-border bg-card"
       role="region"
       aria-label={t('alerts.title')}
     >
       <table className="w-full border-collapse" role="grid">
         <thead>
-          <tr className="border-b border-gray-200 bg-gray-50">
-            <th className="px-4 py-3 text-left text-xs font-semibold text-[#232f3e] uppercase tracking-wide">
+          <tr className="border-b border-border bg-muted/40">
+            <th
+              scope="col"
+              className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-foreground-muted"
+            >
               {t('alerts.overview.headers.date')}
             </th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-[#232f3e] uppercase tracking-wide">
+            <th
+              scope="col"
+              className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-foreground-muted"
+            >
               {t('alerts.overview.headers.status')}
             </th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-[#232f3e] uppercase tracking-wide">
+            <th
+              scope="col"
+              className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-foreground-muted"
+            >
               {t('alerts.overview.headers.topicCount')}
             </th>
-            <th className="hidden sm:table-cell px-4 py-3 text-left text-xs font-semibold text-[#232f3e] uppercase tracking-wide">
+            <th
+              scope="col"
+              className="hidden px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-foreground-muted sm:table-cell"
+            >
               {t('alerts.overview.headers.preview')}
             </th>
           </tr>
@@ -181,28 +194,40 @@ export function SevenDayOverviewTable({
                 tabIndex={selected ? 0 : -1}
                 onClick={() => onSelect(row.date)}
                 onKeyDown={(e) => handleKeyDown(e, idx)}
-                className={`cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors outline-none ${
+                className={cn(
+                  'cursor-pointer border-b border-border last:border-b-0 outline-none transition-colors',
+                  'focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset',
                   selected
-                    ? 'bg-blue-50 border-l-4 border-l-[#146eb4]'
-                    : 'hover:bg-gray-50 border-l-4 border-l-transparent'
-                } focus-visible:ring-2 focus-visible:ring-[#146eb4] focus-visible:ring-inset`}
+                    ? 'border-l-2 border-l-primary bg-primary-soft/40'
+                    : 'border-l-2 border-l-transparent hover:bg-muted/40'
+                )}
               >
                 <td className="px-4 py-3 text-sm">
-                  <div className="font-mono font-medium text-[#232f3e]">{row.date}</div>
-                  <div className="text-xs text-gray-500">{weekdayLabel}</div>
+                  <div className="font-mono font-medium text-foreground">
+                    {row.date}
+                  </div>
+                  <div className="text-xs text-foreground-muted">
+                    {weekdayLabel}
+                  </div>
                   {/* Mobile-only topic pills (overview column is hidden on sm:) */}
-                  <div className="sm:hidden mt-2">
-                    <TopicPreviewList topics={row.top_topic_preview} lang={lang} />
+                  <div className="mt-2 sm:hidden">
+                    <TopicPreviewList
+                      topics={row.top_topic_preview}
+                      lang={lang}
+                    />
                   </div>
                 </td>
                 <td className="px-4 py-3 text-sm">
                   <StatusChip status={row.status} />
                 </td>
-                <td className="px-4 py-3 text-sm text-gray-700 font-mono">
-                  {row.topic_count == null ? '—' : row.topic_count}
+                <td className="px-4 py-3 font-mono text-sm text-foreground-muted">
+                  {row.topic_count == null ? '-' : row.topic_count}
                 </td>
-                <td className="hidden sm:table-cell px-4 py-3 text-sm">
-                  <TopicPreviewList topics={row.top_topic_preview} lang={lang} />
+                <td className="hidden px-4 py-3 text-sm sm:table-cell">
+                  <TopicPreviewList
+                    topics={row.top_topic_preview}
+                    lang={lang}
+                  />
                 </td>
               </tr>
             );

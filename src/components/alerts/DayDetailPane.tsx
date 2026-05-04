@@ -2,6 +2,8 @@
 
 import useSWR from 'swr';
 import { useTranslation } from 'react-i18next';
+import { AlertCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import type { DayDetailResponse } from '@/types/daily-alert';
 import { TopicCard } from './TopicCard';
 import { NoRunPlaceholder } from './NoRunPlaceholder';
@@ -28,16 +30,16 @@ function SkeletonPane() {
       {[0, 1, 2].map((i) => (
         <div
           key={i}
-          className="rounded-lg border border-gray-200 bg-white p-5 animate-pulse"
+          className="animate-pulse rounded-lg border border-border bg-card p-5"
         >
-          <div className="flex items-center gap-3 mb-4">
-            <div className="h-8 w-8 rounded-full bg-gray-200" />
-            <div className="h-4 w-2/3 rounded bg-gray-200" />
+          <div className="mb-4 flex items-center gap-3">
+            <div className="h-8 w-8 rounded-full bg-muted" />
+            <div className="h-4 w-2/3 rounded bg-muted" />
           </div>
           <div className="space-y-2">
-            <div className="h-3 w-full rounded bg-gray-100" />
-            <div className="h-3 w-5/6 rounded bg-gray-100" />
-            <div className="h-3 w-4/6 rounded bg-gray-100" />
+            <div className="h-3 w-full rounded bg-muted/70" />
+            <div className="h-3 w-5/6 rounded bg-muted/70" />
+            <div className="h-3 w-4/6 rounded bg-muted/70" />
           </div>
         </div>
       ))}
@@ -50,9 +52,9 @@ function SkeletonPane() {
  * so that switching days remounts and the SWR cache key is fresh.
  *
  * Branches on response `kind`:
- *   - 'no-run'     → NoRunPlaceholder
- *   - 'empty-day'  → EmptyDayDisplay
- *   - 'published'  → topics.map(TopicCard)
+ *   - 'no-run'     -> NoRunPlaceholder
+ *   - 'empty-day'  -> EmptyDayDisplay
+ *   - 'published'  -> topics.map(TopicCard)
  */
 export function DayDetailPane({ date, lang }: DayDetailPaneProps) {
   const { t } = useTranslation();
@@ -66,15 +68,21 @@ export function DayDetailPane({ date, lang }: DayDetailPaneProps) {
 
   if (error) {
     return (
-      <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
-        <p className="text-sm text-red-700 mb-3">{t('alerts.errorLoading')}</p>
-        <button
+      <div className="rounded-lg border border-danger/20 bg-danger-bg p-6 text-center">
+        <AlertCircle
+          className="mx-auto mb-2 h-8 w-8 text-danger"
+          strokeWidth={1.75}
+          aria-hidden
+        />
+        <p className="mb-3 text-sm text-danger-fg">{t('alerts.errorLoading')}</p>
+        <Button
+          variant="outline"
+          size="sm"
           type="button"
           onClick={() => void mutate()}
-          className="rounded border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100"
         >
           {t('alerts.retry')}
-        </button>
+        </Button>
       </div>
     );
   }
@@ -82,7 +90,8 @@ export function DayDetailPane({ date, lang }: DayDetailPaneProps) {
   if (!data) return null;
 
   if (data.kind === 'no-run') return <NoRunPlaceholder date={date} />;
-  if (data.kind === 'empty-day') return <EmptyDayDisplay alert={data.alert} lang={lang} />;
+  if (data.kind === 'empty-day')
+    return <EmptyDayDisplay alert={data.alert} lang={lang} />;
 
   return (
     <section className="space-y-4">

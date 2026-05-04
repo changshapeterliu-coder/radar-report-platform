@@ -2,8 +2,10 @@
 
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Flame } from 'lucide-react';
 import { useRole } from '@/hooks/useRole';
 import { resolveText } from '@/lib/daily-alert/i18n-fallback';
+import { Button } from '@/components/ui/button';
 import type { DailyHotTopicFull } from '@/types/daily-alert';
 import { NoveltyBadge } from './NoveltyBadge';
 import { FallbackIndicator } from './FallbackIndicator';
@@ -17,20 +19,28 @@ export interface TopicCardProps {
 }
 
 /**
- * Renders a single Daily_Hot_Topic. Per Requirement 8.7 the layout is:
+ * Daily_Hot_Topic card.
+ *
+ * Design refs:
+ * - ui-design-system.md sec 3.3 (card conventions), sec 4.4 (no emoji in chrome)
+ * - power design-guidelines.md sec 5.2 Information Hierarchy, sec 5.3 Scannability
+ *
+ * Layout per Requirement 8.7:
  *   rank + topic_name (+ NoveltyBadge if is_new_canonical)
  *   CanonicalClassLine
- *   hot_score chip
+ *   hot_score chip (Flame icon — migrated from emoji)
  *   keywords (inline, comma-separated)
- *   summary (language-resolved, with (Chinese original) indicator if fallen back)
+ *   summary (language-resolved)
  *   sample_quotes (2-3 blockquotes)
  *   source_links (3-10 external links)
- *   admin-only: "Re-translate topic" button (gated by useRole().isAdmin)
+ *   admin-only: "Re-translate topic" button
  */
 export function TopicCard({ topic, lang }: TopicCardProps) {
   const { t } = useTranslation();
   const { isAdmin } = useRole();
-  const [retranslating, setRetranslating] = useState<null | 'pending' | 'success' | 'error'>(null);
+  const [retranslating, setRetranslating] = useState<
+    null | 'pending' | 'success' | 'error'
+  >(null);
 
   const name = resolveText(topic.topic_name_zh, topic.topic_name_en, lang);
   const summary = resolveText(topic.summary_zh, topic.summary_en, lang);
@@ -55,29 +65,30 @@ export function TopicCard({ topic, lang }: TopicCardProps) {
   };
 
   return (
-    <article className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+    <article className="rounded-lg border border-border bg-card p-5 shadow-sm">
       {/* Header: rank + topic_name + NoveltyBadge */}
       <header className="mb-3 flex items-start justify-between gap-3">
-        <div className="flex items-start gap-3 min-w-0 flex-1">
+        <div className="flex min-w-0 flex-1 items-start gap-3">
           <span
-            className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[#232f3e] text-sm font-bold text-white"
+            className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-foreground text-sm font-semibold text-background"
             aria-label={`${t('alerts.topic.rank')} ${topic.rank}`}
           >
             {topic.rank}
           </span>
-          <h3 className="text-base font-semibold text-[#232f3e] leading-snug min-w-0">
+          <h3 className="min-w-0 text-base font-semibold leading-snug text-foreground">
             <span className="break-words">{name.text}</span>
             {name.needsFallbackIndicator && <FallbackIndicator />}
             {topic.is_new_canonical && <NoveltyBadge />}
           </h3>
         </div>
 
-        {/* Hot score chip */}
+        {/* Hot score chip (Flame icon replaces emoji) */}
         <span
-          className="inline-flex flex-shrink-0 items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-xs font-medium text-orange-700"
+          className="inline-flex flex-shrink-0 items-center gap-1 rounded-full border border-primary/20 bg-primary-soft px-2.5 py-0.5 text-xs font-medium text-primary"
           aria-label={t('alerts.topic.hotScore')}
         >
-          🔥 {topic.hot_score}
+          <Flame className="h-3 w-3" strokeWidth={2} aria-hidden />
+          {topic.hot_score}
         </span>
       </header>
 
@@ -89,19 +100,19 @@ export function TopicCard({ topic, lang }: TopicCardProps) {
       {/* Keywords */}
       {topic.keywords.length > 0 && (
         <div className="mb-3 text-sm">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide mr-2">
+          <span className="mr-2 text-xs font-semibold uppercase tracking-wide text-foreground-muted">
             {t('alerts.topic.keywords')}
           </span>
-          <span className="text-gray-700">{topic.keywords.join('、')}</span>
+          <span className="text-foreground">{topic.keywords.join('、')}</span>
         </div>
       )}
 
       {/* Summary */}
       <div className="mb-4 text-sm">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-foreground-muted">
           {t('alerts.topic.summary')}
         </p>
-        <p className="text-gray-700 leading-relaxed">
+        <p className="leading-relaxed text-foreground">
           {summary.text}
           {summary.needsFallbackIndicator && <FallbackIndicator />}
         </p>
@@ -110,7 +121,7 @@ export function TopicCard({ topic, lang }: TopicCardProps) {
       {/* Sample quotes */}
       {topic.sample_quotes.length > 0 && (
         <div className="mb-4">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-foreground-muted">
             {t('alerts.topic.sampleQuotes')}
           </p>
           <div className="space-y-2">
@@ -123,7 +134,7 @@ export function TopicCard({ topic, lang }: TopicCardProps) {
 
       {/* Source links */}
       <div className={isAdmin ? 'mb-4' : ''}>
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-foreground-muted">
           {t('alerts.topic.sourceLinks')}
         </p>
         <SourceLinkList links={topic.source_links} />
@@ -131,22 +142,25 @@ export function TopicCard({ topic, lang }: TopicCardProps) {
 
       {/* Admin actions */}
       {isAdmin && (
-        <div className="mt-4 flex items-center gap-3 border-t border-gray-100 pt-3">
-          <button
+        <div className="mt-4 flex items-center gap-3 border-t border-border pt-3">
+          <Button
+            variant="outline"
+            size="sm"
             type="button"
             onClick={handleReTranslate}
             disabled={retranslating === 'pending'}
-            className="rounded border border-[#146eb4] px-3 py-1 text-xs font-medium text-[#146eb4] hover:bg-blue-50 disabled:opacity-50"
           >
-            {retranslating === 'pending' ? '...' : t('alerts.topic.reTranslate')}
-          </button>
+            {retranslating === 'pending' ? '…' : t('alerts.topic.reTranslate')}
+          </Button>
           {retranslating === 'success' && (
-            <span className="text-xs text-green-600">
+            <span className="text-xs text-success-fg">
               {t('alerts.topic.reTranslateSuccess')}
             </span>
           )}
           {retranslating === 'error' && (
-            <span className="text-xs text-red-600">{t('alerts.topic.reTranslateError')}</span>
+            <span className="text-xs text-danger-fg">
+              {t('alerts.topic.reTranslateError')}
+            </span>
           )}
         </div>
       )}
