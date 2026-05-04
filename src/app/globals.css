@@ -1,33 +1,167 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+
+/* ========================================================================
+   Design Tokens
+   See .kiro/steering/ui-design-system.md for authoritative definitions.
+   Contract: these tokens are the single source of truth for color. Raw hex
+   in component className is an anti-pattern.
+   ======================================================================== */
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* ── Neutrals (foundation — 90% of UI) ─────────────────── */
+  --background: #fafafa;
+  --foreground: #0a0a0a;
+  --card: #ffffff;
+  --card-foreground: #0a0a0a;
+  --popover: #ffffff;
+  --popover-foreground: #0a0a0a;
+
+  --border: #e5e7eb;
+  --border-strong: #d1d5db;
+  --muted: #f3f4f6;
+  --muted-foreground: #6b7280;
+  --foreground-muted: #6b7280;
+  --foreground-subtle: #9ca3af;
+
+  /* ── Primary accent (Amazon orange, restricted use) ────── */
+  --primary: #ff9900;
+  --primary-foreground: #ffffff;
+  --primary-soft: #fff4e5;
+
+  /* ── Secondary (used for tonal contrast in shadcn components) ── */
+  --secondary: #f3f4f6;
+  --secondary-foreground: #0a0a0a;
+  --accent: #f3f4f6;
+  --accent-foreground: #0a0a0a;
+
+  /* ── Semantic (severity + status) ──────────────────────── */
+  --info: #146eb4;
+  --info-bg: #eff6ff;
+  --info-fg: #1e40af;
+
+  --success: #10b981;
+  --success-bg: #ecfdf5;
+  --success-fg: #047857;
+
+  --warning: #f59e0b;
+  --warning-bg: #fffbeb;
+  --warning-fg: #b45309;
+
+  --danger: #dc2626;
+  --danger-bg: #fef2f2;
+  --danger-fg: #991b1b;
+
+  /* Aliases for shadcn component naming (it uses `destructive`, not `danger`) */
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+
+  /* ── Interaction states ────────────────────────────────── */
+  --input: #e5e7eb;
+  --ring: #ff9900; /* focus ring color — matches primary */
+
+  /* ── Chart palette (order defined in ui-design-system.md §1.4) ── */
+  --chart-1: #ff9900;
+  --chart-2: #146eb4;
+  --chart-3: #374151;
+  --chart-4: #10b981;
+  --chart-5: #8b5cf6;
+  --chart-6: #06b6d4;
+  --chart-7: #d97706;
+
+  /* ── Radius (shadcn expects this exact token) ──────────── */
+  --radius: 0.5rem; /* 8px — "rounded-lg" in our design system */
 }
+
+/* ========================================================================
+   Tailwind v4 theme bridge
+   Maps our CSS variables into Tailwind's utility-class namespace so that
+   `bg-background`, `text-foreground-muted`, `border-border` all work as
+   first-class Tailwind classes consuming the tokens above.
+   ======================================================================== */
 
 @theme inline {
+  /* Neutrals */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-foreground-subtle: var(--foreground-subtle);
+
+  /* Accent */
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-soft: var(--primary-soft);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  /* Semantic */
+  --color-info: var(--info);
+  --color-info-bg: var(--info-bg);
+  --color-info-fg: var(--info-fg);
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+  --color-success-fg: var(--success-fg);
+  --color-warning: var(--warning);
+  --color-warning-bg: var(--warning-bg);
+  --color-warning-fg: var(--warning-fg);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-danger-fg: var(--danger-fg);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  /* Interaction */
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Charts */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+  --color-chart-7: var(--chart-7);
+
+  /* Radius scale — shadcn components read these */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* Font family — bilingual stack from ui-design-system.md §2.1 */
+  --font-sans:
+    "Inter", "PingFang SC", "Microsoft YaHei", "微软雅黑", system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/* ========================================================================
+   Base styles
+   ======================================================================== */
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: "Microsoft YaHei", "微软雅黑", "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ─── Utility: line-clamp ─── */
+/* ========================================================================
+   Utilities retained from previous globals.css
+   ======================================================================== */
+
+/* Line clamping (Tailwind v4 line-clamp plugin not enabled by default) */
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -42,9 +176,11 @@ body {
   overflow: hidden;
 }
 
-/* ─── Print-specific styles for PDF export ─── */
+/* ========================================================================
+   Print styles for PDF export of report pages
+   ======================================================================== */
+
 @media print {
-  /* Hide navigation, buttons, and interactive elements */
   nav,
   .no-print,
   button:not(.print-keep),
@@ -52,7 +188,6 @@ body {
     display: none !important;
   }
 
-  /* Reset background and ensure clean rendering */
   body {
     background: white !important;
     color: black !important;
@@ -60,19 +195,16 @@ body {
     print-color-adjust: exact;
   }
 
-  /* Remove sticky positioning for header during print */
   header {
     position: relative !important;
   }
 
-  /* Ensure content fills the page */
   main {
     padding: 0 !important;
     margin: 0 !important;
     max-width: 100% !important;
   }
 
-  /* Page break control */
   .page-break-before {
     page-break-before: always;
   }
@@ -81,13 +213,12 @@ body {
     page-break-after: always;
   }
 
-  /* Avoid breaking inside cards/sections */
   .bg-white,
+  .bg-card,
   [class*="rounded-lg"] {
     page-break-inside: avoid;
   }
 
-  /* Ensure tables and charts print properly */
   table {
     page-break-inside: auto;
   }
