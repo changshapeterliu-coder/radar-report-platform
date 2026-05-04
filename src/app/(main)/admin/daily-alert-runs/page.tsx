@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
+import { ArrowLeft } from 'lucide-react';
 import { AdminGuard } from '@/components/AdminGuard';
 import { DailyAlertRunsTable } from '@/components/admin/DailyAlertRunsTable';
 
@@ -9,14 +10,15 @@ export default function DailyAlertRunsPage() {
   const { t } = useTranslation();
   return (
     <AdminGuard>
-      <div className="max-w-[1200px] mx-auto">
+      <div className="mx-auto max-w-[1200px]">
         <Link
           href="/admin"
-          className="mb-4 inline-block text-sm text-[#146eb4] hover:underline"
+          className="mb-4 inline-flex items-center gap-1 text-sm text-info hover:underline"
         >
-          ← {t('common.back')}
+          <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
+          {t('common.back')}
         </Link>
-        <h1 className="text-2xl font-bold text-[#232f3e] mb-6">
+        <h1 className="mb-8 text-2xl font-semibold text-foreground">
           {t('adminDailyAlert.runsTitle')}
         </h1>
         <DailyAlertRunsTable />

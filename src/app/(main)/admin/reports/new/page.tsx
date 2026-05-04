@@ -1,13 +1,17 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
+import { ArrowLeft, AlertCircle, Sparkles } from 'lucide-react';
 import { AdminGuard } from '@/components/AdminGuard';
 import { useDomain } from '@/contexts/DomainContext';
-import { useAuth } from '@/hooks/useAuth';
 import ContentEditor from '@/components/admin/ContentEditor';
 import { validateReportContent } from '@/lib/validators/content-validator';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 import type { ReportContent } from '@/types/report';
 
 const defaultContent: ReportContent = {
@@ -16,7 +20,12 @@ const defaultContent: ReportContent = {
   modules: [
     {
       title: '',
-      tables: [{ headers: ['Column 1', 'Column 2'], rows: [{ cells: [{ text: '' }, { text: '' }] }] }],
+      tables: [
+        {
+          headers: ['Column 1', 'Column 2'],
+          rows: [{ cells: [{ text: '' }, { text: '' }] }],
+        },
+      ],
       analysisSections: [{ title: '', quotes: [], keyPoints: [] }],
       highlightBoxes: [],
     },
@@ -27,7 +36,6 @@ export default function CreateReportPage() {
   const { t } = useTranslation();
   const router = useRouter();
   const { currentDomainId, domains } = useDomain();
-  const { user } = useAuth();
 
   const [title, setTitle] = useState('');
   const [type, setType] = useState<'regular' | 'topic'>('regular');
@@ -35,17 +43,16 @@ export default function CreateReportPage() {
   const [weekLabel, setWeekLabel] = useState('');
   const [domainId, setDomainId] = useState(currentDomainId ?? '');
 
-  // Sync domainId when currentDomainId loads
   useEffect(() => {
     if (currentDomainId && !domainId) {
       setDomainId(currentDomainId);
     }
   }, [currentDomainId, domainId]);
+
   const [content, setContent] = useState<ReportContent>(defaultContent);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
 
-  // AI Format state
   const [aiRawText, setAiRawText] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState('');
@@ -65,10 +72,8 @@ export default function CreateReportPage() {
         setAiError(data.error || 'AI formatting failed');
         return;
       }
-      // Fill metadata
       if (data.title) setTitle(data.title);
       if (data.dateRange) setDateRange(data.dateRange);
-      // Fill content
       setContent(data as ReportContent);
       setAiRawText('');
     } catch {
@@ -136,92 +141,153 @@ export default function CreateReportPage() {
   return (
     <AdminGuard>
       <div>
-        <button onClick={() => router.back()} className="mb-4 text-sm text-[#146eb4] hover:underline">
-          ← {t('common.back')}
-        </button>
-        <h1 className="text-2xl font-bold text-[#232f3e] mb-6">{t('admin.createReport')}</h1>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="mb-4 -ml-2"
+          onClick={() => router.back()}
+        >
+          <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
+          {t('common.back')}
+        </Button>
+        <h1 className="mb-8 text-2xl font-semibold text-foreground">
+          {t('admin.createReport')}
+        </h1>
 
         {/* AI Format — paste entire report */}
-        <div className="mb-6 rounded-lg border-2 border-dashed border-[#ff9900] bg-orange-50 p-4">
-          <h3 className="text-sm font-bold text-[#232f3e] mb-2">🤖 AI Format — 智能填充整份报告</h3>
-          <p className="text-xs text-gray-500 mb-2">
-            Paste the entire raw report text. AI will extract the title, date range, and all content modules automatically.
+        <div className="mb-6 rounded-lg border border-primary/30 bg-primary-soft/30 p-5">
+          <div className="mb-2 flex items-center gap-2">
+            <Sparkles
+              className="h-4 w-4 text-primary"
+              strokeWidth={2}
+              aria-hidden
+            />
+            <h3 className="text-sm font-semibold text-foreground">
+              AI Format — auto-fill entire report
+            </h3>
+          </div>
+          <p className="mb-3 text-xs text-foreground-muted">
+            Paste the entire raw report text. AI will extract the title,
+            date range, and all content modules automatically.
           </p>
           <textarea
             value={aiRawText}
             onChange={(e) => setAiRawText(e.target.value)}
             rows={6}
-            className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-[#ff9900] focus:outline-none"
-            placeholder="Paste full report text here (Chinese or English)…&#10;&#10;AI will extract title, date range, and structure all content modules."
+            className={cn(
+              'flex w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground placeholder:text-foreground-subtle',
+              'transition-colors resize-y',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:border-border-strong'
+            )}
+            placeholder="Paste full report text here (Chinese or English)..."
           />
-          {aiError && <p className="text-xs text-red-600 mt-1">{aiError}</p>}
-          <button
-            onClick={handleAiFormat}
-            disabled={aiLoading || !aiRawText.trim()}
-            className="mt-2 rounded bg-[#ff9900] px-4 py-2 text-sm font-medium text-white hover:bg-[#e88b00] disabled:opacity-50"
-          >
-            {aiLoading ? 'AI Processing…' : '🤖 AI 智能格式化'}
-          </button>
+          {aiError && (
+            <p className="mt-1 text-xs text-danger-fg">{aiError}</p>
+          )}
+          <div className="mt-3">
+            <Button
+              onClick={handleAiFormat}
+              disabled={aiLoading || !aiRawText.trim()}
+              size="sm"
+            >
+              <Sparkles className="h-4 w-4" strokeWidth={2} />
+              {aiLoading ? 'Processing...' : 'Format with AI'}
+            </Button>
+          </div>
         </div>
 
         {errors.length > 0 && (
-          <div className="mb-4 rounded border border-red-300 bg-red-50 p-3">
-            {errors.map((e, i) => (
-              <p key={i} className="text-sm text-red-600">{e}</p>
-            ))}
+          <div className="mb-4 flex items-start gap-2 rounded-md border border-danger/20 bg-danger-bg px-3 py-2.5 text-sm text-danger-fg">
+            <AlertCircle
+              className="mt-0.5 h-4 w-4 flex-shrink-0"
+              strokeWidth={1.75}
+              aria-hidden
+            />
+            <div className="space-y-1">
+              {errors.map((e, i) => (
+                <p key={i}>{e}</p>
+              ))}
+            </div>
           </div>
         )}
 
         {/* Metadata */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+        <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
-            <input
+            <label
+              htmlFor="title"
+              className="mb-1.5 block text-sm font-medium text-foreground"
+            >
+              Title
+            </label>
+            <Input
+              id="title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-[#ff9900] focus:outline-none"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
-            <select
+            <label
+              htmlFor="type"
+              className="mb-1.5 block text-sm font-medium text-foreground"
+            >
+              Type
+            </label>
+            <Select
+              id="type"
               value={type}
               onChange={(e) => setType(e.target.value as 'regular' | 'topic')}
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
             >
               <option value="regular">{t('reports.filterRegular')}</option>
               <option value="topic">{t('reports.filterTopic')}</option>
-            </select>
+            </Select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Date Range</label>
-            <input
+            <label
+              htmlFor="dateRange"
+              className="mb-1.5 block text-sm font-medium text-foreground"
+            >
+              Date Range
+            </label>
+            <Input
+              id="dateRange"
               value={dateRange}
               onChange={(e) => setDateRange(e.target.value)}
               placeholder="e.g. 2025-01-01 ~ 2025-01-15"
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-[#ff9900] focus:outline-none"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Week Label</label>
-            <input
+            <label
+              htmlFor="weekLabel"
+              className="mb-1.5 block text-sm font-medium text-foreground"
+            >
+              Week Label
+            </label>
+            <Input
+              id="weekLabel"
               value={weekLabel}
               onChange={(e) => setWeekLabel(e.target.value)}
               placeholder="e.g. W12, W12-W13, 2026-W15"
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-[#ff9900] focus:outline-none"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Domain</label>
-            <select
+            <label
+              htmlFor="domain"
+              className="mb-1.5 block text-sm font-medium text-foreground"
+            >
+              Domain
+            </label>
+            <Select
+              id="domain"
               value={domainId}
               onChange={(e) => setDomainId(e.target.value)}
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
             >
               {domains.map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
               ))}
-            </select>
+            </Select>
           </div>
         </div>
 
@@ -229,21 +295,17 @@ export default function CreateReportPage() {
         <ContentEditor value={content} onChange={setContent} reportType={type} />
 
         {/* Actions */}
-        <div className="flex gap-3 mt-6">
-          <button
+        <div className="mt-6 flex gap-3">
+          <Button
+            variant="outline"
             onClick={() => handleSave(false)}
             disabled={saving}
-            className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
           >
-            {saving ? t('common.loading') : t('common.save')} (Draft)
-          </button>
-          <button
-            onClick={() => handleSave(true)}
-            disabled={saving}
-            className="rounded bg-[#ff9900] px-4 py-2 text-sm font-medium text-white hover:bg-[#e88b00] disabled:opacity-50"
-          >
+            {saving ? t('common.loading') : `${t('common.save')} (Draft)`}
+          </Button>
+          <Button onClick={() => handleSave(true)} disabled={saving}>
             {saving ? t('common.loading') : t('admin.publish')}
-          </button>
+          </Button>
         </div>
       </div>
     </AdminGuard>

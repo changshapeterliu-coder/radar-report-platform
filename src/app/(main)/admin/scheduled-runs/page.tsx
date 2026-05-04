@@ -2,12 +2,15 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
+import { ArrowLeft, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { AdminGuard } from '@/components/AdminGuard';
 import {
   ScheduledRunsTable,
   type ScheduledRunListRow,
 } from '@/components/admin/ScheduledRunsTable';
 import { ScheduledRunDrawer } from '@/components/admin/ScheduledRunDrawer';
+import { SpinnerBlock } from '@/components/ui/spinner';
+import { cn } from '@/lib/utils';
 
 interface Toast {
   kind: 'success' | 'error';
@@ -29,7 +32,9 @@ export default function ScheduledRunsPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/scheduled-runs?page=${p}`, { cache: 'no-store' });
+      const res = await fetch(`/api/admin/scheduled-runs?page=${p}`, {
+        cache: 'no-store',
+      });
       if (!res.ok) throw new Error(`Failed to load runs (${res.status})`);
       const json = await res.json();
       const d = json?.data ?? {};
@@ -48,8 +53,8 @@ export default function ScheduledRunsPage() {
 
   useEffect(() => {
     if (!toast) return;
-    const t = window.setTimeout(() => setToast(null), 5000);
-    return () => window.clearTimeout(t);
+    const tmr = window.setTimeout(() => setToast(null), 5000);
+    return () => window.clearTimeout(tmr);
   }, [toast]);
 
   const handleRetry = useCallback(
@@ -76,7 +81,8 @@ export default function ScheduledRunsPage() {
           const body = await res.json().catch(() => ({}));
           setToast({
             kind: 'error',
-            text: body?.message || 'Only failed or partial runs can be retried',
+            text:
+              body?.message || 'Only failed or partial runs can be retried',
           });
           return;
         }
@@ -94,16 +100,24 @@ export default function ScheduledRunsPage() {
 
   return (
     <AdminGuard>
-      <div className="max-w-[1200px] mx-auto px-4 py-10">
-        <Link href="/admin" className="mb-4 inline-block text-sm text-[#146eb4] hover:underline">
-          ← Back to Admin
+      <div className="mx-auto max-w-[1200px]">
+        <Link
+          href="/admin"
+          className="mb-4 inline-flex items-center gap-1 text-sm text-info hover:underline"
+        >
+          <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
+          Back to Admin
         </Link>
-        <h1 className="text-2xl font-bold text-[#232f3e] mb-6">Scheduled Runs</h1>
+        <h1 className="mb-8 text-2xl font-semibold text-foreground">
+          Scheduled Runs
+        </h1>
 
         {loading && rows.length === 0 ? (
-          <p className="text-sm text-gray-500">Loading runs...</p>
+          <SpinnerBlock label="Loading runs" />
         ) : error ? (
-          <p className="text-sm text-red-600">{error}</p>
+          <p className="rounded-md border border-danger/20 bg-danger-bg px-4 py-3 text-sm text-danger-fg">
+            {error}
+          </p>
         ) : (
           <ScheduledRunsTable
             rows={rows}
@@ -125,13 +139,28 @@ export default function ScheduledRunsPage() {
         {toast && (
           <div className="fixed bottom-6 right-6 z-50">
             <div
-              className={`rounded border px-4 py-3 text-sm shadow-md ${
+              role="status"
+              className={cn(
+                'flex items-start gap-2 rounded-md border px-4 py-3 text-sm shadow-md',
                 toast.kind === 'success'
-                  ? 'border-green-300 bg-green-50 text-green-700'
-                  : 'border-red-300 bg-red-50 text-red-700'
-              }`}
+                  ? 'border-success/20 bg-success-bg text-success-fg'
+                  : 'border-danger/20 bg-danger-bg text-danger-fg'
+              )}
             >
-              {toast.text}
+              {toast.kind === 'success' ? (
+                <CheckCircle2
+                  className="mt-0.5 h-4 w-4 flex-shrink-0"
+                  strokeWidth={1.75}
+                  aria-hidden
+                />
+              ) : (
+                <AlertCircle
+                  className="mt-0.5 h-4 w-4 flex-shrink-0"
+                  strokeWidth={1.75}
+                  aria-hidden
+                />
+              )}
+              <span>{toast.text}</span>
             </div>
           </div>
         )}

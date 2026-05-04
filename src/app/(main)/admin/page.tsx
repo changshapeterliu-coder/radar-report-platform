@@ -4,13 +4,52 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
+import {
+  Clock,
+  Play,
+  Bell,
+  BarChart3,
+  FileText,
+  Newspaper,
+  Users,
+  Globe,
+  Pencil,
+  Trash2,
+  Pin,
+  ClipboardList,
+} from 'lucide-react';
 import { AdminGuard } from '@/components/AdminGuard';
 import { createClient } from '@/lib/supabase/client';
 import { useDomain } from '@/contexts/DomainContext';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { SpinnerBlock } from '@/components/ui/spinner';
+import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database';
+
+/**
+ * Admin hub page.
+ *
+ * Design refs:
+ * - ui-design-system.md sec 3.3, sec 4.4 (no emoji in UI chrome),
+ *   sec 4.2 (button hierarchy — only one primary per screen)
+ * - power design-guidelines.md sec 5.2 Information Hierarchy,
+ *   sec 5.6 Navigation Systems, sec 3.3 Consistency
+ */
 
 type ReportRow = Database['public']['Tables']['reports']['Row'];
 type NewsRow = Database['public']['Tables']['news']['Row'];
+
+interface ReportRequest {
+  id: string;
+  user_id: string;
+  topic: string;
+  description: string | null;
+  marketplace: string;
+  seller_origin: string;
+  status: string;
+  created_at: string;
+}
 
 export default function AdminPage() {
   const { t } = useTranslation();
@@ -22,22 +61,10 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [publishedLoading, setPublishedLoading] = useState(true);
 
-  // News management state
   const [newsItems, setNewsItems] = useState<NewsRow[]>([]);
   const [newsLoading, setNewsLoading] = useState(true);
   const [actioningNewsId, setActioningNewsId] = useState<string | null>(null);
 
-  // Report requests state
-  interface ReportRequest {
-    id: string;
-    user_id: string;
-    topic: string;
-    description: string | null;
-    marketplace: string;
-    seller_origin: string;
-    status: string;
-    created_at: string;
-  }
   const [requests, setRequests] = useState<ReportRequest[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(true);
 
@@ -89,11 +116,18 @@ export default function AdminPage() {
         const { data } = await res.json();
         setRequests(data ?? []);
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     setRequestsLoading(false);
   }, []);
 
-  useEffect(() => { fetchDrafts(); fetchPublished(); fetchNews(); fetchRequests(); }, [fetchDrafts, fetchPublished, fetchNews, fetchRequests]);
+  useEffect(() => {
+    fetchDrafts();
+    fetchPublished();
+    fetchNews();
+    fetchRequests();
+  }, [fetchDrafts, fetchPublished, fetchNews, fetchRequests]);
 
   const handlePublish = async (id: string) => {
     await fetch(`/api/reports/${id}/publish`, { method: 'PUT' });
@@ -125,255 +159,391 @@ export default function AdminPage() {
     setActioningNewsId(null);
   };
 
+  const requestStatusVariant = (
+    status: string
+  ): 'warning' | 'info' | 'success' | 'danger' | 'outline' => {
+    if (status === 'pending') return 'warning';
+    if (status === 'in_progress') return 'info';
+    if (status === 'completed') return 'success';
+    if (status === 'rejected') return 'danger';
+    return 'outline';
+  };
+
   return (
     <AdminGuard>
       <div>
-        <h1 className="text-2xl font-bold text-[#232f3e] mb-6">{t('admin.title')}</h1>
+        <div className="mb-8">
+          <h1 className="text-2xl font-semibold text-foreground">
+            {t('admin.title')}
+          </h1>
+          <p className="mt-1 text-sm text-foreground-muted">
+            Content management, scheduling, and user access.
+          </p>
+        </div>
 
-        {/* Automation Section */}
-        <h2 className="text-lg font-bold text-[#232f3e] mb-3">Automation</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <Link
+        {/* Automation — 4 up */}
+        <SectionHeading title="Automation" />
+        <div className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <NavTile
             href="/admin/schedule-settings"
-            className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-4 hover:border-[#ff9900] hover:shadow transition-all"
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#ff9900]/10 text-[#ff9900]">⏱</div>
-            <span className="font-medium text-[#232f3e]">Schedule Settings</span>
-          </Link>
-          <Link
+            icon={Clock}
+            label="Schedule Settings"
+          />
+          <NavTile
             href="/admin/scheduled-runs"
-            className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-4 hover:border-[#ff9900] hover:shadow transition-all"
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#146eb4]/10 text-[#146eb4]">▶</div>
-            <span className="font-medium text-[#232f3e]">Scheduled Runs</span>
-          </Link>
-          <Link
+            icon={Play}
+            label="Scheduled Runs"
+          />
+          <NavTile
             href="/admin/daily-alert-settings"
-            className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-4 hover:border-[#ff9900] hover:shadow transition-all"
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#ff9900]/10 text-[#ff9900]">🔔</div>
-            <span className="font-medium text-[#232f3e]">Daily Alert Settings</span>
-          </Link>
-          <Link
+            icon={Bell}
+            label="Daily Alert Settings"
+          />
+          <NavTile
             href="/admin/daily-alert-runs"
-            className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-4 hover:border-[#ff9900] hover:shadow transition-all"
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#146eb4]/10 text-[#146eb4]">📊</div>
-            <span className="font-medium text-[#232f3e]">Daily Alert Runs</span>
-          </Link>
+            icon={BarChart3}
+            label="Daily Alert Runs"
+          />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
-          <Link href="/admin/reports/new" className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-4 hover:border-[#ff9900] hover:shadow transition-all">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#ff9900]/10 text-[#ff9900]">📄</div>
-            <span className="font-medium text-[#232f3e]">{t('admin.createReport')}</span>
-          </Link>
-          <Link href="/admin/news/new" className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-4 hover:border-[#ff9900] hover:shadow transition-all">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#146eb4]/10 text-[#146eb4]">📰</div>
-            <span className="font-medium text-[#232f3e]">{t('admin.createNews')}</span>
-          </Link>
-          <Link href="/admin/users" className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-4 hover:border-[#ff9900] hover:shadow transition-all">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-purple-100 text-purple-700">👥</div>
-            <span className="font-medium text-[#232f3e]">Manage Users</span>
-          </Link>
-          <div className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-4 opacity-60">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-gray-500">🌐</div>
-            <span className="font-medium text-gray-500">{t('admin.manageDomains')}</span>
-          </div>
+        {/* Content + Users — 4 up */}
+        <SectionHeading title="Content & Access" />
+        <div className="mb-10 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <NavTile
+            href="/admin/reports/new"
+            icon={FileText}
+            label={t('admin.createReport')}
+          />
+          <NavTile
+            href="/admin/news/new"
+            icon={Newspaper}
+            label={t('admin.createNews')}
+          />
+          <NavTile href="/admin/users" icon={Users} label="Manage Users" />
+          <NavTile
+            href="#"
+            icon={Globe}
+            label={t('admin.manageDomains')}
+            disabled
+          />
         </div>
 
-        {/* Draft Reports Section */}
-        <h2 className="text-lg font-bold text-[#232f3e] mb-3">{t('admin.drafts')}</h2>
+        {/* Draft Reports */}
+        <SectionHeading title={t('admin.drafts')} />
         {loading ? (
-          <div className="flex justify-center py-8">
-            <div className="inline-block h-6 w-6 animate-spin rounded-full border-4 border-[#ff9900] border-r-transparent" />
-          </div>
+          <SpinnerBlock />
         ) : drafts.length === 0 ? (
-          <p className="text-gray-500 text-sm py-4">{t('common.noData')}</p>
+          <EmptyLine label={t('common.noData')} />
         ) : (
-          <div className="space-y-2">
+          <ul className="mb-8 divide-y divide-border rounded-lg border border-border bg-card">
             {drafts.map((draft) => (
-              <div key={draft.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-white rounded-lg border border-gray-200 p-4">
-                <div>
-                  <h3 className="font-medium text-[#232f3e]">{draft.title}</h3>
-                  <p className="text-xs text-gray-400">
-                    {draft.type === 'regular' ? t('reports.filterRegular') : t('reports.filterTopic')} · {draft.date_range}
+              <li
+                key={draft.id}
+                className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6"
+              >
+                <div className="min-w-0 flex-1">
+                  <h3 className="truncate text-sm font-semibold text-foreground">
+                    {draft.title}
+                  </h3>
+                  <p className="mt-1 text-xs text-foreground-muted">
+                    {draft.type === 'regular'
+                      ? t('reports.filterRegular')
+                      : t('reports.filterTopic')}{' '}
+                    · {draft.date_range}
                   </p>
                 </div>
-                <div className="flex gap-2">
-                  <button onClick={() => router.push(`/admin/reports/${draft.id}/edit`)} className="rounded border border-[#146eb4] px-3 py-1.5 text-xs font-medium text-[#146eb4] hover:bg-blue-50">
-                    ✏️ {t('common.edit', 'Edit')}
-                  </button>
-                  <button onClick={() => handlePublish(draft.id)} className="rounded bg-[#ff9900] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#e88b00]">
+                <div className="flex flex-shrink-0 gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      router.push(`/admin/reports/${draft.id}/edit`)
+                    }
+                  >
+                    <Pencil className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    {t('common.edit', 'Edit')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => handlePublish(draft.id)}
+                  >
                     {t('admin.publish')}
-                  </button>
-                  <button onClick={() => handleDelete(draft.id)} className="rounded border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50">
-                    {t('admin.delete')}
-                  </button>
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => handleDelete(draft.id)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    <span className="sr-only sm:not-sr-only">
+                      {t('admin.delete')}
+                    </span>
+                  </Button>
                 </div>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
 
-        {/* Published Reports Section */}
-        <h2 className="text-lg font-bold text-[#232f3e] mt-10 mb-3">📋 Published Reports</h2>
+        {/* Published Reports */}
+        <SectionHeading title="Published Reports" />
         {publishedLoading ? (
-          <div className="flex justify-center py-8">
-            <div className="inline-block h-6 w-6 animate-spin rounded-full border-4 border-[#146eb4] border-r-transparent" />
-          </div>
+          <SpinnerBlock />
         ) : published.length === 0 ? (
-          <p className="text-gray-500 text-sm py-4">{t('common.noData')}</p>
+          <EmptyLine label={t('common.noData')} />
         ) : (
-          <div className="space-y-2">
+          <ul className="mb-8 divide-y divide-border rounded-lg border border-border bg-card">
             {published.map((report) => (
-              <div key={report.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-white rounded-lg border border-gray-200 p-4">
-                <div>
-                  <h3 className="font-medium text-[#232f3e]">{report.title}</h3>
-                  <p className="text-xs text-gray-400">
-                    {report.type === 'regular' ? t('reports.filterRegular') : t('reports.filterTopic')} · {report.date_range}
-                    {report.published_at && ` · Published ${new Date(report.published_at).toLocaleDateString()}`}
+              <li
+                key={report.id}
+                className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6"
+              >
+                <div className="min-w-0 flex-1">
+                  <h3 className="truncate text-sm font-semibold text-foreground">
+                    {report.title}
+                  </h3>
+                  <p className="mt-1 text-xs text-foreground-muted">
+                    {report.type === 'regular'
+                      ? t('reports.filterRegular')
+                      : t('reports.filterTopic')}{' '}
+                    · {report.date_range}
+                    {report.published_at &&
+                      ` · Published ${new Date(report.published_at).toLocaleDateString()}`}
                   </p>
                 </div>
-                <div className="flex gap-2">
-                  <button onClick={() => router.push(`/admin/reports/${report.id}/edit`)} className="rounded border border-[#146eb4] px-3 py-1.5 text-xs font-medium text-[#146eb4] hover:bg-blue-50">
-                    ✏️ {t('common.edit', 'Edit')}
-                  </button>
-                  <button onClick={() => handleDelete(report.id)} className="rounded border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50">
-                    {t('admin.delete')}
-                  </button>
+                <div className="flex flex-shrink-0 gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      router.push(`/admin/reports/${report.id}/edit`)
+                    }
+                  >
+                    <Pencil className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    {t('common.edit', 'Edit')}
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => handleDelete(report.id)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    <span className="sr-only sm:not-sr-only">
+                      {t('admin.delete')}
+                    </span>
+                  </Button>
                 </div>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
 
-        {/* Report Requests Section */}
-        <h2 className="text-lg font-bold text-[#232f3e] mt-10 mb-3">📋 Report Requests</h2>
+        {/* Report Requests */}
+        <SectionHeading title="Report Requests" />
         {requestsLoading ? (
-          <div className="flex justify-center py-8">
-            <div className="inline-block h-6 w-6 animate-spin rounded-full border-4 border-purple-500 border-r-transparent" />
-          </div>
+          <SpinnerBlock />
         ) : requests.length === 0 ? (
-          <p className="text-gray-500 text-sm py-4">No report requests yet.</p>
+          <EmptyLine label="No report requests yet." />
         ) : (
-          <div className="space-y-2">
+          <ul className="mb-8 divide-y divide-border rounded-lg border border-border bg-card">
             {requests.map((req) => (
-              <div key={req.id} className="bg-white rounded-lg border border-gray-200 p-4">
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-medium text-[#232f3e]">{req.topic}</h3>
-                      <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-bold ${
-                        req.status === 'pending' ? 'bg-yellow-100 text-yellow-700 border border-yellow-300' :
-                        req.status === 'in_progress' ? 'bg-blue-100 text-blue-700 border border-blue-300' :
-                        req.status === 'completed' ? 'bg-green-100 text-green-700 border border-green-300' :
-                        'bg-red-100 text-red-700 border border-red-300'
-                      }`}>
+              <li key={req.id} className="px-4 py-4 sm:px-6">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-sm font-semibold text-foreground">
+                        {req.topic}
+                      </h3>
+                      <Badge variant={requestStatusVariant(req.status)}>
                         {req.status}
-                      </span>
+                      </Badge>
                     </div>
                     {req.description && (
-                      <p className="text-sm text-gray-600 mt-1">{req.description}</p>
+                      <p className="mt-1.5 text-sm leading-relaxed text-foreground-muted">
+                        {req.description}
+                      </p>
                     )}
-                    <p className="text-xs text-gray-400 mt-1">
-                      🌍 {req.marketplace} · 🏪 {req.seller_origin} · {new Date(req.created_at).toLocaleDateString()}
+                    <p className="mt-1.5 text-xs text-foreground-subtle">
+                      {req.marketplace} · {req.seller_origin} ·{' '}
+                      {new Date(req.created_at).toLocaleDateString()}
                     </p>
                   </div>
                   {req.status === 'pending' && (
-                    <div className="flex gap-2 flex-shrink-0">
-                      <button
+                    <div className="flex flex-shrink-0 gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={async () => {
-                          await supabase.from('report_requests').update({ status: 'in_progress' }).eq('id', req.id);
+                          await supabase
+                            .from('report_requests')
+                            .update({ status: 'in_progress' })
+                            .eq('id', req.id);
                           fetchRequests();
                         }}
-                        className="rounded border border-[#146eb4] px-3 py-1.5 text-xs font-medium text-[#146eb4] hover:bg-blue-50"
                       >
-                        ▶️ Start
-                      </button>
-                      <button
+                        Start
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={async () => {
-                          await supabase.from('report_requests').update({ status: 'completed' }).eq('id', req.id);
+                          await supabase
+                            .from('report_requests')
+                            .update({ status: 'completed' })
+                            .eq('id', req.id);
                           fetchRequests();
                         }}
-                        className="rounded border border-green-500 px-3 py-1.5 text-xs font-medium text-green-600 hover:bg-green-50"
                       >
-                        ✅ Done
-                      </button>
+                        Done
+                      </Button>
                     </div>
                   )}
                   {req.status === 'in_progress' && (
-                    <button
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={async () => {
-                        await supabase.from('report_requests').update({ status: 'completed' }).eq('id', req.id);
+                        await supabase
+                          .from('report_requests')
+                          .update({ status: 'completed' })
+                          .eq('id', req.id);
                         fetchRequests();
                       }}
-                      className="rounded border border-green-500 px-3 py-1.5 text-xs font-medium text-green-600 hover:bg-green-50"
                     >
-                      ✅ Done
-                    </button>
+                      Done
+                    </Button>
                   )}
                 </div>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
 
-        {/* News Management Section */}
-        <h2 className="text-lg font-bold text-[#232f3e] mt-10 mb-3">📰 News Management</h2>
+        {/* News Management */}
+        <SectionHeading title="News Management" />
         {newsLoading ? (
-          <div className="flex justify-center py-8">
-            <div className="inline-block h-6 w-6 animate-spin rounded-full border-4 border-[#146eb4] border-r-transparent" />
-          </div>
+          <SpinnerBlock />
         ) : newsItems.length === 0 ? (
-          <p className="text-gray-500 text-sm py-4">No news items found.</p>
+          <EmptyLine label="No news items found." />
         ) : (
-          <div className="space-y-2">
+          <ul className="mb-8 divide-y divide-border rounded-lg border border-border bg-card">
             {newsItems.map((item) => (
-              <div key={item.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-white rounded-lg border border-gray-200 p-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-medium text-[#232f3e]">{item.title}</h3>
+              <li
+                key={item.id}
+                className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-sm font-semibold text-foreground">
+                      {item.title}
+                    </h3>
                     {item.is_pinned && (
-                      <span className="inline-block rounded-full bg-red-100 text-red-700 border border-red-300 px-2 py-0.5 text-xs font-bold">
+                      <Badge variant="danger">
+                        <Pin className="h-2.5 w-2.5" strokeWidth={2} />
                         Pinned
-                      </span>
+                      </Badge>
                     )}
-                    <span className="inline-block rounded-full bg-gray-100 text-gray-600 border border-gray-300 px-2 py-0.5 text-xs">
-                      {item.source_channel}
-                    </span>
+                    <Badge variant="outline">{item.source_channel}</Badge>
                   </div>
-                  <p className="text-xs text-gray-400 mt-1">
+                  <p className="mt-1.5 text-xs text-foreground-subtle">
                     {new Date(item.published_at).toLocaleDateString()}
                   </p>
                 </div>
-                <div className="flex gap-2 flex-shrink-0">
-                  <button
-                    onClick={() => router.push(`/admin/news/${item.id}/edit`)}
-                    className="rounded border border-[#146eb4] px-3 py-1.5 text-xs font-medium text-[#146eb4] hover:bg-blue-50"
+                <div className="flex flex-shrink-0 gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      router.push(`/admin/news/${item.id}/edit`)
+                    }
                   >
-                    ✏️ Edit
-                  </button>
-                  <button
-                    onClick={() => handleTogglePin(item.id, item.is_pinned)}
+                    <Pencil className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    Edit
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      handleTogglePin(item.id, item.is_pinned)
+                    }
                     disabled={actioningNewsId === item.id}
-                    className="rounded border border-[#ff9900] px-3 py-1.5 text-xs font-medium text-[#ff9900] hover:bg-orange-50 disabled:opacity-50"
                   >
-                    {item.is_pinned ? '📌 Unpin' : '📌 Pin'}
-                  </button>
-                  <button
+                    <Pin className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    {item.is_pinned ? 'Unpin' : 'Pin'}
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
                     onClick={() => handleDeleteNews(item.id)}
                     disabled={actioningNewsId === item.id}
-                    className="rounded border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
                   >
-                    🗑️ Delete
-                  </button>
+                    <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    <span className="sr-only sm:not-sr-only">Delete</span>
+                  </Button>
                 </div>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
       </div>
     </AdminGuard>
+  );
+}
+
+// ── Sub-components ──
+
+function SectionHeading({ title }: { title: string }) {
+  return (
+    <h2 className="mb-3 text-lg font-semibold text-foreground">{title}</h2>
+  );
+}
+
+function EmptyLine({ label }: { label: string }) {
+  return (
+    <div className="mb-8 flex items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-card px-4 py-6 text-sm text-foreground-muted">
+      <ClipboardList
+        className="h-4 w-4 text-foreground-subtle"
+        strokeWidth={1.75}
+        aria-hidden
+      />
+      {label}
+    </div>
+  );
+}
+
+function NavTile({
+  href,
+  icon: Icon,
+  label,
+  disabled = false,
+}: {
+  href: string;
+  icon: typeof Clock;
+  label: string;
+  disabled?: boolean;
+}) {
+  const inner = (
+    <div
+      className={cn(
+        'flex items-center gap-3 rounded-lg border border-border bg-card p-4 transition-colors',
+        disabled
+          ? 'cursor-not-allowed opacity-60'
+          : 'hover:border-border-strong hover:bg-muted/40'
+      )}
+    >
+      <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted text-foreground-muted">
+        <Icon className="h-4.5 w-4.5" strokeWidth={1.75} aria-hidden />
+      </div>
+      <span className="text-sm font-medium text-foreground">{label}</span>
+    </div>
+  );
+  if (disabled) return inner;
+  return (
+    <Link
+      href={href}
+      className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+    >
+      {inner}
+    </Link>
   );
 }
