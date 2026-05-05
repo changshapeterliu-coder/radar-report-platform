@@ -11,8 +11,6 @@
  *        - rank ∈ [1, 10]
  *        - source_links: drop entries with malformed URLs; reject topic
  *          if fewer than 3 valid links remain
- *        - source_links freshness: require ≥1 link with published_date
- *          within 14 days of coverage_window_start (null dates trusted)
  *        - sample_quotes: length ∈ [2, 3]  (already enforced by Zod)
  *      violations are logged in debug output, topic is dropped
  *   5. sort surviving topics by hot_score DESC, keep top 10
@@ -95,11 +93,11 @@ export async function runDailyScan(input: DailyScanInput): Promise<DailyScanResu
     // because they don't expose publish_date to the indexer. The 5-way
     // probe run 2026-05-03 showed oneDay=0 refs, oneWeek=2-10 refs (mostly
     // unrelated English sites), noLimit=10 refs of real Chinese seller
-    // content → 5 real topics. To keep noLimit from dragging in genuinely
-    // stale content, we apply a post-filter below requiring at least one
-    // source_link with published_date within 14 days of coverage_window_start
-    // (source_links with null published_date are treated as "unknown → trust"
-    // because most Chinese seller sites don't expose this field anyway).
+    // content → 5 real topics. Activity on those forums is driven by
+    // comment velocity on older threads (a 2025-11 post with fresh replies
+    // is still hot), so filtering by the post's static published_date would
+    // throw away real signal. We trust the prompt's {coverage_window_start}
+    // anchor + GLM's hot_score judgement instead.
     searchRecency: 'noLimit',
     contentSize: 'high',
     errorContext: {
@@ -132,16 +130,17 @@ export async function runDailyScan(input: DailyScanInput): Promise<DailyScanResu
   const validated: ScanResponse = parsed.data;
   const droppedTopics: Array<{ rank: number | null; topicName: string; reason: string }> = [];
 
-  // Stale-content cutoff: coverage window start minus 14 days. Any topic
-  // whose source_links are ALL strictly older than this cutoff is dropped.
-  // This guards against 'noLimit' search bringing back months-old content
-  // that the prompt's date anchor asked the AI to avoid (Principle 2 —
-  // code-layer guarantee, not prompt-layer hope).
-  const staleCutoff = new Date(coverageWindowStartIso);
-  staleCutoff.setDate(staleCutoff.getDate() - 14);
-
   // Per-topic sanitation: drop malformed source_links, reject topics with
-  // < 3 valid links after drops, then apply the stale-content cutoff.
+  // < 3 valid links after drops.
+  //
+  // NOTE: we intentionally do NOT filter by source_links published_date.
+  // Activity on Chinese seller-community forums is driven by comment
+  // velocity on older threads, not by the original post date. A thread
+  // from 2025-11 that still gets new replies today is a hot topic; its
+  // static `published_date` is a bad proxy for current activity. We
+  // trust GLM's hot_score + its decision to include a topic in `topics[]`
+  // as the authoritative activity signal — that is exactly what the LLM
+  // is being asked to judge during the scan.
   const survivingTopics: ScanTopic[] = [];
   for (const topic of validated.topics) {
     const validLinks = topic.source_links.filter((link) => isValidHttpUrl(link.url));
@@ -153,24 +152,6 @@ export async function runDailyScan(input: DailyScanInput): Promise<DailyScanResu
       });
       continue;
     }
-
-    // Freshness gate: require at least one link with either null
-    // published_date (unknown → trust) OR a date on/after staleCutoff.
-    const hasRecentEvidence = validLinks.some((link) => {
-      if (!link.published_date) return true; // unknown date — give benefit of doubt
-      const d = new Date(link.published_date);
-      if (Number.isNaN(d.getTime())) return true; // unparseable — treat as unknown
-      return d >= staleCutoff;
-    });
-    if (!hasRecentEvidence) {
-      droppedTopics.push({
-        rank: topic.rank,
-        topicName: topic.topic_name_zh,
-        reason: `all source_links older than ${staleCutoff.toISOString().slice(0, 10)}`,
-      });
-      continue;
-    }
-
     // Keep the topic with the cleaned links list (bounded 3–10 by Zod plus our drop).
     survivingTopics.push({
       ...topic,
