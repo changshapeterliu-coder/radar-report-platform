@@ -15,6 +15,10 @@
  *     - 017 (initial seed)
  *     - 019 (rewrite daily_scan_prompt: goal-oriented, anti-hallucination)
  *   If you edit one, edit the other in the same commit. No drift allowed.
+ *   Current synced migrations:
+ *     - 017 (initial seed)
+ *     - 019 (rewrite: goal-oriented, anti-hallucination)
+ *     - 020 (add business-focus buckets: Account Suspension / Listing Takedown)
  *
  * Placeholder contract (enforced by PUT validation on /api/admin/daily-alert-prompts):
  *   - DEFAULT_DAILY_SCAN_PROMPT must contain `{coverage_window_start}` AND
@@ -42,14 +46,38 @@ export const DEFAULT_DAILY_SCAN_PROMPT = `# 角色
 社交媒体渠道，识别最可能在未来几天驱动卖家向 Amazon 支持团队升级咨询的
 热点话题。你的输出将被 CN-seller support team 用作当日的预警简报。
 
+# 业务焦点（必须归属到下列两大板块之一）
+
+只收录能归属到下列两大板块之一的话题。不能归入任一板块的话题丢弃。
+
+## Bucket 1: Account Suspension（账户层级后果）
+任何导致卖家**账户**被停用、审核、冻结资金、触发额外验证、降低评级
+的事件或讨论。判断依据：后果落在"账号"这一层，不是单个商品或单个
+广告。
+
+## Bucket 2: Listing Takedown（商品层级后果）
+任何导致单个商品 listing 被下架、屏蔽、冻结、无法销售的事件或讨论。
+判断依据：后果落在"商品"这一层，原因可来自合规、知识产权、内容审核、
+类目规则等。
+
+## 决策原则
+- 不明显属于两个板块中任一个 → 丢弃，不要勉强归类
+- 同时触及两个板块 → 归入影响更严重的那一个（通常 Bucket 1）
+- 文章是政策综述 / 运营红线汇总 / SEO 稿，即使标题含"封号""下架"
+  等关键词，若不是由具体事件驱动的讨论 → 丢弃
+- 讨论的是"广告账户封停"而非卖家账户 → 丢弃（不同层）
+- 讨论 ODR / 取消率 / 迟发等业绩指标但**没有出现账户级后果** → 丢弃；
+  若有具体停用事件驱动，归入 Bucket 1
+
 # 工作前提：精确、诚实、可追溯
 你是在做"早期预警"。读者拿到你的输出就要判断今天是否需要额外准备
 支持资源、调整支持话术。因此：
 
 1. **日内热度优先**：只关心 24 小时内观察到的真实讨论。历史议题如果
    今天没有新增讨论，不要进榜。
-2. **诚实优先于凑数**：目标 Top 10，但如果今天真实观察到的优质信号只有
-   3 条，就返回 3 条。凑数的预警没有价值。
+2. **诚实优先于凑数**：目标 Top 10，但如果今天真实观察到的、且能归入
+   上述两大板块之一的优质信号只有 3 条，就返回 3 条。凑数的预警没有
+   价值。
 3. **每条必须有原话与外链**：\`sample_quotes\` 是卖家口气的 verbatim
    片段（2–3 条）；\`source_links\` 是至少 3 条可点开的外部 URL（直接
    来自 web_search 工具返回的结果）。两者都不得编造。
@@ -105,10 +133,10 @@ export const DEFAULT_DAILY_SCAN_PROMPT = `# 角色
   "topics": [ ...最多 10 条, 按 hot_score 降序 ]
 }
 
-**空值规则**：只有当你**已经完成至少 3 轮 web_search、换过不同关键词
-和视角、仍然没有任何相关中文 seller 讨论命中**时，才返回
-\`{"topics": []}\`。空数组在下游系统里是一个明确的"搜索失败"信号，
-会触发操作员复查 —— 不要把它当默认退路。
+**空值规则**：只有当 (a) 你已经完成至少 3 轮 web_search、换过不同关键词
+和视角，且 (b) 所有命中都无法归入 Bucket 1 或 Bucket 2 时，才返回
+\`{"topics": []}\`。空数组在下游系统里是一个明确的"搜索失败 / 当日无
+业务焦点信号"信号，会触发操作员复查 —— 不要把它当默认退路。
 `;
 
 export const DEFAULT_DAILY_CANONICALIZATION_PROMPT = `# 角色
