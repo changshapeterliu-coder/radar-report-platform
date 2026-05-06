@@ -62,7 +62,9 @@ interface CaseResult {
     | 'D_oneWeek_toolRequired'
     | 'E_weeklyPromptReplay'
     | 'F_weeklyPromptDailyWindow_oneDay'
-    | 'G_weeklyPromptDailyWindow_noLimit';
+    | 'G_weeklyPromptDailyWindow_noLimit'
+    | 'H_searchPro_oneDay'
+    | 'I_searchPro_searchPrompt_oneDay';
   searchRecency: 'oneDay' | 'oneWeek' | 'noLimit';
   toolChoice: 'auto' | 'required';
   ok: boolean;
@@ -84,7 +86,9 @@ async function runOne(
   toolChoice: CaseResult['toolChoice'],
   apiKey: string,
   promptOverride?: string,
-  contentSizeOverride?: 'low' | 'medium' | 'high'
+  contentSizeOverride?: 'low' | 'medium' | 'high',
+  searchEngineOverride?: 'search_std' | 'search_pro',
+  searchPromptOverride?: string
 ): Promise<CaseResult> {
   const start = Date.now();
   const result = await callZai<{ topics?: unknown[] }>({
@@ -96,6 +100,8 @@ async function runOne(
     enableWebSearch: true,
     searchRecency,
     contentSize: contentSizeOverride ?? 'high',
+    searchEngine: searchEngineOverride,
+    searchPrompt: searchPromptOverride,
     toolChoice: toolChoice === 'auto' ? undefined : toolChoice,
     errorContext: { engine: 'kimi', stage: 'hot-radar-scan' },
   });
@@ -349,6 +355,8 @@ export async function GET(_request: NextRequest) {
     toolChoice: CaseResult['toolChoice'];
     promptOverride?: string;
     contentSizeOverride?: 'low' | 'medium' | 'high';
+    searchEngine?: 'search_std' | 'search_pro';
+    searchPrompt?: string;
   }> = [
     { label: 'A_oneDay', recency: 'oneDay', toolChoice: 'auto' },
     { label: 'B_oneWeek', recency: 'oneWeek', toolChoice: 'auto' },
@@ -387,9 +395,41 @@ export async function GET(_request: NextRequest) {
     });
   }
 
+  // H / I: upgrade the search engine to z.ai's Pro tier (`search_pro`) to
+  // test whether the basic engine's poor Chinese-seller long-tail recall
+  // is the true bottleneck. Uses the MINIMAL probe prompt (not daily/weekly
+  // production) to isolate the engine-level change from prompt effects.
+  //
+  // H: search_pro + oneDay, no search_prompt hint. Tests: does just swapping
+  //    engine fix the 24h-window junk-refs problem?
+  // I: search_pro + oneDay + search_prompt hint. Tests: does adding a
+  //    query-time Chinese-seller-community constraint further improve recall?
+  //
+  // Read signals from H first:
+  //   - HTTP 200 + searchCount>0 + Chinese seller refs → search_pro works &
+  //     account has access. Compare I vs H to see search_prompt's marginal lift.
+  //   - HTTP 4xx with a clear billing / plan error → account needs upgrade.
+  //     errorMessage will carry the provider's exact wording.
+  //   - HTTP 200 but searchCount=0 or still-junk refs → search_pro alone isn't
+  //     enough; check I's effect.
+  cases.push({
+    label: 'H_searchPro_oneDay',
+    recency: 'oneDay',
+    toolChoice: 'auto',
+    searchEngine: 'search_pro',
+  });
+  cases.push({
+    label: 'I_searchPro_searchPrompt_oneDay',
+    recency: 'oneDay',
+    toolChoice: 'auto',
+    searchEngine: 'search_pro',
+    searchPrompt:
+      '只查找中国跨境卖家社区（知无不言、卖家之家、雨果网、亿恩网、AMZ123、跨境知道、小红书跨境博主、微博跨境圈）关于亚马逊账户健康、封号、申诉、listing 下架、合规、KYC 的讨论。排除英文媒体和非卖家论坛。',
+  });
+
   for (const c of cases) {
     console.log(
-      `[probe-scan-recency] ▶ ${c.label} (recency=${c.recency}, tool_choice=${c.toolChoice}${c.promptOverride ? ', prompt=weekly-production' : ''})...`
+      `[probe-scan-recency] ▶ ${c.label} (recency=${c.recency}, tool_choice=${c.toolChoice}${c.promptOverride ? ', prompt=weekly-production' : ''}${c.searchEngine ? `, engine=${c.searchEngine}` : ''}${c.searchPrompt ? ', search_prompt=injected' : ''})...`
     );
     const r = await runOne(
       c.label,
@@ -397,7 +437,9 @@ export async function GET(_request: NextRequest) {
       c.toolChoice,
       apiKey,
       c.promptOverride,
-      c.contentSizeOverride
+      c.contentSizeOverride,
+      c.searchEngine,
+      c.searchPrompt
     );
     results.push(r);
     console.log(

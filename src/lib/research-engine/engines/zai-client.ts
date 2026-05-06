@@ -98,6 +98,37 @@ export interface ZaiCallParams {
    * Ignored when `enableWebSearch` is false.
    */
   contentSize?: 'low' | 'medium' | 'high';
+  /**
+   * Passed through to the web_search tool's `search_engine` field.
+   *   - `'search_std'`  → z.ai standard search engine
+   *   - `'search_pro'`  → z.ai Pro search engine (deeper Chinese long-tail
+   *                       coverage, better recency on Chinese domains;
+   *                       may incur additional billing — check z.ai
+   *                       console before enabling in production)
+   *   - undefined       → omit field → GLM default (basic engine)
+   *
+   * Probe data (2026-05-06) showed the basic engine returns CGTN / Oregon
+   * Health / LAVA forum junk for Chinese-seller queries under 24h recency.
+   * search_pro is the hypothesis lever for that failure mode.
+   *
+   * Ignored when `enableWebSearch` is false.
+   */
+  searchEngine?: 'search_std' | 'search_pro';
+  /**
+   * Passed through to the web_search tool's `search_prompt` field — a hint
+   * to the search engine at query-construction time. Distinct from the
+   * system/user `messages` prompt: `search_prompt` steers how the engine
+   * formulates queries from the user turn, rather than how the model
+   * interprets the tool's results.
+   *
+   * Use case: constrain result universe to Chinese cross-border seller
+   * communities at the search layer, not via "please ignore English
+   * sources" text in the LLM prompt (Principle 2: API constraints beat
+   * prompt hope).
+   *
+   * Undefined → omit field. Ignored when `enableWebSearch` is false.
+   */
+  searchPrompt?: string;
   errorContext: {
     engine: 'gemini' | 'kimi' | 'synthesizer';
     stage?: LoopStage;
@@ -132,6 +163,8 @@ export async function callZai<T = unknown>(
     toolChoice,
     searchRecency,
     contentSize,
+    searchEngine,
+    searchPrompt,
     errorContext,
   } = params;
 
@@ -159,6 +192,12 @@ export async function callZai<T = unknown>(
       }
       if (contentSize) {
         webSearchConfig.content_size = contentSize;
+      }
+      if (searchEngine) {
+        webSearchConfig.search_engine = searchEngine;
+      }
+      if (searchPrompt) {
+        webSearchConfig.search_prompt = searchPrompt;
       }
       body.tools = [
         {
