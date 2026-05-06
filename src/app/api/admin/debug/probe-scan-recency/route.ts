@@ -60,7 +60,9 @@ interface CaseResult {
     | 'B_oneWeek'
     | 'C_noLimit'
     | 'D_oneWeek_toolRequired'
-    | 'E_weeklyPromptReplay';
+    | 'E_weeklyPromptReplay'
+    | 'F_weeklyPromptDailyWindow_oneDay'
+    | 'G_weeklyPromptDailyWindow_noLimit';
   searchRecency: 'oneDay' | 'oneWeek' | 'noLimit';
   toolChoice: 'auto' | 'required';
   ok: boolean;
@@ -188,6 +190,55 @@ async function loadAndResolveWeeklyEngineBPrompt(
     .join(weekLabel);
 }
 
+/**
+ * Same as loadAndResolveWeeklyEngineBPrompt, but substitutes a 24-hour
+ * window (yesterday 00:00 → yesterday 23:59 Shanghai-ish) into the weekly
+ * prompt's {start_date} / {end_date} / {week_label} placeholders.
+ *
+ * Used by probe cases F and G to test the hypothesis: does the weekly
+ * Engine B prompt's structure/persona produce real Chinese-seller refs
+ * even when we narrow the declared window to one day?
+ *
+ * Returns null if the weekly prompt row is missing in prompt_templates.
+ */
+async function loadAndResolveWeeklyPromptForDailyWindow(
+  supabase: Awaited<ReturnType<typeof createClient>>
+): Promise<string | null> {
+  const { data: domainRows } = await supabase
+    .from('domains')
+    .select('id')
+    .eq('name', 'Account Health')
+    .limit(1);
+  const domainId = domainRows?.[0]?.id;
+  if (!domainId) return null;
+
+  const { data: promptRows } = await supabase
+    .from('prompt_templates')
+    .select('template_text')
+    .eq('domain_id', domainId)
+    .eq('prompt_type', 'engine_b_hot_radar')
+    .limit(1);
+  const template = promptRows?.[0]?.template_text;
+  if (!template || typeof template !== 'string') return null;
+
+  // 24h window, yesterday. Shanghai-approximate (probe doesn't need tz
+  // precision; we just want the prompt to say "yesterday, one day only").
+  const now = new Date();
+  const endDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const startDate = endDate; // same day as end — declare window as a single day
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  // Use the daily-style label so prompt context suggests "daily" not "weekly".
+  const weekLabel = `daily-${fmt(endDate)}`;
+
+  return template
+    .split('{start_date}')
+    .join(fmt(startDate))
+    .split('{end_date}')
+    .join(fmt(endDate))
+    .split('{week_label}')
+    .join(weekLabel);
+}
+
 function diagnose(results: CaseResult[]): string {
   const a = results.find((r) => r.label === 'A_oneDay');
   const b = results.find((r) => r.label === 'B_oneWeek');
@@ -283,6 +334,14 @@ export async function GET(_request: NextRequest) {
     console.warn('[probe-scan-recency] Could not load weekly engine_b_hot_radar prompt; case E will be skipped');
   }
 
+  const weeklyPromptDailyWindow =
+    await loadAndResolveWeeklyPromptForDailyWindow(supabase);
+  if (weeklyPromptDailyWindow == null) {
+    console.warn(
+      '[probe-scan-recency] Could not load weekly engine_b_hot_radar prompt; cases F/G will be skipped'
+    );
+  }
+
   const results: CaseResult[] = [];
   const cases: Array<{
     label: CaseResult['label'];
@@ -303,6 +362,28 @@ export async function GET(_request: NextRequest) {
       toolChoice: 'auto',
       promptOverride: weeklyPrompt,
       contentSizeOverride: 'medium', // matches weekly production loop.ts config
+    });
+  }
+  // F / G: weekly prompt structure + daily 24h window substitution.
+  // Hypothesis: the weekly prompt's richer persona ("情报研究员", explicit
+  // data-source precedence, search-strategy paragraph) drives GLM to actually
+  // search Chinese seller sites, regardless of recency filter. We test both
+  // oneDay and noLimit with the same prompt to isolate recency effect under
+  // the weekly structure.
+  if (weeklyPromptDailyWindow) {
+    cases.push({
+      label: 'F_weeklyPromptDailyWindow_oneDay',
+      recency: 'oneDay',
+      toolChoice: 'auto',
+      promptOverride: weeklyPromptDailyWindow,
+      contentSizeOverride: 'medium',
+    });
+    cases.push({
+      label: 'G_weeklyPromptDailyWindow_noLimit',
+      recency: 'noLimit',
+      toolChoice: 'auto',
+      promptOverride: weeklyPromptDailyWindow,
+      contentSizeOverride: 'medium',
     });
   }
 
