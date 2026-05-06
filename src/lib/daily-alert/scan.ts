@@ -168,9 +168,11 @@ export async function runDailyScan(input: DailyScanInput): Promise<DailyScanResu
     });
   }
 
-  // Sort surviving by hot_score desc and cap at top 10.
-  survivingTopics.sort((a, b) => b.hot_score - a.hot_score);
-  const capped = survivingTopics.slice(0, 10);
+  // Sort surviving by voice_volume desc (migration 022) and cap at Top 5.
+  // Pre-022 used hot_score; voice_volume is more deterministic because
+  // it's derived from channel_counts (not AI's subjective 0-100 guess).
+  survivingTopics.sort((a, b) => b.voice_volume - a.voice_volume);
+  const capped = survivingTopics.slice(0, 5);
 
   // Re-rank survivors 1..N contiguous — per PBT P33.
   const reranked = capped.map((topic, i) => ({ ...topic, rank: i + 1 }));

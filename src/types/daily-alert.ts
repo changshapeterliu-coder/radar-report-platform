@@ -144,23 +144,38 @@ export const ScanSourceLinkSchema = z.object({
 });
 
 export const ScanTopicSchema = z.object({
-  rank: z.number().int().min(1).max(10),
+  rank: z.number().int().min(1).max(5),
   topic_name_zh: z.string().min(1).max(40),
   keywords: z.array(z.string().min(1)).min(1).max(5),
-  // Three evidence fields below are *structural forcing functions*: the AI
-  // can only fill them with ≥2 items if it actually executed a web_search
-  // that returned ≥2 distinct results. Lowering any of these from 2 to 1
-  // would reopen the 2026-05-03 fabrication mode (AI ignoring the tool).
-  // Per Principle 2: enforce search at the schema layer, not via prompt hope.
+  // voice_volume + channel_counts: migration 022 borrowed these from weekly
+  // engine_b_hot_radar. They are the strongest structural forcing function:
+  // GLM cannot fabricate a coherent voice_volume without first classifying
+  // refs into forum/provider/media/kol buckets via channel_counts, which
+  // in turn cannot be done without actually executing web_search. Probe
+  // evidence (2026-05-06): cases E/F/G (weekly prompt with these fields)
+  // consistently triggered real search; cases A/B/C/H/J/K (daily prompt
+  // without these fields) frequently returned {"topics":[]} with
+  // searchCount 0-4 and hallucinated topics from training knowledge.
+  voice_volume: z.number().nonnegative(),
+  channel_counts: z.object({
+    forum: z.number().int().nonnegative(),
+    provider: z.number().int().nonnegative(),
+    media: z.number().int().nonnegative(),
+    kol: z.number().int().nonnegative(),
+  }),
+  // Evidence fields kept from migration 021 (all min=2). Renamed
+  // `discussion_channels` → `channels_observed` to match weekly schema.
+  channels_observed: z.array(z.string().min(1).max(50)).min(2).max(8),
   sample_quotes: z.array(ScanSampleQuoteSchema).min(2).max(3),
   source_links: z.array(ScanSourceLinkSchema).min(2).max(10),
-  discussion_channels: z.array(z.string().min(1).max(50)).min(2).max(8),
   hot_score: z.number().int().min(0).max(100),
   summary_zh: z.string().min(1).max(400),
 });
 
 export const ScanResponseSchema = z.object({
-  topics: z.array(ScanTopicSchema).max(10),
+  // Top 5 cap per user decision 2026-05-06: daily early-warning only
+  // needs 5 strong signals; more dilutes the alert. Was 10 in 021.
+  topics: z.array(ScanTopicSchema).max(5),
 });
 
 export type ScanResponse = z.infer<typeof ScanResponseSchema>;
