@@ -100,6 +100,13 @@ export async function runDailyScan(input: DailyScanInput): Promise<DailyScanResu
     // anchor + GLM's hot_score judgement instead.
     searchRecency: 'noLimit',
     contentSize: 'high',
+    // Upgrade to Zhipu's Pro search engine (commit 78c88ed probe, case H):
+    // basic engine + oneDay returned 0 Chinese-seller refs in 24h window;
+    // search_pro + oneDay on the same prompt returned 10 refs of real
+    // Chinese-seller discussions from today (跨境头条, 雨果网 etc.). Cost
+    // is $0.01/use per docs.z.ai pricing (pay-as-you-go). Monthly budget
+    // for daily scan ≈ 30 × $0.01 = $0.30.
+    searchEngine: 'search_pro',
     errorContext: {
       engine: 'kimi', // Reused per task 1.5 — breadcrumb lives in `stage` below.
       stage: 'hot-radar-scan', // Reused from existing LoopStage union (breadcrumb precision via errorContext only).
@@ -131,7 +138,9 @@ export async function runDailyScan(input: DailyScanInput): Promise<DailyScanResu
   const droppedTopics: Array<{ rank: number | null; topicName: string; reason: string }> = [];
 
   // Per-topic sanitation: drop malformed source_links, reject topics with
-  // < 3 valid links after drops.
+  // < 2 valid links after drops (migration 021 minimum; was 3 pre-021, but
+  // relaxed because some real daily discussions on smaller forums only
+  // yield 2 distinct URLs and the 3-link floor was causing false drops).
   //
   // NOTE: we intentionally do NOT filter by source_links published_date.
   // Activity on Chinese seller-community forums is driven by comment
@@ -144,15 +153,15 @@ export async function runDailyScan(input: DailyScanInput): Promise<DailyScanResu
   const survivingTopics: ScanTopic[] = [];
   for (const topic of validated.topics) {
     const validLinks = topic.source_links.filter((link) => isValidHttpUrl(link.url));
-    if (validLinks.length < 3) {
+    if (validLinks.length < 2) {
       droppedTopics.push({
         rank: topic.rank,
         topicName: topic.topic_name_zh,
-        reason: `source_links after URL validation: ${validLinks.length} < 3`,
+        reason: `source_links after URL validation: ${validLinks.length} < 2`,
       });
       continue;
     }
-    // Keep the topic with the cleaned links list (bounded 3–10 by Zod plus our drop).
+    // Keep the topic with the cleaned links list (bounded 2–10 by Zod plus our drop).
     survivingTopics.push({
       ...topic,
       source_links: validLinks.slice(0, 10),

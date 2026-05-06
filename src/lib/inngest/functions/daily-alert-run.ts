@@ -261,21 +261,83 @@ export const dailyAlertRun = inngest.createFunction(
       return { runId, status: 'failed' as const, failureReason: canonResult.failureReason };
     }
 
+    // Post-search bucket filter (migration 021): canonicalize returns kept
+    // assignments (decision='keep', bucket set) and dropped assignments
+    // (decision='drop', drop_reason set). Only kept ones proceed to persist.
+    //
+    // If every scanned topic was dropped, treat it as an empty day — scan
+    // found discussions but none belonged to either business-focus bucket.
+    // This is a legitimate "no actionable signal today" outcome, not a
+    // failure, and produces the same downstream artifact (Empty_Day_Alert)
+    // as scanResult.topics.length === 0 at Step 4a.
+    if (canonResult.keptAssignments.length === 0) {
+      console.log(
+        `[daily-alert-run] all ${canonResult.droppedAssignments.length} topic(s) dropped by bucket filter; treating as empty day. reasons: ${canonResult.droppedAssignments
+          .map((a) => (a.decision === 'drop' ? a.drop_reason : ''))
+          .filter(Boolean)
+          .slice(0, 5)
+          .join(' | ')}`
+      );
+      await step.run('persist-empty-day-all-dropped', () =>
+        persistEmptyDayAlert({
+          runId,
+          domainId,
+          coverageWindowStartDate,
+        })
+      );
+      await step.run('mark-succeeded-all-dropped', async () => {
+        const supabase = createServiceRoleClient();
+        const { error } = await supabase
+          .from('daily_alert_runs')
+          .update({
+            status: 'succeeded',
+            topic_count: 0,
+            new_canonical_count: 0,
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', runId);
+        if (error) {
+          throw new Error(`Failed to mark all-dropped run succeeded: ${error.message}`);
+        }
+      });
+      return { runId, status: 'succeeded' as const, topicCount: 0, newCanonicalCount: 0 };
+    }
+
+    // Build the scanned-topics-for-persist list: only those scanned_topic
+    // indexes that appear in keptAssignments. The existing persist path
+    // expects scannedTopics.length === canonicalAssignments.length, with
+    // index i of each list corresponding to the same logical topic.
+    const keptIndexes = canonResult.keptAssignments
+      .map((a) => a.scanned_topic_index)
+      .sort((x, y) => x - y);
+    const scannedTopicsForPersist = keptIndexes.map((i) => scanResult.topics[i]);
+    // Re-index kept assignments' scanned_topic_index to match the new 0..N-1
+    // slot in scannedTopicsForPersist (persist downstream uses it as a zip index).
+    const keptAssignmentsReindexed: CanonicalAssignment[] = canonResult.keptAssignments
+      .slice()
+      .sort((a, b) => a.scanned_topic_index - b.scanned_topic_index)
+      .map((a, newIdx) => ({ ...a, scanned_topic_index: newIdx }));
+
     // Re-derive is_new_canonical from DB state (novelty.ts rule): trust the
     // existingKeys Set, not the AI's self-report. This is a defense-in-depth
     // that also correctly handles the race where a concurrent run minted
     // the key between `load-canonicals` and `canonicalize`.
-    const truedAssignments: CanonicalAssignment[] = canonResult.assignments.map((a) => ({
-      ...a,
-      is_new_canonical: !existingKeys.has(a.canonical_topic_key),
-    })) as CanonicalAssignment[];
+    const truedAssignments: CanonicalAssignment[] = keptAssignmentsReindexed.map((a) => {
+      // Only 'keep' branch reaches here (drops filtered out above), so
+      // canonical_topic_key is non-null. Cast narrows the discriminated union.
+      if (a.decision !== 'keep') return a;
+      return {
+        ...a,
+        is_new_canonical: !existingKeys.has(a.canonical_topic_key),
+      } as CanonicalAssignment;
+    });
 
     const persistResult = await step.run('persist', () =>
       persistDailyAlertTransaction({
         runId,
         domainId,
         coverageWindowStartDate,
-        scannedTopics: scanResult.topics,
+        scannedTopics: scannedTopicsForPersist,
         canonicalAssignments: truedAssignments,
         existingCanonicalKeys: existingKeys,
       })
@@ -310,7 +372,9 @@ export const dailyAlertRun = inngest.createFunction(
         .from('daily_alert_runs')
         .update({
           status: 'succeeded',
-          topic_count: scanResult.topics.length,
+          // topic_count reflects what actually landed in daily_hot_topics,
+          // i.e. kept topics after bucket filter — not the raw scan count.
+          topic_count: scannedTopicsForPersist.length,
           new_canonical_count: persistResult.newCanonicalKeys.length,
           completed_at: new Date().toISOString(),
         })
@@ -323,7 +387,7 @@ export const dailyAlertRun = inngest.createFunction(
     return {
       runId,
       status: 'succeeded' as const,
-      topicCount: scanResult.topics.length,
+      topicCount: scannedTopicsForPersist.length,
       newCanonicalCount: persistResult.newCanonicalKeys.length,
     };
   }

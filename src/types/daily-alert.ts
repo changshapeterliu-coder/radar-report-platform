@@ -147,8 +147,14 @@ export const ScanTopicSchema = z.object({
   rank: z.number().int().min(1).max(10),
   topic_name_zh: z.string().min(1).max(40),
   keywords: z.array(z.string().min(1)).min(1).max(5),
+  // Three evidence fields below are *structural forcing functions*: the AI
+  // can only fill them with ≥2 items if it actually executed a web_search
+  // that returned ≥2 distinct results. Lowering any of these from 2 to 1
+  // would reopen the 2026-05-03 fabrication mode (AI ignoring the tool).
+  // Per Principle 2: enforce search at the schema layer, not via prompt hope.
   sample_quotes: z.array(ScanSampleQuoteSchema).min(2).max(3),
-  source_links: z.array(ScanSourceLinkSchema).min(3).max(10),
+  source_links: z.array(ScanSourceLinkSchema).min(2).max(10),
+  discussion_channels: z.array(z.string().min(1).max(50)).min(2).max(8),
   hot_score: z.number().int().min(0).max(100),
   summary_zh: z.string().min(1).max(400),
 });
@@ -160,13 +166,42 @@ export const ScanResponseSchema = z.object({
 export type ScanResponse = z.infer<typeof ScanResponseSchema>;
 export type ScanTopic = z.infer<typeof ScanTopicSchema>;
 
-// Canonicalize response — discriminated union on `is_new_canonical`.
-// Reuse branch omits the title/description (they're inherited from the
-// matched canonical at persist time). New branch carries the freshly-generated
-// title + description.
+// Canonicalize response — discriminated union on `decision`, with the
+// `keep` branch further discriminated on `is_new_canonical`.
+//
+// Post-search bucket filter (as of migration 021): canonicalize also acts
+// as a business-focus gate. A scanned topic that does NOT belong to either
+// "Account Suspension" (account-level consequence) or "Listing Takedown"
+// (listing-level consequence) is returned with `decision: 'drop'` + a
+// `drop_reason`, and will NOT be persisted into daily_hot_topics.
+//
+// Drop branch: everything except scanned_topic_index/decision/drop_reason
+// is explicitly null so the AI cannot accidentally smuggle in a canonical
+// assignment via a dropped topic.
+//
+// Keep branches: require `bucket` to be one of the two literals, never null.
+//
+// This schema is the sole place where the 3-way shape is enforced; the
+// discriminated union makes Zod reject any mixed/inconsistent shape at
+// parse time (e.g. decision='drop' with a non-null canonical_topic_key).
+
+const CanonicalAssignmentDropSchema = z.object({
+  scanned_topic_index: z.number().int().nonnegative(),
+  decision: z.literal('drop'),
+  bucket: z.null(),
+  drop_reason: z.string().min(1).max(300),
+  canonical_topic_key: z.null(),
+  is_new_canonical: z.literal(false),
+  category_slug: z.null(),
+  secondary_axis_type: z.null(),
+  secondary_axis_value: z.null(),
+});
 
 const CanonicalAssignmentReuseSchema = z.object({
   scanned_topic_index: z.number().int().nonnegative(),
+  decision: z.literal('keep'),
+  bucket: z.enum(['account_suspension', 'listing_takedown']),
+  drop_reason: z.null(),
   canonical_topic_key: z.string().regex(CANONICAL_KEY_REGEX),
   is_new_canonical: z.literal(false),
   category_slug: z.string().regex(/^[a-z0-9-]+$/),
@@ -176,6 +211,9 @@ const CanonicalAssignmentReuseSchema = z.object({
 
 const CanonicalAssignmentNewSchema = z.object({
   scanned_topic_index: z.number().int().nonnegative(),
+  decision: z.literal('keep'),
+  bucket: z.enum(['account_suspension', 'listing_takedown']),
+  drop_reason: z.null(),
   canonical_topic_key: z.string().regex(CANONICAL_KEY_REGEX),
   is_new_canonical: z.literal(true),
   category_slug: z.string().regex(/^[a-z0-9-]+$/),
@@ -185,9 +223,16 @@ const CanonicalAssignmentNewSchema = z.object({
   canonical_description_zh: z.string().min(30).max(400),
 });
 
-export const CanonicalAssignmentSchema = z.discriminatedUnion('is_new_canonical', [
+// Nested discriminated union: first split on decision (drop vs keep),
+// then inside 'keep' split on is_new_canonical.
+const CanonicalAssignmentKeepSchema = z.discriminatedUnion('is_new_canonical', [
   CanonicalAssignmentReuseSchema,
   CanonicalAssignmentNewSchema,
+]);
+
+export const CanonicalAssignmentSchema = z.discriminatedUnion('decision', [
+  CanonicalAssignmentDropSchema,
+  CanonicalAssignmentKeepSchema,
 ]);
 
 export const CanonicalizeResponseSchema = z.object({

@@ -20,7 +20,9 @@
  *   P24 — First-ever topic for empty domain is always new
  */
 
-import type { CanonicalAssignment } from '@/types/daily-alert';
+// Note: no longer imports CanonicalAssignment — since migration 021 the
+// narrower input shape (just { canonical_topic_key: string }) is clearer
+// and avoids tempting callers to pass the drop branch (which has null key).
 
 /**
  * Return `true` iff the assignment's `canonical_topic_key` is NOT present
@@ -28,9 +30,13 @@ import type { CanonicalAssignment } from '@/types/daily-alert';
  * `is_new_canonical` value.
  *
  * Empty `existingKeys` → always returns `true`.
+ *
+ * Only valid for `decision: 'keep'` assignments — `drop` assignments have
+ * `canonical_topic_key: null` and should not be passed through here.
+ * Callers are expected to filter the drop branch before invoking.
  */
 export function computeIsNewCanonical(
-  assignment: Pick<CanonicalAssignment, 'canonical_topic_key'>,
+  assignment: { canonical_topic_key: string },
   existingKeys: ReadonlySet<string>
 ): boolean {
   return !existingKeys.has(assignment.canonical_topic_key);

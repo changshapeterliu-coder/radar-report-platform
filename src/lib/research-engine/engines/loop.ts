@@ -258,6 +258,13 @@ async function callResearcher<T>(
       jsonMode: true,
       searchRecency,
       contentSize,
+      // Upgrade weekly engine B to z.ai's Pro search engine (probe 2026-05-06,
+      // commit 78c88ed case H): 10 real Chinese-seller refs in 24h window
+      // vs basic engine returning CGTN/Oregon-Health junk. Weekly already
+      // worked OK with the basic engine (case E: 5 refs + 6 topics), but
+      // same-cost upgrade removes the weak-day variance observed in the
+      // wild. Cost is $0.01/use per docs.z.ai pricing.
+      searchEngine: 'search_pro',
       errorContext: {
         engine: config.engineLabel,
         stage: p.stage,

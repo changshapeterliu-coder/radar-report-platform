@@ -1,42 +1,69 @@
-/**
- * Daily Hot-Topic Alert — default prompts (seeded via migration 017).
- *
- * These two Chinese prompts are the **source of truth** for the daily-alert
- * pipeline's prompt behavior. They are:
- *   1. Seeded into the `prompt_templates` table via migration 017
- *      (`prompt_type` = `'daily_scan_prompt'` | `'daily_canonicalization_prompt'`)
- *   2. Exposed to the admin UI via `GET /api/admin/daily-alert-prompts`
- *      as the `defaults` payload — used by the "Reset to default" action
- *
- * CRITICAL — cross-file invariant:
- *   The text below MUST stay byte-identical to the dollar-quoted SQL literals
- *   in the most recent daily_scan_prompt / daily_canonicalization_prompt
- *   migration. Currently that is:
- *     - 017 (initial seed)
- *     - 019 (rewrite daily_scan_prompt: goal-oriented, anti-hallucination)
- *     - 020 (add business-focus buckets: Account Suspension / Listing Takedown)
- *     - 021 (revert bucket from scan + add evidence-forcing schema;
- *            canonicalize absorbs bucket-gate with decision/bucket/drop_reason)
- *   If you edit one, edit the other in the same commit. No drift allowed.
- *
- * Placeholder contract (enforced by PUT validation on /api/admin/daily-alert-prompts):
- *   - DEFAULT_DAILY_SCAN_PROMPT must contain `{coverage_window_start}` AND
- *     `{coverage_window_end}`. `{domain_name}` is optional.
- *   - DEFAULT_DAILY_CANONICALIZATION_PROMPT must contain `{scanned_topics_json}`
- *     AND `{existing_canonicals_json}`. `{domain_name}` is optional.
- *
- * Design references:
- *   - `.kiro/specs/daily-hot-topic-alert/design.md` § "默认 Prompts"
- *   - `.kiro/specs/daily-hot-topic-alert/requirements.md` § Requirement 12
- *     (admin-editable prompts)
- *
- * Style note (per `.kiro/specs/goal-oriented-prompt-rewrite`):
- *   Prompts are goal-oriented — they state the mission, trust the AI on
- *   search depth, and reserve hard rules for output schema + anti-fabrication.
- *   No desperate warnings, no artificial quotas, no all-caps threats.
- */
+-- ============================================================
+-- 021_post_search_bucket_filter.sql
+--
+-- Two coordinated prompt rewrites implementing the "post-search bucket
+-- filter" architecture:
+--
+--   1. daily_scan_prompt reverts to a pure search/scan role
+--      (no Bucket 1 / Bucket 2 definitions) + adds schema-level evidence
+--      forcing functions (sample_quotes ≥2, source_links ≥2,
+--      discussion_channels ≥2). This un-blocks the 2026-05-03-onwards
+--      zero-topics production failure where migration 020's business-
+--      focus block let GLM-4.6 skip web_search and fabricate topics from
+--      training knowledge.
+--
+--   2. daily_canonicalization_prompt absorbs the bucket-gate role and
+--      extends every assignment with `decision: 'keep' | 'drop'` +
+--      `bucket` + `drop_reason`. Dropped topics never reach
+--      daily_hot_topics.
+--
+-- Motivation: see probe evidence 2026-05-06 (A/B/C/H/I cases) and the
+-- content-design-review discussion. Summary:
+--   - Basic web_search engine can recall Chinese seller sites BUT only
+--     produces fabricated "daily" topics when the prompt pre-declares the
+--     buckets — the AI finds it easier to generate plausible bucket-fitting
+--     topics from memory than to actually search.
+--   - search_pro (new pipeline param, commit 78c88ed) + a pure-search prompt
+--     returns real 24h Chinese seller content without fabrication.
+--   - Moving bucket reasoning downstream to canonicalize keeps scan's
+--     single responsibility = "find real discussions" and makes the filter
+--     observable (drop_reason is stored alongside kept topics in run raw_output).
+--
+-- Design choice reaffirmed:
+--   - Bucket definitions stay abstract (semantic, not keyword whitelists).
+--   - No new DB columns on topic_canonicals — bucket gating is a run-time
+--     filter, not a durable dictionary attribute. If we later want bucket
+--     analytics, a future migration can derive bucket from the canonical's
+--     historical assignments.
+--
+-- Spec: .kiro/specs/daily-hot-topic-alert/ (Requirements 4.x, 9.x, 12.1)
+--
+-- Depends on:
+--   - 017 (seed rows for daily_scan_prompt + daily_canonicalization_prompt)
+--   - 019 / 020 superseded by this migration's scan rewrite
+--   - Application-layer CanonicalAssignmentSchema extended in the same
+--     commit (src/types/daily-alert.ts) — the schema MUST ship together
+--     with this migration, otherwise running daily-alert pipeline against
+--     pre-021 prompts or post-021 prompts with pre-021 schema will fail
+--     Zod parse.
+--
+-- Re-run safety: both UPDATEs are idempotent; `updated_at = NOW()` bumps
+-- on each apply. Admin-edited overrides are clobbered (same tradeoff as
+-- 019 / 020).
+--
+-- CROSS-FILE INVARIANT:
+--   The two prompt bodies below MUST stay byte-identical (modulo SQL/JS
+--   escaping) to DEFAULT_DAILY_SCAN_PROMPT and
+--   DEFAULT_DAILY_CANONICALIZATION_PROMPT in
+--   `src/lib/daily-alert/prompt-defaults.ts`. Edit both in the same commit.
+-- ============================================================
 
-export const DEFAULT_DAILY_SCAN_PROMPT = `# 角色
+-- ─────────────────────────────────────────────────────────────
+-- Part 1 / 2: daily_scan_prompt — pure search role + evidence forcing fields
+-- ─────────────────────────────────────────────────────────────
+
+UPDATE prompt_templates
+   SET template_text = $SCAN$# 角色
 你是亚马逊中国卖家账户健康领域的**每日热点话题侦察员**。
 
 # 使命
@@ -118,9 +145,18 @@ discussion_channels）是结构性约束**：没有真实搜索结果你填不�
 和视角、每次搜索都没有命中任何能凑齐 2+2+2 证据字段的话题时，才返回
 \`{"topics": []}\`。空数组在下游系统里是一个明确的"当日无可信信号"信号，
 会触发操作员复查 —— 不要把它当默认退路。
-`;
+$SCAN$,
+       updated_at = NOW()
+ WHERE domain_id = (SELECT id FROM domains WHERE name = 'Account Health')
+   AND prompt_type = 'daily_scan_prompt';
 
-export const DEFAULT_DAILY_CANONICALIZATION_PROMPT = `# 角色
+
+-- ─────────────────────────────────────────────────────────────
+-- Part 2 / 2: daily_canonicalization_prompt — absorbs bucket-gate role
+-- ─────────────────────────────────────────────────────────────
+
+UPDATE prompt_templates
+   SET template_text = $CANON$# 角色
 你是亚马逊中国卖家账户健康领域的**话题归类员**兼**业务焦点判定员**。
 
 # 使命
@@ -275,4 +311,52 @@ drop 的话题不进分类字典、不占当日 Top 名额 —— 但要在输�
     ...对每个 scanned_topic_index 一条, 与输入的 topic 数量完全一致
   ]
 }
-`;
+$CANON$,
+       updated_at = NOW()
+ WHERE domain_id = (SELECT id FROM domains WHERE name = 'Account Health')
+   AND prompt_type = 'daily_canonicalization_prompt';
+
+
+-- ============================================================
+-- Manual verification (run after applying migration 021):
+--
+--   -- 1. Scan prompt has evidence-forcing fields, no bucket block:
+--   SELECT
+--     template_text LIKE '%discussion_channels%'              AS has_channels,
+--     template_text LIKE '%**至少 2** 个平台%'                 AS has_channels_min,
+--     template_text LIKE '%业务焦点%'                          AS has_old_bucket,
+--     template_text LIKE '%Bucket 1: Account Suspension%'     AS has_old_b1
+--   FROM prompt_templates
+--   WHERE domain_id = (SELECT id FROM domains WHERE name = 'Account Health')
+--     AND prompt_type = 'daily_scan_prompt';
+--   Expected: t, t, f, f  (channels fields present; bucket block gone)
+--
+--   -- 2. Canonicalize prompt now carries the bucket-gate + decision field:
+--   SELECT
+--     template_text LIKE '%业务焦点判定员%'                      AS has_role,
+--     template_text LIKE '%Bucket 1: Account Suspension%'       AS has_b1,
+--     template_text LIKE '%Bucket 2: Listing Takedown%'         AS has_b2,
+--     template_text LIKE '%decision = "drop"%'                  AS has_drop,
+--     template_text LIKE '%"bucket": <"account_suspension"%'    AS has_bucket_field
+--   FROM prompt_templates
+--   WHERE domain_id = (SELECT id FROM domains WHERE name = 'Account Health')
+--     AND prompt_type = 'daily_canonicalization_prompt';
+--   Expected: t, t, t, t, t
+--
+--   -- 3. Placeholders still intact (PUT validator requires these):
+--   SELECT
+--     (scan_row.template_text LIKE '%{coverage_window_start}%')  AS scan_has_start,
+--     (scan_row.template_text LIKE '%{coverage_window_end}%')    AS scan_has_end,
+--     (canon_row.template_text LIKE '%{scanned_topics_json}%')   AS canon_has_topics,
+--     (canon_row.template_text LIKE '%{existing_canonicals_json}%') AS canon_has_existing
+--   FROM
+--     (SELECT template_text FROM prompt_templates
+--      WHERE prompt_type = 'daily_scan_prompt'
+--        AND domain_id = (SELECT id FROM domains WHERE name = 'Account Health')
+--      LIMIT 1) AS scan_row,
+--     (SELECT template_text FROM prompt_templates
+--      WHERE prompt_type = 'daily_canonicalization_prompt'
+--        AND domain_id = (SELECT id FROM domains WHERE name = 'Account Health')
+--      LIMIT 1) AS canon_row;
+--   Expected: t, t, t, t
+-- ============================================================

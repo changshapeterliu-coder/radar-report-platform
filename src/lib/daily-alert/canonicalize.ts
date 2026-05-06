@@ -46,8 +46,18 @@ export interface DailyCanonicalizeInput {
 export type DailyCanonicalizeResult =
   | {
       ok: true;
-      /** One assignment per scannedTopic (same index). */
-      assignments: CanonicalAssignment[];
+      /**
+       * Assignments whose decision is `'keep'`. Only these proceed to
+       * persist. Each carries a `bucket` literal for downstream filtering
+       * / analytics.
+       */
+      keptAssignments: CanonicalAssignment[];
+      /**
+       * Assignments whose decision is `'drop'`. These never reach
+       * `daily_hot_topics`; they are surfaced here for debugging /
+       * observability (admin UI may want to display drop_reason).
+       */
+      droppedAssignments: CanonicalAssignment[];
       rawContent: string;
     }
   | {
@@ -145,6 +155,10 @@ export async function runDailyCanonicalize(
   }
 
   // Key normalization + completeness-by-index check.
+  //
+  // Note (migration 021): assignment.decision can now be 'drop', in which
+  // case canonical_topic_key is null and we skip key normalization entirely.
+  // Only 'keep' assignments go through normalizeCanonicalKey.
   const seenIndices = new Set<number>();
   const normalized: CanonicalAssignment[] = [];
 
@@ -166,8 +180,15 @@ export async function runDailyCanonicalize(
     }
     seenIndices.add(idx);
 
-    // Normalize the key (lowercase primary segment, trim); throws if
-    // it still doesn't match the regex.
+    if (assignment.decision === 'drop') {
+      // Drop branch: nothing to normalize. Zod already enforced all nulls
+      // and the drop_reason string. Pass through unchanged.
+      normalized.push(assignment);
+      continue;
+    }
+
+    // Keep branch: normalize the key (lowercase primary segment, trim);
+    // throws if it still doesn't match the regex.
     let normalizedKey: string;
     try {
       normalizedKey = normalizeCanonicalKey(assignment.canonical_topic_key);
@@ -189,9 +210,15 @@ export async function runDailyCanonicalize(
   // Sort by scanned_topic_index so caller can zip with scannedTopics[i].
   normalized.sort((a, b) => a.scanned_topic_index - b.scanned_topic_index);
 
+  // Split into kept vs dropped. Callers consume these separately: kept
+  // goes into persist, dropped is surfaced for debugging.
+  const keptAssignments = normalized.filter((a) => a.decision === 'keep');
+  const droppedAssignments = normalized.filter((a) => a.decision === 'drop');
+
   return {
     ok: true,
-    assignments: normalized,
+    keptAssignments,
+    droppedAssignments,
     rawContent: result.rawContent,
   };
 }
