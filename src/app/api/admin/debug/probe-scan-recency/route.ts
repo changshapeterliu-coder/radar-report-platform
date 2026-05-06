@@ -64,7 +64,9 @@ interface CaseResult {
     | 'F_weeklyPromptDailyWindow_oneDay'
     | 'G_weeklyPromptDailyWindow_noLimit'
     | 'H_searchPro_oneDay'
-    | 'I_searchPro_searchPrompt_oneDay';
+    | 'I_searchPro_searchPrompt_oneDay'
+    | 'J_prodDailyPrompt_searchPro'
+    | 'K_prodDailyPromptRelaxedMin_searchPro';
   searchRecency: 'oneDay' | 'oneWeek' | 'noLimit';
   toolChoice: 'auto' | 'required';
   ok: boolean;
@@ -245,6 +247,71 @@ async function loadAndResolveWeeklyPromptForDailyWindow(
     .join(weekLabel);
 }
 
+/**
+ * Load the production daily_scan_prompt (currently migration 021) from
+ * prompt_templates and substitute a 24-hour coverage window into the
+ * placeholders. Optionally apply a "relaxed min" transform that rewrites
+ * the in-prompt evidence thresholds from 2 → 1 — used by probe case K
+ * to test whether the 2+2+2 constraint is the bottleneck that caused
+ * production run afccee15-... to return {"topics":[]} despite searchCount=7.
+ *
+ * Returns null if the prompt row can't be loaded.
+ *
+ * IMPORTANT: This transform is intentionally surgical — it only touches
+ * the numeric thresholds in the min-count rule, not the structural
+ * evidence-field requirement. Goal is to isolate "does GLM return topics
+ * when the threshold is 1?" from all other variables.
+ */
+async function loadAndResolveProdDailyScanPrompt(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  options: { relaxMinToOne: boolean }
+): Promise<string | null> {
+  const { data: domainRows } = await supabase
+    .from('domains')
+    .select('id')
+    .eq('name', 'Account Health')
+    .limit(1);
+  const domainId = domainRows?.[0]?.id;
+  if (!domainId) return null;
+
+  const { data: promptRows } = await supabase
+    .from('prompt_templates')
+    .select('template_text')
+    .eq('domain_id', domainId)
+    .eq('prompt_type', 'daily_scan_prompt')
+    .limit(1);
+  const template = promptRows?.[0]?.template_text;
+  if (!template || typeof template !== 'string') return null;
+
+  const now = new Date();
+  const endDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const startDate = endDate;
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  let resolved = template
+    .split('{coverage_window_start}')
+    .join(fmt(startDate))
+    .split('{coverage_window_end}')
+    .join(fmt(endDate))
+    .split('{domain_name}')
+    .join('Account Health');
+
+  if (options.relaxMinToOne) {
+    // Rewrite the numeric thresholds only. Strings targeted match migration 021:
+    //   "**至少 2** 个 ..."                      → "**至少 1** 个 ..."
+    //   "凑不齐 2 个 sample_quotes / 2 个 ..."    → "凑不齐 1 个 ... / 1 个 ..."
+    //   "凑齐 2+2+2 证据字段"                    → "凑齐 1+1+1 证据字段"
+    resolved = resolved
+      .split('**至少 2**')
+      .join('**至少 1**')
+      .split('凑不齐 2 个 sample_quotes / 2 个 source_links / 2 个')
+      .join('凑不齐 1 个 sample_quotes / 1 个 source_links / 1 个')
+      .split('凑齐 2+2+2 证据字段')
+      .join('凑齐 1+1+1 证据字段');
+  }
+
+  return resolved;
+}
+
 function diagnose(results: CaseResult[]): string {
   const a = results.find((r) => r.label === 'A_oneDay');
   const b = results.find((r) => r.label === 'B_oneWeek');
@@ -348,6 +415,23 @@ export async function GET(_request: NextRequest) {
     );
   }
 
+  // Cases J / K: production daily_scan_prompt (migration 021), with
+  // case K rewriting the 2+2+2 evidence thresholds to 1+1+1 to test
+  // the "threshold-too-strict" hypothesis for the 2026-05-06 zero-topic
+  // production run (afccee15-...).
+  const prodDailyPrompt = await loadAndResolveProdDailyScanPrompt(supabase, {
+    relaxMinToOne: false,
+  });
+  const prodDailyPromptRelaxed = await loadAndResolveProdDailyScanPrompt(
+    supabase,
+    { relaxMinToOne: true }
+  );
+  if (prodDailyPrompt == null || prodDailyPromptRelaxed == null) {
+    console.warn(
+      '[probe-scan-recency] Could not load daily_scan_prompt; cases J/K will be skipped'
+    );
+  }
+
   const results: CaseResult[] = [];
   const cases: Array<{
     label: CaseResult['label'];
@@ -426,6 +510,35 @@ export async function GET(_request: NextRequest) {
     searchPrompt:
       '只查找中国跨境卖家社区（知无不言、卖家之家、雨果网、亿恩网、AMZ123、跨境知道、小红书跨境博主、微博跨境圈）关于亚马逊账户健康、封号、申诉、listing 下架、合规、KYC 的讨论。排除英文媒体和非卖家论坛。',
   });
+
+  // J / K: production daily prompt regression tests. Isolate whether the
+  // 2+2+2 evidence threshold is the true bottleneck for zero-topic days.
+  //   J: prod prompt as-is, expected to reproduce {"topics":[]} like run
+  //      afccee15-... from 2026-05-06.
+  //   K: same prompt but with numeric min-counts rewritten 2→1 in the
+  //      prompt body. If K returns topics while J is empty, the
+  //      threshold is confirmed as the bottleneck, and we can safely
+  //      ship "min 1" to production Zod + migration 022.
+  if (prodDailyPrompt) {
+    cases.push({
+      label: 'J_prodDailyPrompt_searchPro',
+      recency: 'noLimit',
+      toolChoice: 'auto',
+      promptOverride: prodDailyPrompt,
+      contentSizeOverride: 'high',
+      searchEngine: 'search_pro',
+    });
+  }
+  if (prodDailyPromptRelaxed) {
+    cases.push({
+      label: 'K_prodDailyPromptRelaxedMin_searchPro',
+      recency: 'noLimit',
+      toolChoice: 'auto',
+      promptOverride: prodDailyPromptRelaxed,
+      contentSizeOverride: 'high',
+      searchEngine: 'search_pro',
+    });
+  }
 
   for (const c of cases) {
     console.log(
