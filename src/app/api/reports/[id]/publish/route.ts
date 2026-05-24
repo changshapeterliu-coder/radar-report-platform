@@ -237,15 +237,43 @@ Return ONLY valid JSON.`;
 
           for (const item of newsItems) {
             if (item.title && item.content) {
-              await supabase.from('news').insert({
-                domain_id: report.domain_id,
-                created_by: user.id,
-                title: item.title,
-                summary: item.summary || null,
-                content: item.content,
-                source_channel: 'AI Insight',
-                is_pinned: false,
-              });
+              const { data: insertedNews, error: insertErr } = await supabase
+                .from('news')
+                .insert({
+                  domain_id: report.domain_id,
+                  created_by: user.id,
+                  title: item.title,
+                  summary: item.summary || null,
+                  content: item.content,
+                  source_channel: 'AI Insight',
+                  is_pinned: false,
+                })
+                .select('id')
+                .single();
+
+              if (insertErr || !insertedNews?.id) {
+                console.warn(
+                  `[publish ${id}] AI Insight news insert failed (non-blocking): ${insertErr?.message ?? 'no id returned'}`
+                );
+                continue;
+              }
+
+              // Enqueue translation so AI Insight news shows up bilingual
+              // like every other news row. Mirrors /api/news POST. Bug
+              // pre-fix: AI Insight rows never carried `content_translated`
+              // because this enqueue was missing — they always rendered as
+              // Chinese-original on en mode.
+              try {
+                await inngest.send({
+                  name: 'news/translate',
+                  data: { newsId: insertedNews.id },
+                });
+              } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                console.warn(
+                  `[publish ${id}] AI Insight translate enqueue failed for ${insertedNews.id} (non-blocking): ${msg}`
+                );
+              }
             }
           }
         } else {
