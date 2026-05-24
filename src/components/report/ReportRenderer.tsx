@@ -12,7 +12,7 @@ import type {
 } from '@/types/report';
 import BlockRenderer from './BlockRenderer';
 import MarkdownRenderer from './MarkdownRenderer';
-import TopTopicsTable from './TopTopicsTable';
+import TopTopicsTable, { type CategoryCellState } from './TopTopicsTable';
 import { isMarkdownModule } from '@/lib/validators/report-schema';
 
 /**
@@ -251,14 +251,31 @@ function HighlightBoxRenderer({ box }: { box: HighlightBox }) {
 
 // ─── Module Card ───
 
-function ModuleCard({ module }: { module: ReportModule }) {
+function ModuleCard({
+  module,
+  categoryResolution,
+}: {
+  module: ReportModule;
+  categoryResolution?: CategoryCellState[];
+}) {
   if (isMarkdownModule(module)) {
-    return <MarkdownModuleCard module={module} />;
+    return (
+      <MarkdownModuleCard
+        module={module}
+        categoryResolution={categoryResolution}
+      />
+    );
   }
   return <LegacyModuleCard module={module} />;
 }
 
-function MarkdownModuleCard({ module }: { module: ReportModule }) {
+function MarkdownModuleCard({
+  module,
+  categoryResolution,
+}: {
+  module: ReportModule;
+  categoryResolution?: CategoryCellState[];
+}) {
   const hasTopTopics =
     Array.isArray(module.topTopics) && module.topTopics.length > 0;
   return (
@@ -271,7 +288,12 @@ function MarkdownModuleCard({ module }: { module: ReportModule }) {
       </div>
       <div className="px-6 py-8 sm:px-10">
         <div className="mx-auto max-w-[820px]">
-          {hasTopTopics && <TopTopicsTable topics={module.topTopics!} />}
+          {hasTopTopics && (
+            <TopTopicsTable
+              topics={module.topTopics!}
+              categoryResolution={categoryResolution}
+            />
+          )}
           <MarkdownRenderer source={module.markdown ?? ''} />
         </div>
       </div>
@@ -343,10 +365,36 @@ function LegacyModuleCard({ module }: { module: ReportModule }) {
 
 export interface ReportRendererProps {
   module: ReportModule;
+  /**
+   * Optional per-module category resolution map, keyed by module index in
+   * `report.content.modules`. When provided alongside `moduleIndex`, the
+   * matching slice is forwarded to `<TopTopicsTable categoryResolution=…>`,
+   * which renders the unified-dictionary Category column.
+   *
+   * When omitted (or no entry exists for the current `moduleIndex`), the
+   * Category column is not rendered, preserving behavior for callers that
+   * have not yet adopted the unified topic dictionary.
+   *
+   * Spec ref: Req 17.1.
+   */
+  categoryResolutionByModule?: Record<number, CategoryCellState[]>;
+  /**
+   * Index of `module` within its parent `report.content.modules` array.
+   * Required to look up the right slice in `categoryResolutionByModule`.
+   */
+  moduleIndex?: number;
 }
 
-export default function ReportRenderer({ module }: ReportRendererProps) {
-  return <ModuleCard module={module} />;
+export default function ReportRenderer({
+  module,
+  categoryResolutionByModule,
+  moduleIndex,
+}: ReportRendererProps) {
+  const categoryResolution =
+    moduleIndex !== undefined
+      ? categoryResolutionByModule?.[moduleIndex]
+      : undefined;
+  return <ModuleCard module={module} categoryResolution={categoryResolution} />;
 }
 
 export {

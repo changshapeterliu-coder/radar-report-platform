@@ -10,7 +10,11 @@ import type { TopTopic } from '@/types/report';
  * TopTopic[] (v4 schema), not from AI-produced table JSON.
  *
  * Columns (fixed):
- *   Rank / Topic / Voice Volume / Keywords / Seller Discussion / Severity
+ *   Rank / Topic / Category? / Voice Volume / Keywords / Seller Discussion / Severity
+ *
+ * The `Category` column is conditional: it only renders when the caller
+ * passes `categoryResolution` (zero-impact for existing call sites that
+ * predate the unified topic dictionary work — Spec ref: design §17.1).
  *
  * Rank column respects the `cross_engine_confirmed` hint:
  *   - confirmed  -> rank + green lucide Check (cross-engine)
@@ -33,6 +37,26 @@ const SEVERITY_VARIANT: Record<
   low: { labelKey: 'report.topTopics.severityLow', variant: 'info' },
 };
 
+/**
+ * Per-row category resolution states for the Category column.
+ *
+ * - `canonical` — row is mapped to a canonical topic; render the resolved
+ *    title (zh on zh-mode; en on en-mode; zh + `(Chinese original)` indicator
+ *    when en is null/empty on en-mode). Spec ref: Req 17.4(a).
+ * - `dropped` — engine intentionally dropped this topic; render `—` with
+ *    `title=dropReason` for hover detail. Spec ref: Req 17.4(b).
+ * - `unmapped` — no canonical, no drop reason (e.g. legacy row pre-canonicalize);
+ *    render `—` with no tooltip. Spec ref: Req 17.4(c).
+ *
+ * Priority when a data row has both a canonical key and a drop reason
+ * (shouldn't happen, but defensive): canonical wins. Resolution is the
+ * caller's responsibility — this type just describes what to render.
+ */
+export type CategoryCellState =
+  | { kind: 'canonical'; titleZh: string; titleEn: string | null }
+  | { kind: 'dropped'; dropReason: string }
+  | { kind: 'unmapped' };
+
 function RankBadge({
   rank,
   confirmed,
@@ -51,18 +75,66 @@ function RankBadge({
   return <span className="text-foreground-muted">{rank}</span>;
 }
 
+function CategoryCell({
+  state,
+  lang,
+}: {
+  state: CategoryCellState;
+  lang: 'zh' | 'en';
+}) {
+  if (state.kind === 'canonical') {
+    if (lang === 'zh') {
+      return <span className="text-foreground">{state.titleZh}</span>;
+    }
+    if (state.titleEn && state.titleEn.trim().length > 0) {
+      return <span className="text-foreground">{state.titleEn}</span>;
+    }
+    // en-mode but no en title: show zh with a muted indicator. Spec ref: Req 10.3 / 17.4(a).
+    return (
+      <span className="text-foreground">
+        {state.titleZh}{' '}
+        <span className="text-foreground-muted">(Chinese original)</span>
+      </span>
+    );
+  }
+  if (state.kind === 'dropped') {
+    return (
+      <span className="text-foreground-muted" title={state.dropReason}>
+        —
+      </span>
+    );
+  }
+  // unmapped — no tooltip (Spec ref: Req 17.4(c))
+  return <span className="text-foreground-muted">—</span>;
+}
+
 export interface TopTopicsTableProps {
   topics: TopTopic[];
   /** Table heading — optional. */
   caption?: string;
+  /**
+   * Per-row category resolution, index-aligned with `topics`. When omitted,
+   * the Category column is not rendered at all (zero-impact for existing
+   * call sites). When provided, the column renders unconditionally; rows
+   * without a corresponding entry render as `unmapped`.
+   *
+   * Spec ref: Req 17.1 (column appears with the unified topic dictionary).
+   */
+  categoryResolution?: Array<CategoryCellState>;
 }
 
 export default function TopTopicsTable({
   topics,
   caption,
+  categoryResolution,
 }: TopTopicsTableProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   if (!topics || topics.length === 0) return null;
+
+  const showCategory = categoryResolution !== undefined;
+  const lang: 'zh' | 'en' = i18n.language?.startsWith('zh') ? 'zh' : 'en';
+  const categoryHeader = lang === 'zh' ? '类别' : 'Category';
+
   return (
     <div className="my-5 overflow-hidden rounded-lg border border-border">
       {caption && (
@@ -86,6 +158,14 @@ export default function TopTopicsTable({
               >
                 {t('report.topTopics.topic')}
               </th>
+              {showCategory && (
+                <th
+                  scope="col"
+                  className="border-b border-border px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-foreground-muted"
+                >
+                  {categoryHeader}
+                </th>
+              )}
               <th
                 scope="col"
                 className="w-20 border-b border-border px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-foreground-muted"
@@ -126,6 +206,14 @@ export default function TopTopicsTable({
                   <td className="border-b border-border px-4 py-3 font-medium text-foreground">
                     {topicRow.topic}
                   </td>
+                  {showCategory && (
+                    <td className="border-b border-border px-4 py-3 text-sm">
+                      <CategoryCell
+                        state={categoryResolution[i] ?? { kind: 'unmapped' }}
+                        lang={lang}
+                      />
+                    </td>
+                  )}
                   <td className="border-b border-border px-4 py-3 font-mono text-foreground">
                     {topicRow.voice_volume.toFixed(1)}
                   </td>

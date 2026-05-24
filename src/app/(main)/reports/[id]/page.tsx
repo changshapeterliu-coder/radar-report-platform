@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useMemo,
   useState,
   use,
   Component,
@@ -23,6 +24,7 @@ import {
   getDisplayReportTitle,
   getDisplayReportDateRange,
 } from '@/lib/content-display';
+import type { CategoryCellState } from '@/components/report/TopTopicsTable';
 
 /**
  * Report viewer page.
@@ -39,6 +41,35 @@ import {
  */
 
 type ReportRow = Database['public']['Tables']['reports']['Row'];
+
+/**
+ * Joined `topic_rankings` row carrying its canonical title pair via
+ * Supabase's nested-select syntax. The `topic_canonicals` field arrives
+ * as `null` (no FK match), a single object, or an array depending on the
+ * postgrest plan — normalize on read. (Same pattern as the publish route's
+ * AI Insight news block.)
+ */
+type RankingWithCanonical = {
+  module_index: number;
+  rank: number;
+  canonical_topic_key: string | null;
+  topic_canonicals:
+    | { canonical_title_zh: string; canonical_title_en: string | null }
+    | { canonical_title_zh: string; canonical_title_en: string | null }[]
+    | null;
+};
+
+/**
+ * Strip the cross-engine-confirmed marker (`✓`) from a TopTopic.rank
+ * label and parse to an integer. Returns NaN when the label is not a
+ * recognizable rank (defensive — the synthesizer schema guarantees a
+ * leading integer but we don't want a parse error to crash the page).
+ */
+function parseTopTopicRank(label: string): number {
+  const stripped = label.replace(/✓/g, '').trim();
+  const n = parseInt(stripped, 10);
+  return Number.isFinite(n) ? n : NaN;
+}
 
 // ─── Error Boundary ───
 
@@ -76,6 +107,7 @@ export default function ReportViewerPage({
   const { id } = use(params);
   const { i18n } = useTranslation();
   const [report, setReport] = useState<ReportRow | null>(null);
+  const [rankings, setRankings] = useState<RankingWithCanonical[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState(0);
@@ -85,21 +117,30 @@ export default function ReportViewerPage({
     async function fetchReport() {
       try {
         const supabase = createClient();
-        const { data, error: fetchErr } = await supabase
-          .from('reports')
-          .select('*')
-          .eq('id', id)
-          .single();
+        // Parallel: report row + topic_rankings joined to topic_canonicals.
+        // The rankings query is best-effort — failure to load the join
+        // result must not block report rendering. The Category column
+        // simply renders as `unmapped` in that case.
+        const [reportRes, rankingsRes] = await Promise.all([
+          supabase.from('reports').select('*').eq('id', id).single(),
+          supabase
+            .from('topic_rankings')
+            .select(
+              'module_index, rank, canonical_topic_key, topic_canonicals(canonical_title_zh, canonical_title_en)'
+            )
+            .eq('report_id', id),
+        ]);
 
-        if (fetchErr) {
-          setError(fetchErr.message);
+        if (reportRes.error) {
+          setError(reportRes.error.message);
           return;
         }
-        if (!data) {
+        if (!reportRes.data) {
           setError('Report not found');
           return;
         }
-        setReport(data as ReportRow);
+        setReport(reportRes.data as ReportRow);
+        setRankings((rankingsRes.data ?? []) as RankingWithCanonical[]);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load report');
       } finally {
@@ -108,6 +149,64 @@ export default function ReportViewerPage({
     }
     fetchReport();
   }, [id]);
+
+  /**
+   * Per-module `CategoryCellState[]` array, index-aligned with each
+   * module's `topTopics`. Built by joining `topic_rankings` rows (keyed
+   * by `(module_index, rank)`) to the canonical title pair.
+   *
+   * Priority per Req 17.4: canonical wins over dropped wins over unmapped.
+   * Drops are NEVER persisted as `topic_rankings` rows (Req 4.2 — drops
+   * never produce rankings rows), so any TopTopic without a matching
+   * row resolves to `unmapped`. The `dropped` state is reserved for
+   * future use cases where drop info is stored alongside the report.
+   *
+   * Indexing uses the original (untranslated) `report.content.modules`
+   * because TopTopic rank labels carry through translation unchanged —
+   * the localized `displayContent.modules` keeps the same length and the
+   * same `rank` strings, so the array is reusable across languages.
+   *
+   * Computed BEFORE the early returns to keep hook order stable across
+   * loading / error / success states.
+   */
+  const categoryResolutionByModule = useMemo<
+    Record<number, CategoryCellState[]>
+  >(() => {
+    const sourceModules = report?.content?.modules ?? [];
+    if (sourceModules.length === 0) return {};
+
+    // Index the joined rankings by (module_index, rank) for O(1) lookup.
+    const rankingsByModuleAndRank = new Map<string, RankingWithCanonical>();
+    for (const r of rankings) {
+      rankingsByModuleAndRank.set(`${r.module_index}:${r.rank}`, r);
+    }
+
+    const out: Record<number, CategoryCellState[]> = {};
+    sourceModules.forEach((mod, mi) => {
+      const topTopics = mod.topTopics ?? [];
+      out[mi] = topTopics.map<CategoryCellState>((tt) => {
+        const rankNum = parseTopTopicRank(tt.rank);
+        if (!Number.isFinite(rankNum)) return { kind: 'unmapped' };
+
+        const row = rankingsByModuleAndRank.get(`${mi}:${rankNum}`);
+        if (!row || !row.canonical_topic_key) return { kind: 'unmapped' };
+
+        // Postgrest-nested-select can return either a single object or a
+        // single-element array depending on the FK plan — normalize.
+        const tc = Array.isArray(row.topic_canonicals)
+          ? row.topic_canonicals[0]
+          : row.topic_canonicals;
+        if (!tc) return { kind: 'unmapped' };
+
+        return {
+          kind: 'canonical',
+          titleZh: tc.canonical_title_zh,
+          titleEn: tc.canonical_title_en,
+        };
+      });
+    });
+    return out;
+  }, [report, rankings]);
 
   if (loading) return <SpinnerBlock label="Loading report" />;
 
@@ -188,7 +287,11 @@ export default function ReportViewerPage({
           </div>
         ) : activeModule ? (
           <ErrorBoundary onError={() => setRenderError(true)}>
-            <ReportRenderer module={activeModule} />
+            <ReportRenderer
+              module={activeModule}
+              moduleIndex={activeTab}
+              categoryResolutionByModule={categoryResolutionByModule}
+            />
           </ErrorBoundary>
         ) : (
           <div className="overflow-x-auto rounded-lg border border-border bg-card p-6">

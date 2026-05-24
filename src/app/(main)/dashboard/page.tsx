@@ -28,7 +28,9 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import { useDomain } from '@/contexts/DomainContext';
 import { TableRenderer } from '@/components/report/ReportRenderer';
-import TopTopicsTable from '@/components/report/TopTopicsTable';
+import TopTopicsTable, {
+  type CategoryCellState,
+} from '@/components/report/TopTopicsTable';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { SpinnerBlock } from '@/components/ui/spinner';
@@ -64,6 +66,17 @@ import {
 type ReportRow = Database['public']['Tables']['reports']['Row'];
 type NewsRow = Database['public']['Tables']['news']['Row'];
 type TopicRankingRow = Database['public']['Tables']['topic_rankings']['Row'];
+
+/**
+ * Narrow projection of `topic_canonicals` consumed by `resolveLegendLabel`.
+ * Only the canonical key + bilingual titles are loaded — the dashboard never
+ * needs `category_slug`, `secondary_axis_*`, `seen_count`, etc., so keeping
+ * the projection thin reduces JSON payload + makes the type match the SELECT.
+ */
+type TopicCanonicalLegendRow = Pick<
+  Database['public']['Tables']['topic_canonicals']['Row'],
+  'canonical_topic_key' | 'canonical_title_zh' | 'canonical_title_en'
+>;
 
 /**
  * Chart palette from ui-design-system.md sec 1.4.
@@ -106,6 +119,9 @@ export default function DashboardPage() {
   const [reports, setReports] = useState<ReportRow[]>([]);
   const [latestNews, setLatestNews] = useState<NewsRow[]>([]);
   const [topicRankings, setTopicRankings] = useState<TopicRankingRow[]>([]);
+  const [topicCanonicals, setTopicCanonicals] = useState<
+    TopicCanonicalLegendRow[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [trendModuleIndex, setTrendModuleIndex] = useState(0);
 
@@ -113,7 +129,7 @@ export default function DashboardPage() {
     if (!currentDomainId) return;
     setLoading(true);
 
-    const [reportsRes, newsRes, topicRes] = await Promise.all([
+    const [reportsRes, newsRes, topicRes, canonicalRes] = await Promise.all([
       supabase
         .from('reports')
         .select('*')
@@ -134,11 +150,19 @@ export default function DashboardPage() {
         .select('*')
         .eq('domain_id', currentDomainId)
         .order('created_at', { ascending: true }),
+      // Canonical dictionary for legend label resolution (Req 10.2, 10.3).
+      // Loaded in parallel — domain-scoped so the cardinality stays small.
+      supabase
+        .from('topic_canonicals')
+        .select('canonical_topic_key, canonical_title_zh, canonical_title_en')
+        .eq('domain_id', currentDomainId),
     ]);
 
     if (reportsRes.data) setReports(reportsRes.data as ReportRow[]);
     if (newsRes.data) setLatestNews(newsRes.data as NewsRow[]);
     if (topicRes.data) setTopicRankings(topicRes.data as TopicRankingRow[]);
+    if (canonicalRes.data)
+      setTopicCanonicals(canonicalRes.data as TopicCanonicalLegendRow[]);
     setLoading(false);
   }, [supabase, currentDomainId]);
 
@@ -161,7 +185,10 @@ export default function DashboardPage() {
   const hotNews = latestNews.slice(0, 3);
   const historyNews = latestNews.slice(3);
 
-  // Build trend data from topic_rankings table
+  // Build trend data from topic_rankings table — group by canonical_topic_key.
+  // Rows whose canonical_topic_key is null are skipped (Req 9.1 step f). The
+  // column becomes NOT NULL in migration 027, so the null branch is defensive
+  // for any in-flight rows during the rollout window.
   const filteredRankings = useMemo(
     () => topicRankings.filter((r) => r.module_index === trendModuleIndex),
     [topicRankings, trendModuleIndex]
@@ -172,12 +199,14 @@ export default function DashboardPage() {
     const weekOrder: string[] = [];
 
     filteredRankings.forEach((r) => {
+      const groupKey = r.canonical_topic_key;
+      if (!groupKey) return;
       const week = r.week_label || 'Unknown';
       if (!weekMap.has(week)) {
         weekMap.set(week, { name: week });
         weekOrder.push(week);
       }
-      weekMap.get(week)![r.topic_label] = r.rank;
+      weekMap.get(week)![groupKey] = r.rank;
     });
 
     return weekOrder.map((w) => weekMap.get(w)!);
@@ -193,21 +222,101 @@ export default function DashboardPage() {
     return Array.from(keys).slice(0, 7);
   }, [trendData]);
 
-  // Map English topic_label → Chinese rendering for legend + tooltip.
-  // Keeps the chart's internal join key stable (always English) while the
-  // display string follows the UI language. Per Principle 3: bilingual
-  // first-class. `topic_label_zh` is NULL on rows inserted before
-  // migration 024 — falls back to topic_label (English).
-  const localizedLabel = useMemo(() => {
-    if (i18n.language !== 'zh') return (en: string) => en;
-    const zhByEn = new Map<string, string>();
-    filteredRankings.forEach((r) => {
-      if (r.topic_label_zh && !zhByEn.has(r.topic_label)) {
-        zhByEn.set(r.topic_label, r.topic_label_zh);
-      }
+  // Resolve legend / tooltip label from canonical dictionary (Req 10.2, 10.3).
+  //   - zh mode → canonical_title_zh
+  //   - en mode + non-empty canonical_title_en → canonical_title_en
+  //   - en mode + null/empty canonical_title_en → `${zh} (Chinese original)`
+  //   - key not in dictionary (legacy row whose key is a topic_label string)
+  //     → return key unchanged so the chart still renders during rollout.
+  const resolveLegendLabel = useMemo(() => {
+    const lookup = new Map<
+      string,
+      { zh: string; en: string | null }
+    >();
+    topicCanonicals.forEach((c) =>
+      lookup.set(c.canonical_topic_key, {
+        zh: c.canonical_title_zh,
+        en: c.canonical_title_en,
+      })
+    );
+    return (key: string): string => {
+      const c = lookup.get(key);
+      if (!c) return key; // legacy row, key already a human-readable label
+      if (i18n.language === 'zh') return c.zh;
+      if (c.en && c.en.trim().length > 0) return c.en;
+      return `${c.zh} (Chinese original)`;
+    };
+  }, [topicCanonicals, i18n.language]);
+
+  /**
+   * Per-module `CategoryCellState[]` for the latest-report Module 1 / Module 2
+   * summary tables, index-aligned with each module's `topTopics`.
+   *
+   * Built by joining `topic_rankings` rows scoped to `latestReport.id` against
+   * `topic_canonicals` via `canonical_topic_key`. Drops never persist as
+   * `topic_rankings` rows (Req 4.2), so any TopTopic without a matching row
+   * resolves to `unmapped`. Priority follows Req 17.4: canonical → unmapped.
+   *
+   * Mirrors the same logic as the report viewer page (task 8.3); kept inline
+   * here per the task brief — extraction can come later if both pages drift.
+   *
+   * Indexes off `latestReport.content.modules` (original, untranslated)
+   * rather than `latestContent.modules` so the memo's dep array stays stable
+   * across language switches — TopTopic.rank labels carry through translation
+   * unchanged, so the resolved CategoryCellState[] is reusable for either lang.
+   *
+   * Spec ref: Req 10.4, 10.5, 10.6, 17.1, 17.2.
+   */
+  const categoryResolutionByModule = useMemo<
+    Record<number, CategoryCellState[]>
+  >(() => {
+    if (!latestReport) return {};
+    const sourceModules = latestReport.content?.modules ?? [];
+    if (sourceModules.length === 0) return {};
+
+    // Index canonicals by key for O(1) title lookup.
+    const canonicalByKey = new Map<
+      string,
+      { zh: string; en: string | null }
+    >();
+    topicCanonicals.forEach((c) =>
+      canonicalByKey.set(c.canonical_topic_key, {
+        zh: c.canonical_title_zh,
+        en: c.canonical_title_en,
+      })
+    );
+
+    // Index rankings by (module_index, rank), scoped to the latest report.
+    const rankingsByModuleAndRank = new Map<string, TopicRankingRow>();
+    for (const r of topicRankings) {
+      if (r.report_id !== latestReport.id) continue;
+      rankingsByModuleAndRank.set(`${r.module_index}:${r.rank}`, r);
+    }
+
+    const out: Record<number, CategoryCellState[]> = {};
+    sourceModules.forEach((mod, mi) => {
+      const topTopics = mod.topTopics ?? [];
+      out[mi] = topTopics.map<CategoryCellState>((tt) => {
+        // Same rank-parsing shape as task 8.3: strip `✓`, parseInt.
+        const stripped = tt.rank.replace(/✓/g, '').trim();
+        const rankNum = parseInt(stripped, 10);
+        if (!Number.isFinite(rankNum)) return { kind: 'unmapped' };
+
+        const row = rankingsByModuleAndRank.get(`${mi}:${rankNum}`);
+        if (!row || !row.canonical_topic_key) return { kind: 'unmapped' };
+
+        const tc = canonicalByKey.get(row.canonical_topic_key);
+        if (!tc) return { kind: 'unmapped' };
+
+        return {
+          kind: 'canonical',
+          titleZh: tc.zh,
+          titleEn: tc.en,
+        };
+      });
     });
-    return (en: string) => zhByEn.get(en) ?? en;
-  }, [filteredRankings, i18n.language]);
+    return out;
+  }, [latestReport, topicRankings, topicCanonicals]);
 
   // Follow global language for news title/summary via shared helper
   const getNewsTitle = (item: NewsRow) =>
@@ -282,7 +391,10 @@ export default function DashboardPage() {
                 />
                 <div className="overflow-x-auto rounded-lg border border-border bg-card p-4 shadow-sm">
                   {isMarkdownModule(module1) ? (
-                    <TopTopicsTable topics={module1.topTopics!} />
+                    <TopTopicsTable
+                      topics={module1.topTopics!}
+                      categoryResolution={categoryResolutionByModule[0]}
+                    />
                   ) : (
                     module1Table && <TableRenderer table={module1Table} />
                   )}
@@ -303,7 +415,10 @@ export default function DashboardPage() {
                 />
                 <div className="overflow-x-auto rounded-lg border border-border bg-card p-4 shadow-sm">
                   {isMarkdownModule(module2) ? (
-                    <TopTopicsTable topics={module2.topTopics!} />
+                    <TopTopicsTable
+                      topics={module2.topTopics!}
+                      categoryResolution={categoryResolutionByModule[1]}
+                    />
                   ) : (
                     module2Table && <TableRenderer table={module2Table} />
                   )}
@@ -446,7 +561,7 @@ export default function DashboardPage() {
                   }}
                   formatter={(value: number, name: string) => [
                     `#${value}`,
-                    localizedLabel(name),
+                    resolveLegendLabel(name),
                   ]}
                 />
                 <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
@@ -455,7 +570,7 @@ export default function DashboardPage() {
                     key={key}
                     type="monotone"
                     dataKey={key}
-                    name={localizedLabel(key)}
+                    name={resolveLegendLabel(key)}
                     stroke={CHART_COLORS[i % CHART_COLORS.length]}
                     strokeWidth={2}
                     dot={{ r: 3, strokeWidth: 1.5 }}
