@@ -48,10 +48,12 @@ export async function POST(_request: NextRequest) {
   const service = createServiceRoleClient();
 
   // ── 1. News rows missing content_translated ──
+  // content_translated is JSONB — only IS NULL is meaningful (the empty
+  // JSON cases {} / [] are valid translations and we never produce them).
   const { data: newsRows, error: newsErr } = await service
     .from('news')
     .select('id')
-    .or('content_translated.is.null,content_translated.eq.');
+    .is('content_translated', null);
   if (newsErr) {
     return NextResponse.json(
       { code: 'SCAN_ERROR', message: `news scan: ${newsErr.message}`, statusCode: 500 },

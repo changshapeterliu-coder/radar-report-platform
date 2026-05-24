@@ -39,11 +39,13 @@ export const translationSweeper = inngest.createFunction(
     const supabase = createServiceRoleClient();
 
     // ── 1. News rows missing content_translated ──
+    // content_translated is JSONB — only IS NULL is meaningful (the empty
+    // JSON cases {} / [] are valid translations and we never produce them).
     const newsRows = await step.run('scan-news', async () => {
       const { data, error } = await supabase
         .from('news')
         .select('id')
-        .or('content_translated.is.null,content_translated.eq.');
+        .is('content_translated', null);
       if (error) throw new Error(`news scan failed: ${error.message}`);
       return data ?? [];
     });
