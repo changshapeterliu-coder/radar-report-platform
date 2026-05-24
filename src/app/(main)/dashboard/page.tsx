@@ -4,7 +4,6 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import {
-  FileText,
   Flame,
   Archive,
   TrendingUp,
@@ -14,6 +13,7 @@ import {
   Newspaper,
   Pin,
   ChevronRight,
+  ArrowRight,
 } from 'lucide-react';
 import {
   LineChart,
@@ -27,17 +27,15 @@ import {
 } from 'recharts';
 import { createClient } from '@/lib/supabase/client';
 import { useDomain } from '@/contexts/DomainContext';
-import { TableRenderer } from '@/components/report/ReportRenderer';
-import TopTopicsTable, {
-  type CategoryCellState,
-} from '@/components/report/TopTopicsTable';
+import CompactTopTopicsTable from '@/components/report/CompactTopTopicsTable';
+import { type CategoryCellState } from '@/components/report/TopTopicsTable';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { SpinnerBlock } from '@/components/ui/spinner';
 import DisclaimerBanner from '@/components/DisclaimerBanner';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database';
-import type { ReportContent, ReportTable, ReportModule } from '@/types/report';
+import type { ReportContent, ReportModule } from '@/types/report';
 import { isMarkdownModule } from '@/lib/validators/report-schema';
 import {
   getDisplayReportContent,
@@ -45,22 +43,34 @@ import {
 } from '@/lib/content-display';
 
 /**
- * Dashboard landing page.
+ * Dashboard landing page — redesign 2026-05.
+ *
+ * Information hierarchy (top to bottom in the main column):
+ *   1. Page header (h1 + subtitle)
+ *   2. Latest report STRIP — "what's the newest report; one click to open"
+ *   3. This week's TOP TOPICS — compact 4-column table, tabbed by module
+ *      (account suspension / listing takedown). Drops Keywords + Seller
+ *      Discussion entirely; those live on the report-detail page (Req 5.1
+ *      Content Primacy + Req 6.3 Minimalist Design — dashboard is glance,
+ *      report is depth).
+ *   4. TREND CHART — last 8 weeks rank trend, supporting context.
+ *
+ * Sidebar: Hot news (top 3) + Recent news. Hot uses `--primary-soft` tint.
+ *
+ * What changed vs the previous layout:
+ *   - "Recent Reports" 4-card grid replaced by a single strip pointing at
+ *     the newest report. `/reports` is one nav-click away for archive.
+ *   - Module 1 / Module 2 summary tables merged into a tabbed compact
+ *     table (one rendered at a time → ~50px/row vs the previous ~600px).
+ *   - Trend chart moved up out of the bottom.
  *
  * Design refs:
- * - ui-design-system.md sec 4.4 (no emoji in UI chrome), sec 9.1 (page header),
- *   sec 3.3 (card conventions), sec 1.4 (chart palette)
- * - power design-guidelines.md sec 5.2 Information Hierarchy, sec 6.2 Emphasis,
- *   sec 6.3 Minimalist Design, sec 3.3 Consistency
- * - power ui-guidelines.md "App Surfaces" — Linear-style restraint, utility
- *   copy, no hero section on operational workspaces, viewport budget
- *
- * Information hierarchy (top to bottom):
- *   1. Page header (h1)
- *   2. Recent Reports (2-col grid, main column)
- *   3. Summary tables (Module 1 + Module 2 of latest report)
- *   4. Hot News + Recent News (sidebar)
- *   5. Trend Chart (full-width, at the bottom — supporting reference, not hero)
+ * - ui-design-system.md sec 1.4 (chart palette), sec 3.3 (card chrome),
+ *   sec 4.4 (no emoji in UI chrome), sec 9.1 (page header)
+ * - power ui-guidelines.md "App Surfaces" — Linear-style restraint,
+ *   utility copy, no hero section, viewport budget
+ * - power design-guidelines.md 5.1 Content Primacy / 5.2 Information
+ *   Hierarchy / 6.3 Minimalist Design / 5.3 Scannability
  */
 
 type ReportRow = Database['public']['Tables']['reports']['Row'];
@@ -68,10 +78,8 @@ type NewsRow = Database['public']['Tables']['news']['Row'];
 type TopicRankingRow = Database['public']['Tables']['topic_rankings']['Row'];
 
 /**
- * Narrow projection of `topic_canonicals` consumed by `resolveLegendLabel`.
- * Only the canonical key + bilingual titles are loaded — the dashboard never
- * needs `category_slug`, `secondary_axis_*`, `seen_count`, etc., so keeping
- * the projection thin reduces JSON payload + makes the type match the SELECT.
+ * Narrow projection of `topic_canonicals` for the trend chart legend +
+ * compact-table category column. Only key + bilingual titles loaded.
  */
 type TopicCanonicalLegendRow = Pick<
   Database['public']['Tables']['topic_canonicals']['Row'],
@@ -93,10 +101,7 @@ const CHART_COLORS = [
   '#d97706', // amber-600
 ];
 
-/**
- * Channel -> lucide icon + semantic color intent.
- * Was emoji; switched per ui-design-system sec 4.4.
- */
+/** Channel → lucide icon + semantic color intent. */
 function getChannelIcon(channel: string) {
   switch (channel) {
     case 'AI Insight':
@@ -123,7 +128,11 @@ export default function DashboardPage() {
     TopicCanonicalLegendRow[]
   >([]);
   const [loading, setLoading] = useState(true);
-  const [trendModuleIndex, setTrendModuleIndex] = useState(0);
+  // Both the Top Topics table and the Trend Chart are tabbed across the
+  // same two modules (0 = suspension, 1 = listing takedown). They share a
+  // single state slot so switching one switches the other (Req 3.3
+  // consistency).
+  const [activeModuleIndex, setActiveModuleIndex] = useState(0);
 
   const fetchData = useCallback(async () => {
     if (!currentDomainId) return;
@@ -150,8 +159,6 @@ export default function DashboardPage() {
         .select('*')
         .eq('domain_id', currentDomainId)
         .order('created_at', { ascending: true }),
-      // Canonical dictionary for legend label resolution (Req 10.2, 10.3).
-      // Loaded in parallel — domain-scoped so the cardinality stays small.
       supabase
         .from('topic_canonicals')
         .select('canonical_topic_key, canonical_title_zh, canonical_title_en')
@@ -170,28 +177,101 @@ export default function DashboardPage() {
     fetchData();
   }, [fetchData]);
 
-  // Extract summary tables from latest report — pick translated content
-  // when UI language is English so Module1/Module2 tables follow the switch.
+  // ── Latest report ────────────────────────────────────────
   const latestReport = reports[0] ?? null;
   const latestContent: ReportContent | null = latestReport
     ? getDisplayReportContent(latestReport, i18n.language)
     : null;
-  const module1: ReportModule | null = latestContent?.modules?.[0] ?? null;
-  const module2: ReportModule | null = latestContent?.modules?.[1] ?? null;
-  const module1Table: ReportTable | null = module1?.tables?.[0] ?? null;
-  const module2Table: ReportTable | null = module2?.tables?.[0] ?? null;
 
-  // Split news: top 3 as HOT, rest as history
-  const hotNews = latestNews.slice(0, 3);
-  const historyNews = latestNews.slice(3);
+  // Topic-count summary for the strip (count across all modules' topTopics).
+  const latestTopicCount = useMemo(() => {
+    if (!latestContent?.modules) return 0;
+    return latestContent.modules.reduce(
+      (sum, m) => sum + (Array.isArray(m.topTopics) ? m.topTopics.length : 0),
+      0
+    );
+  }, [latestContent]);
 
-  // Build trend data from topic_rankings table — group by canonical_topic_key.
-  // Rows whose canonical_topic_key is null are skipped (Req 9.1 step f). The
-  // column becomes NOT NULL in migration 027, so the null branch is defensive
-  // for any in-flight rows during the rollout window.
+  const latestModuleCount = latestContent?.modules?.length ?? 0;
+
+  const formatPublished = useCallback(
+    (iso: string | null) => {
+      if (!iso) return '';
+      const d = new Date(iso);
+      return new Intl.DateTimeFormat(
+        i18n.language === 'zh' ? 'zh-CN' : 'en-US',
+        { dateStyle: 'medium', timeStyle: 'short' }
+      ).format(d);
+    },
+    [i18n.language]
+  );
+
+  // ── Per-module top-topics for the compact tabbed table ───
+  const moduleTopics = useMemo<Array<ReportModule | null>>(() => {
+    return [0, 1].map((i) => latestContent?.modules?.[i] ?? null);
+  }, [latestContent]);
+
+  /**
+   * Per-module `CategoryCellState[]` for the compact table, index-aligned
+   * with each module's `topTopics`. Joined by `(module_index, rank)` to
+   * `topic_rankings` rows scoped to the latest report, then resolved via
+   * the canonical dictionary.
+   *
+   * Drops never produce `topic_rankings` rows (Req 4.2), so any missing
+   * row resolves to `unmapped`. Spec ref: Req 17.4.
+   */
+  const categoryResolutionByModule = useMemo<
+    Record<number, CategoryCellState[]>
+  >(() => {
+    if (!latestReport) return {};
+    const sourceModules = latestReport.content?.modules ?? [];
+    if (sourceModules.length === 0) return {};
+
+    const canonicalByKey = new Map<
+      string,
+      { zh: string; en: string | null }
+    >();
+    topicCanonicals.forEach((c) =>
+      canonicalByKey.set(c.canonical_topic_key, {
+        zh: c.canonical_title_zh,
+        en: c.canonical_title_en,
+      })
+    );
+
+    const rankingsByModuleAndRank = new Map<string, TopicRankingRow>();
+    for (const r of topicRankings) {
+      if (r.report_id !== latestReport.id) continue;
+      rankingsByModuleAndRank.set(`${r.module_index}:${r.rank}`, r);
+    }
+
+    const out: Record<number, CategoryCellState[]> = {};
+    sourceModules.forEach((mod, mi) => {
+      const topTopics = mod.topTopics ?? [];
+      out[mi] = topTopics.map<CategoryCellState>((tt) => {
+        const stripped = tt.rank.replace(/✓/g, '').trim();
+        const rankNum = parseInt(stripped, 10);
+        if (!Number.isFinite(rankNum)) return { kind: 'unmapped' };
+
+        const row = rankingsByModuleAndRank.get(`${mi}:${rankNum}`);
+        if (!row || !row.canonical_topic_key) return { kind: 'unmapped' };
+
+        const tc = canonicalByKey.get(row.canonical_topic_key);
+        if (!tc) return { kind: 'unmapped' };
+
+        return {
+          kind: 'canonical',
+          titleZh: tc.zh,
+          titleEn: tc.en,
+        };
+      });
+    });
+    return out;
+  }, [latestReport, topicRankings, topicCanonicals]);
+
+  // ── Trend chart data ─────────────────────────────────────
   const filteredRankings = useMemo(
-    () => topicRankings.filter((r) => r.module_index === trendModuleIndex),
-    [topicRankings, trendModuleIndex]
+    () => topicRankings.filter((r) => r.module_index === activeModuleIndex),
+    [topicRankings, activeModuleIndex]
   );
 
   const trendData = useMemo(() => {
@@ -222,17 +302,8 @@ export default function DashboardPage() {
     return Array.from(keys).slice(0, 7);
   }, [trendData]);
 
-  // Resolve legend / tooltip label from canonical dictionary (Req 10.2, 10.3).
-  //   - zh mode → canonical_title_zh
-  //   - en mode + non-empty canonical_title_en → canonical_title_en
-  //   - en mode + null/empty canonical_title_en → `${zh} (Chinese original)`
-  //   - key not in dictionary (legacy row whose key is a topic_label string)
-  //     → return key unchanged so the chart still renders during rollout.
   const resolveLegendLabel = useMemo(() => {
-    const lookup = new Map<
-      string,
-      { zh: string; en: string | null }
-    >();
+    const lookup = new Map<string, { zh: string; en: string | null }>();
     topicCanonicals.forEach((c) =>
       lookup.set(c.canonical_topic_key, {
         zh: c.canonical_title_zh,
@@ -241,202 +312,204 @@ export default function DashboardPage() {
     );
     return (key: string): string => {
       const c = lookup.get(key);
-      if (!c) return key; // legacy row, key already a human-readable label
+      if (!c) return key;
       if (i18n.language === 'zh') return c.zh;
       if (c.en && c.en.trim().length > 0) return c.en;
       return `${c.zh} (Chinese original)`;
     };
   }, [topicCanonicals, i18n.language]);
 
-  /**
-   * Per-module `CategoryCellState[]` for the latest-report Module 1 / Module 2
-   * summary tables, index-aligned with each module's `topTopics`.
-   *
-   * Built by joining `topic_rankings` rows scoped to `latestReport.id` against
-   * `topic_canonicals` via `canonical_topic_key`. Drops never persist as
-   * `topic_rankings` rows (Req 4.2), so any TopTopic without a matching row
-   * resolves to `unmapped`. Priority follows Req 17.4: canonical → unmapped.
-   *
-   * Mirrors the same logic as the report viewer page (task 8.3); kept inline
-   * here per the task brief — extraction can come later if both pages drift.
-   *
-   * Indexes off `latestReport.content.modules` (original, untranslated)
-   * rather than `latestContent.modules` so the memo's dep array stays stable
-   * across language switches — TopTopic.rank labels carry through translation
-   * unchanged, so the resolved CategoryCellState[] is reusable for either lang.
-   *
-   * Spec ref: Req 10.4, 10.5, 10.6, 17.1, 17.2.
-   */
-  const categoryResolutionByModule = useMemo<
-    Record<number, CategoryCellState[]>
-  >(() => {
-    if (!latestReport) return {};
-    const sourceModules = latestReport.content?.modules ?? [];
-    if (sourceModules.length === 0) return {};
-
-    // Index canonicals by key for O(1) title lookup.
-    const canonicalByKey = new Map<
-      string,
-      { zh: string; en: string | null }
-    >();
-    topicCanonicals.forEach((c) =>
-      canonicalByKey.set(c.canonical_topic_key, {
-        zh: c.canonical_title_zh,
-        en: c.canonical_title_en,
-      })
-    );
-
-    // Index rankings by (module_index, rank), scoped to the latest report.
-    const rankingsByModuleAndRank = new Map<string, TopicRankingRow>();
-    for (const r of topicRankings) {
-      if (r.report_id !== latestReport.id) continue;
-      rankingsByModuleAndRank.set(`${r.module_index}:${r.rank}`, r);
-    }
-
-    const out: Record<number, CategoryCellState[]> = {};
-    sourceModules.forEach((mod, mi) => {
-      const topTopics = mod.topTopics ?? [];
-      out[mi] = topTopics.map<CategoryCellState>((tt) => {
-        // Same rank-parsing shape as task 8.3: strip `✓`, parseInt.
-        const stripped = tt.rank.replace(/✓/g, '').trim();
-        const rankNum = parseInt(stripped, 10);
-        if (!Number.isFinite(rankNum)) return { kind: 'unmapped' };
-
-        const row = rankingsByModuleAndRank.get(`${mi}:${rankNum}`);
-        if (!row || !row.canonical_topic_key) return { kind: 'unmapped' };
-
-        const tc = canonicalByKey.get(row.canonical_topic_key);
-        if (!tc) return { kind: 'unmapped' };
-
-        return {
-          kind: 'canonical',
-          titleZh: tc.zh,
-          titleEn: tc.en,
-        };
-      });
-    });
-    return out;
-  }, [latestReport, topicRankings, topicCanonicals]);
-
-  // Follow global language for news title/summary via shared helper
+  // ── News split ───────────────────────────────────────────
+  const hotNews = latestNews.slice(0, 3);
+  const historyNews = latestNews.slice(3);
   const getNewsTitle = (item: NewsRow) =>
     getDisplayNewsFields(item, i18n.language).title;
 
   if (loading) return <SpinnerBlock />;
 
   const hasTrendData = trendData.length > 1 && trendKeys.length > 0;
+  const activeTopics =
+    moduleTopics[activeModuleIndex] && isMarkdownModule(moduleTopics[activeModuleIndex]!)
+      ? moduleTopics[activeModuleIndex]!.topTopics ?? []
+      : [];
+  const activeCategoryResolution =
+    categoryResolutionByModule[activeModuleIndex];
 
   return (
     <div>
-      {/* Page header per ui-design-system sec 9.1 */}
-      <div className="mb-8">
+      {/* Page header (Req 9.1) */}
+      <div className="mb-6">
         <h1 className="text-2xl font-semibold text-foreground">
           {t('dashboard.title')}
         </h1>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Main column — reports + summary tables */}
+        {/* Main column */}
         <div className="space-y-6 lg:col-span-2">
-          {/* Recent Reports */}
-          <section aria-labelledby="recent-reports-heading">
-            <SectionHeading
-              id="recent-reports-heading"
-              icon={FileText}
-              title={t('dashboard.recentReports')}
+          {/* 1. Latest report strip */}
+          {latestReport ? (
+            <LatestReportStrip
+              report={latestReport}
+              moduleCount={latestModuleCount}
+              topicCount={latestTopicCount}
+              publishedFormatted={formatPublished(latestReport.published_at)}
+              onOpen={() => router.push(`/reports/${latestReport.id}`)}
+              onAll={() => router.push('/reports')}
             />
-            {reports.length === 0 ? (
-              <EmptyBlock icon={FileText} label={t('dashboard.noData')} />
-            ) : (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {reports.map((r) => (
+          ) : (
+            <div className="rounded-lg border border-dashed border-border bg-card px-6 py-8 text-center text-sm text-foreground-muted">
+              {t('dashboard.latestReport.noReport')}
+            </div>
+          )}
+
+          {/* 2. This week's top topics — tabbed compact table */}
+          {activeTopics.length > 0 && (
+            <section
+              aria-labelledby="top-topics-heading"
+              className="rounded-lg border border-border bg-card p-5 shadow-sm"
+            >
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <h2
+                  id="top-topics-heading"
+                  className="text-base font-semibold text-foreground"
+                >
+                  {t('dashboard.topTopics.title')}
+                </h2>
+                <ModuleTabs
+                  active={activeModuleIndex}
+                  onChange={setActiveModuleIndex}
+                  labels={{
+                    suspension: t('dashboard.topTopics.tabSuspension'),
+                    takedown: t('dashboard.topTopics.tabTakedown'),
+                  }}
+                />
+              </div>
+
+              <CompactTopTopicsTable
+                topics={activeTopics}
+                categoryResolution={activeCategoryResolution}
+              />
+
+              {latestReport && (
+                <div className="mt-4 flex justify-end">
                   <button
                     type="button"
-                    key={r.id}
-                    onClick={() => router.push(`/reports/${r.id}`)}
-                    className="group flex flex-col rounded-lg border border-border bg-card p-4 text-left shadow-sm transition-colors hover:border-border-strong hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                    onClick={() => router.push(`/reports/${latestReport.id}`)}
+                    className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                   >
-                    <h3 className="truncate text-sm font-semibold text-foreground">
-                      {r.title}
-                    </h3>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      {r.week_label && (
-                        <Badge variant="outline">{r.week_label}</Badge>
-                      )}
-                      <span className="text-xs text-foreground-muted">
-                        {r.date_range}
-                      </span>
-                    </div>
-                    <span className="mt-1 text-xs text-foreground-subtle">
-                      {r.published_at
-                        ? new Date(r.published_at).toLocaleDateString()
-                        : ''}
-                    </span>
+                    {t('dashboard.topTopics.openFullCta')}
                   </button>
-                ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* 3. Trend chart */}
+          {hasTrendData && (
+            <section
+              aria-labelledby="trend-heading"
+              className="rounded-lg border border-border bg-card p-5 shadow-sm"
+            >
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2
+                    id="trend-heading"
+                    className="flex items-center gap-2 text-base font-semibold text-foreground"
+                  >
+                    <TrendingUp
+                      className="h-5 w-5 text-foreground-muted"
+                      strokeWidth={1.75}
+                      aria-hidden
+                    />
+                    {t('dashboard.trend.title')}
+                  </h2>
+                  <p className="mt-1 text-xs text-foreground-muted">
+                    {t('dashboard.trend.subtitle')}
+                  </p>
+                </div>
+                <ModuleTabs
+                  active={activeModuleIndex}
+                  onChange={setActiveModuleIndex}
+                  labels={{
+                    suspension: t('dashboard.trend.tabSuspension'),
+                    takedown: t('dashboard.trend.tabTakedown'),
+                  }}
+                />
               </div>
-            )}
-          </section>
 
-          {/* Module 1 Summary */}
-          {module1 &&
-            (isMarkdownModule(module1)
-              ? (module1.topTopics ?? []).length > 0
-              : !!module1Table) && (
-              <section aria-labelledby="module1-heading">
-                <SectionHeading
-                  id="module1-heading"
-                  icon={TrendingUp}
-                  title={t('dashboard.module1Summary')}
-                />
-                <div className="overflow-x-auto rounded-lg border border-border bg-card p-4 shadow-sm">
-                  {isMarkdownModule(module1) ? (
-                    <TopTopicsTable
-                      topics={module1.topTopics!}
-                      categoryResolution={categoryResolutionByModule[0]}
+              <ResponsiveContainer width="100%" height={320}>
+                <LineChart
+                  data={trendData}
+                  margin={{ top: 16, right: 24, left: 12, bottom: 8 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="var(--border)"
+                  />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fontSize: 12, fill: 'var(--foreground-muted)' }}
+                    stroke="var(--border-strong)"
+                  />
+                  <YAxis
+                    reversed
+                    domain={[1, 'auto']}
+                    tick={{ fontSize: 12, fill: 'var(--foreground-muted)' }}
+                    stroke="var(--border-strong)"
+                    label={{
+                      value: 'Rank',
+                      angle: -90,
+                      position: 'insideLeft',
+                      style: {
+                        fontSize: 12,
+                        fill: 'var(--foreground-muted)',
+                      },
+                    }}
+                    allowDecimals={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      borderRadius: 8,
+                      border: '1px solid var(--border)',
+                      backgroundColor: 'var(--card)',
+                      boxShadow:
+                        '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
+                      fontSize: 12,
+                    }}
+                    formatter={(value: number, name: string) => [
+                      `#${value}`,
+                      resolveLegendLabel(name),
+                    ]}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+                  {trendKeys.map((key, i) => (
+                    <Line
+                      key={key}
+                      type="monotone"
+                      dataKey={key}
+                      name={resolveLegendLabel(key)}
+                      stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                      strokeWidth={2}
+                      dot={{ r: 3, strokeWidth: 1.5 }}
+                      activeDot={{ r: 5 }}
                     />
-                  ) : (
-                    module1Table && <TableRenderer table={module1Table} />
-                  )}
-                </div>
-              </section>
-            )}
-
-          {/* Module 2 Summary */}
-          {module2 &&
-            (isMarkdownModule(module2)
-              ? (module2.topTopics ?? []).length > 0
-              : !!module2Table) && (
-              <section aria-labelledby="module2-heading">
-                <SectionHeading
-                  id="module2-heading"
-                  icon={TrendingUp}
-                  title={t('dashboard.module2Summary')}
-                />
-                <div className="overflow-x-auto rounded-lg border border-border bg-card p-4 shadow-sm">
-                  {isMarkdownModule(module2) ? (
-                    <TopTopicsTable
-                      topics={module2.topTopics!}
-                      categoryResolution={categoryResolutionByModule[1]}
-                    />
-                  ) : (
-                    module2Table && <TableRenderer table={module2Table} />
-                  )}
-                </div>
-              </section>
-            )}
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </section>
+          )}
         </div>
 
         {/* Sidebar — news */}
         <div className="space-y-6">
-          {/* Hot News (Top 3) — subtle primary tint, same row chrome as Recent News */}
           {hotNews.length > 0 && (
             <section aria-labelledby="hot-news-heading">
               <div className="mb-3 flex items-center justify-between">
                 <SectionHeading
                   id="hot-news-heading"
                   icon={Flame}
-                  title="Hot News"
+                  title={t('dashboard.hotNews')}
                   accent
                 />
                 <Button
@@ -461,13 +534,12 @@ export default function DashboardPage() {
             </section>
           )}
 
-          {/* Recent News */}
           {historyNews.length > 0 && (
             <section aria-labelledby="recent-news-heading">
               <SectionHeading
                 id="recent-news-heading"
                 icon={Archive}
-                title="Recent News"
+                title={t('dashboard.recentNews')}
               />
               <ul className="space-y-2">
                 {historyNews.map((item) => (
@@ -484,111 +556,114 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Trend Chart — full-width, bottom position.
-          Supporting reference, not a hero. Compact height per power
-          "viewport budget" + design-guidelines sec 5.2 Info Hierarchy. */}
-      {hasTrendData && (
-        <section aria-labelledby="trend-heading" className="mt-10">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <SectionHeading
-              id="trend-heading"
-              icon={TrendingUp}
-              title={t('dashboard.trendView', 'Trend View')}
-            />
-            <div
-              role="tablist"
-              aria-label="Trend module selector"
-              className="inline-flex overflow-hidden rounded-md border border-border bg-card text-sm shadow-sm"
-            >
-              {[
-                { idx: 0, label: 'Suspension Trends' },
-                { idx: 1, label: 'Listing Takedown' },
-              ].map((tab) => (
-                <button
-                  type="button"
-                  key={tab.idx}
-                  role="tab"
-                  aria-selected={trendModuleIndex === tab.idx}
-                  onClick={() => setTrendModuleIndex(tab.idx)}
-                  className={cn(
-                    'px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
-                    trendModuleIndex === tab.idx
-                      ? 'bg-muted text-foreground'
-                      : 'text-foreground-muted hover:bg-muted hover:text-foreground'
-                  )}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
-            <ResponsiveContainer width="100%" height={360}>
-              <LineChart
-                data={trendData}
-                margin={{ top: 16, right: 24, left: 12, bottom: 8 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis
-                  dataKey="name"
-                  tick={{ fontSize: 12, fill: 'var(--foreground-muted)' }}
-                  stroke="var(--border-strong)"
-                />
-                <YAxis
-                  reversed
-                  domain={[1, 'auto']}
-                  tick={{ fontSize: 12, fill: 'var(--foreground-muted)' }}
-                  stroke="var(--border-strong)"
-                  label={{
-                    value: 'Rank',
-                    angle: -90,
-                    position: 'insideLeft',
-                    style: {
-                      fontSize: 12,
-                      fill: 'var(--foreground-muted)',
-                    },
-                  }}
-                  allowDecimals={false}
-                />
-                <Tooltip
-                  contentStyle={{
-                    borderRadius: 8,
-                    border: '1px solid var(--border)',
-                    backgroundColor: 'var(--card)',
-                    boxShadow:
-                      '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
-                    fontSize: 12,
-                  }}
-                  formatter={(value: number, name: string) => [
-                    `#${value}`,
-                    resolveLegendLabel(name),
-                  ]}
-                />
-                <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
-                {trendKeys.map((key, i) => (
-                  <Line
-                    key={key}
-                    type="monotone"
-                    dataKey={key}
-                    name={resolveLegendLabel(key)}
-                    stroke={CHART_COLORS[i % CHART_COLORS.length]}
-                    strokeWidth={2}
-                    dot={{ r: 3, strokeWidth: 1.5 }}
-                    activeDot={{ r: 5 }}
-                  />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
-      )}
-
       <DisclaimerBanner className="mt-10" />
     </div>
   );
 }
 
 // ─────────── Local sub-components ───────────
+
+function LatestReportStrip({
+  report,
+  moduleCount,
+  topicCount,
+  publishedFormatted,
+  onOpen,
+  onAll,
+}: {
+  report: ReportRow;
+  moduleCount: number;
+  topicCount: number;
+  publishedFormatted: string;
+  onOpen: () => void;
+  onAll: () => void;
+}) {
+  const { t } = useTranslation();
+  const typeLabel =
+    report.type === 'regular'
+      ? t('reports.filterRegular')
+      : t('reports.filterTopic');
+
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-border border-l-[3px] border-l-primary bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <div className="flex flex-wrap items-center gap-3 sm:flex-nowrap">
+        {report.week_label && (
+          <span className="rounded-md bg-primary-soft px-3 py-1.5 text-sm font-semibold tabular-nums text-warning-fg">
+            {report.week_label}
+          </span>
+        )}
+        <div className="min-w-0">
+          <div className="truncate text-base font-semibold text-foreground">
+            {report.title}
+          </div>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-foreground-muted">
+            <span>
+              {t('dashboard.latestReport.published', {
+                time: publishedFormatted,
+              })}
+            </span>
+            <span aria-hidden>·</span>
+            <span>
+              {t('dashboard.latestReport.meta', {
+                type: typeLabel,
+                moduleCount,
+                topicCount,
+              })}
+            </span>
+          </div>
+        </div>
+      </div>
+      <div className="flex flex-shrink-0 items-center gap-2">
+        <Button variant="outline" size="sm" onClick={onAll}>
+          {t('dashboard.latestReport.allReports')}
+        </Button>
+        <Button size="sm" onClick={onOpen}>
+          {t('dashboard.latestReport.openReport')}
+          <ArrowRight className="ml-1 h-4 w-4" strokeWidth={1.75} />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ModuleTabs({
+  active,
+  onChange,
+  labels,
+}: {
+  active: number;
+  onChange: (idx: number) => void;
+  labels: { suspension: string; takedown: string };
+}) {
+  return (
+    <div
+      role="tablist"
+      aria-label="Module"
+      className="inline-flex overflow-hidden rounded-md border border-border bg-card text-sm shadow-sm"
+    >
+      {[
+        { idx: 0, label: labels.suspension },
+        { idx: 1, label: labels.takedown },
+      ].map((tab) => (
+        <button
+          type="button"
+          key={tab.idx}
+          role="tab"
+          aria-selected={active === tab.idx}
+          onClick={() => onChange(tab.idx)}
+          className={cn(
+            'px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
+            active === tab.idx
+              ? 'bg-muted text-foreground'
+              : 'text-foreground-muted hover:bg-muted hover:text-foreground'
+          )}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function SectionHeading({
   id,
@@ -597,17 +672,14 @@ function SectionHeading({
   accent = false,
 }: {
   id?: string;
-  icon: typeof FileText;
+  icon: typeof TrendingUp;
   title: string;
   accent?: boolean;
 }) {
   return (
     <h2
       id={id}
-      className={cn(
-        'mb-3 flex items-center gap-2 text-lg font-semibold',
-        accent ? 'text-foreground' : 'text-foreground'
-      )}
+      className="mb-0 flex items-center gap-2 text-base font-semibold text-foreground"
     >
       <Icon
         className={cn(
@@ -622,25 +694,6 @@ function SectionHeading({
   );
 }
 
-function EmptyBlock({
-  icon: Icon,
-  label,
-}: {
-  icon: typeof FileText;
-  label: string;
-}) {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-card py-10 text-center">
-      <Icon
-        className="mb-2 h-8 w-8 text-foreground-subtle"
-        strokeWidth={1.5}
-        aria-hidden
-      />
-      <p className="text-sm text-foreground-muted">{label}</p>
-    </div>
-  );
-}
-
 interface NewsRowItemProps {
   item: NewsRow;
   title: string;
@@ -648,7 +701,12 @@ interface NewsRowItemProps {
   onClick: () => void;
 }
 
-function NewsRowItem({ item, title, emphasis = false, onClick }: NewsRowItemProps) {
+function NewsRowItem({
+  item,
+  title,
+  emphasis = false,
+  onClick,
+}: NewsRowItemProps) {
   const { Icon, tone } = getChannelIcon(item.source_channel);
   return (
     <li>
