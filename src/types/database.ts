@@ -172,8 +172,10 @@ export interface Database {
           report_id: string;
           domain_id: string;
           module_index: number;
-          topic_label: string;
-          topic_label_zh: string | null;
+          // NOT NULL after migration 027. Composite FK (domain_id, canonical_topic_key)
+          // → topic_canonicals. Legacy topic_label / topic_label_zh columns dropped in
+          // the same migration (spec unify-topic-dictionary-across-pipelines, Req 8.3-8.6).
+          canonical_topic_key: string;
           rank: number;
           week_label: string | null;
           raw_reason: string | null;
@@ -185,8 +187,7 @@ export interface Database {
           report_id: string;
           domain_id: string;
           module_index?: number;
-          topic_label: string;
-          topic_label_zh?: string | null;
+          canonical_topic_key: string;
           rank: number;
           week_label?: string | null;
           raw_reason?: string | null;
@@ -198,8 +199,7 @@ export interface Database {
           report_id?: string;
           domain_id?: string;
           module_index?: number;
-          topic_label?: string;
-          topic_label_zh?: string | null;
+          canonical_topic_key?: string;
           rank?: number;
           week_label?: string | null;
           raw_reason?: string | null;

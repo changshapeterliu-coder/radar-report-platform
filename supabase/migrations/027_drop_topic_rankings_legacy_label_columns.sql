@@ -1,0 +1,86 @@
+-- ============================================================
+-- 027_drop_topic_rankings_legacy_label_columns.sql
+--
+-- Step (g) of the 7-step rollout sequence (Req 9.1) — PR-G.
+--
+-- Tightens `topic_rankings.canonical_topic_key` to NOT NULL and
+-- removes the now-dead `topic_label` / `topic_label_zh` columns.
+-- After this migration is live, the canonical dictionary
+-- (`topic_canonicals`) is the single source of truth for every
+-- topic display label across both pipelines (weekly report +
+-- daily alert), with `topic_rankings` referencing it via the
+-- composite FK (domain_id, canonical_topic_key) introduced in
+-- migration 026.
+--
+-- Sequencing (Req 9.1):
+--   - 025  widens topic_canonicals.origin                    ← PR-A
+--   - 026  adds topic_rankings.canonical_topic_key nullable  ← PR-B
+--   - 026b creates the persist RPC with dual-write            ← PR-B
+--   - PR-C / PR-D / PR-E ship code + backfill + dashboard read swap
+--   - 026c re-creates the RPC WITHOUT dual-write              ← PR-F
+--   - 027  drops the legacy columns + tightens to NOT NULL    ← PR-G (this file)
+--
+-- This migration MUST run AFTER 026c. Sequencing matters: 026c
+-- removed the dual-write that 026b carried during the rollout
+-- window. If 027 lands while 026b is still the live RPC, every
+-- weekly publish run would fail with "column topic_label does
+-- not exist". File-name sort enforces 026c < 027.
+--
+-- Pre-condition (Req 9.5) — verify BEFORE applying:
+--   SELECT COUNT(*) FROM topic_rankings WHERE canonical_topic_key IS NULL;
+--   -- Expected: 0.
+-- The first statement below (SET NOT NULL) will scan the table
+-- and refuse to apply if any NULL row remains, so a stale
+-- pre-condition fails the migration cleanly without partial side
+-- effects (the subsequent DROP COLUMN statements never run).
+--
+-- Post-verification (Req 9.6) — verify AFTER applying:
+--   SELECT column_name FROM information_schema.columns
+--    WHERE table_name = 'topic_rankings'
+--      AND column_name IN ('topic_label', 'topic_label_zh');
+--   -- Expected: 0 rows.
+--
+--   SELECT is_nullable FROM information_schema.columns
+--    WHERE table_name = 'topic_rankings'
+--      AND column_name = 'canonical_topic_key';
+--   -- Expected: 'NO'.
+--
+-- Rollback if reverted (Req 9.7) — run in SQL Editor:
+--
+--   ALTER TABLE topic_rankings
+--     ADD COLUMN topic_label TEXT,
+--     ADD COLUMN topic_label_zh TEXT;
+--   ALTER TABLE topic_rankings ALTER COLUMN canonical_topic_key DROP NOT NULL;
+--
+--   -- The re-added columns are nullable TEXT and start empty.
+--   -- This migration drops no data path that can be reconstructed
+--   -- from the dictionary alone: `topic_label` was a per-row LLM
+--   -- label that has since been retired. There is NO automatic
+--   -- backfill — if the operator needs the legacy columns
+--   -- repopulated, they can re-run a backfill script that joins
+--   -- topic_rankings to topic_canonicals on (domain_id,
+--   -- canonical_topic_key) and copies canonical_title_en /
+--   -- canonical_title_zh into topic_label / topic_label_zh.
+--   -- A full revert also requires git-reverting PR-G code (which
+--   -- removed the columns from src/types/database.ts and any
+--   -- reader still pointing at them); see design.md
+--   -- "Rollout and Reversibility" §(g).
+-- ============================================================
+
+-- 1. Tighten canonical_topic_key to NOT NULL. Runs FIRST so any
+--    null row blocks the migration at Req 9.5 enforcement before
+--    we drop the legacy columns. Postgres raises:
+--      ERROR: column "canonical_topic_key" contains null values
+--    if the pre-condition is not met, leaving the table unchanged.
+ALTER TABLE topic_rankings ALTER COLUMN canonical_topic_key SET NOT NULL;
+
+-- 2. Drop the legacy display-label columns. IF EXISTS keeps the
+--    migration idempotent in environments that may have already
+--    dropped one column manually during incident response.
+ALTER TABLE topic_rankings DROP COLUMN IF EXISTS topic_label;
+ALTER TABLE topic_rankings DROP COLUMN IF EXISTS topic_label_zh;
+
+-- 3. Refresh the column comment now that canonical_topic_key is
+--    permanent (no longer "nullable during the rollout window").
+COMMENT ON COLUMN topic_rankings.canonical_topic_key IS
+  'Composite FK reference into topic_canonicals via (domain_id, canonical_topic_key). Populated by every weekly publish run via persist_weekly_topic_rankings (migrations 026b → 026c). Spec: unify-topic-dictionary-across-pipelines, Req 8.3 / 8.4.';
