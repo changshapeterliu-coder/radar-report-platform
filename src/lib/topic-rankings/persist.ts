@@ -40,6 +40,14 @@ export async function extractAndPersistTopicRankings(params: {
   weekLabel: string | null;
   content: ReportContent;
   apiKey: string;
+  /**
+   * If true, delete existing topic_rankings rows for this report
+   * before inserting the new ones. Used by `backfill --force` to
+   * re-run extraction on already-processed reports (e.g. to fill
+   * in topic_label_zh for rows inserted before migration 024).
+   * Default: false (the publish-time path never replaces).
+   */
+  replaceExisting?: boolean;
 }): Promise<PersistResult> {
   const { supabase, reportId, domainId, weekLabel, content, apiKey } = params;
 
@@ -83,11 +91,29 @@ export async function extractAndPersistTopicRankings(params: {
       domain_id: domainId,
       module_index: moduleIndex,
       topic_label: t.topic_label,
+      topic_label_zh: t.topic_label_zh,
       rank: t.rank,
       week_label: weekLabel,
       raw_reason: t.raw_reason || null,
       raw_keywords: t.raw_keywords || null,
     }));
+
+    // If this report already has rankings (e.g. a backfill run with --force),
+    // wipe them first so the insert is the new source of truth. Without this,
+    // re-running the extraction on a report would either fail (if there were
+    // a uniqueness constraint) or duplicate rows.
+    if (params.replaceExisting) {
+      const { error: delErr } = await supabase
+        .from('topic_rankings')
+        .delete()
+        .eq('report_id', reportId)
+        .eq('module_index', moduleIndex);
+      if (delErr) {
+        throw new Error(
+          `topic_rankings delete-before-replace failed for report=${reportId} module=${moduleIndex}: ${delErr.message}`
+        );
+      }
+    }
 
     const { error: insertErr } = await supabase
       .from('topic_rankings')

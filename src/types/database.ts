@@ -173,6 +173,7 @@ export interface Database {
           domain_id: string;
           module_index: number;
           topic_label: string;
+          topic_label_zh: string | null;
           rank: number;
           week_label: string | null;
           raw_reason: string | null;
@@ -185,6 +186,7 @@ export interface Database {
           domain_id: string;
           module_index?: number;
           topic_label: string;
+          topic_label_zh?: string | null;
           rank: number;
           week_label?: string | null;
           raw_reason?: string | null;
@@ -197,6 +199,7 @@ export interface Database {
           domain_id?: string;
           module_index?: number;
           topic_label?: string;
+          topic_label_zh?: string | null;
           rank?: number;
           week_label?: string | null;
           raw_reason?: string | null;

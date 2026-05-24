@@ -193,6 +193,22 @@ export default function DashboardPage() {
     return Array.from(keys).slice(0, 7);
   }, [trendData]);
 
+  // Map English topic_label → Chinese rendering for legend + tooltip.
+  // Keeps the chart's internal join key stable (always English) while the
+  // display string follows the UI language. Per Principle 3: bilingual
+  // first-class. `topic_label_zh` is NULL on rows inserted before
+  // migration 024 — falls back to topic_label (English).
+  const localizedLabel = useMemo(() => {
+    if (i18n.language !== 'zh') return (en: string) => en;
+    const zhByEn = new Map<string, string>();
+    filteredRankings.forEach((r) => {
+      if (r.topic_label_zh && !zhByEn.has(r.topic_label)) {
+        zhByEn.set(r.topic_label, r.topic_label_zh);
+      }
+    });
+    return (en: string) => zhByEn.get(en) ?? en;
+  }, [filteredRankings, i18n.language]);
+
   // Follow global language for news title/summary via shared helper
   const getNewsTitle = (item: NewsRow) =>
     getDisplayNewsFields(item, i18n.language).title;
@@ -430,7 +446,7 @@ export default function DashboardPage() {
                   }}
                   formatter={(value: number, name: string) => [
                     `#${value}`,
-                    name,
+                    localizedLabel(name),
                   ]}
                 />
                 <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
@@ -439,6 +455,7 @@ export default function DashboardPage() {
                     key={key}
                     type="monotone"
                     dataKey={key}
+                    name={localizedLabel(key)}
                     stroke={CHART_COLORS[i % CHART_COLORS.length]}
                     strokeWidth={2}
                     dot={{ r: 3, strokeWidth: 1.5 }}

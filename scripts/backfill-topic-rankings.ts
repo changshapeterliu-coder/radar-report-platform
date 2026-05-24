@@ -20,6 +20,11 @@
  *   npm run backfill:topic-rankings
  *   npm run backfill:topic-rankings -- --domain=<uuid>   # single domain
  *   npm run backfill:topic-rankings -- --report=<uuid>   # single report
+ *   npm run backfill:topic-rankings -- --force           # re-extract even if rows exist
+ *
+ * --force is needed when a schema change (e.g. migration 024 added
+ * topic_label_zh) means existing rows are stale; without it the
+ * script no-ops on already-populated reports.
  *
  * Requirements (in .env.local):
  *   - NEXT_PUBLIC_SUPABASE_URL
@@ -34,11 +39,16 @@ import type { ReportContent } from '../src/types/report';
 interface Args {
   domain?: string;
   report?: string;
+  force?: boolean;
 }
 
 function parseArgs(): Args {
   const out: Args = {};
   for (const arg of process.argv.slice(2)) {
+    if (arg === '--force') {
+      out.force = true;
+      continue;
+    }
     const m = arg.match(/^--(\w+)=(.+)$/);
     if (!m) continue;
     if (m[1] === 'domain') out.domain = m[2];
@@ -109,9 +119,12 @@ async function main() {
     }
 
     if ((count ?? 0) > 0) {
-      console.log(`  ↷ ${r.id} (${r.week_label ?? 'no-week'}) — already has ${count} rankings, skipping`);
-      skipped++;
-      continue;
+      if (!args.force) {
+        console.log(`  ↷ ${r.id} (${r.week_label ?? 'no-week'}) — already has ${count} rankings, skipping (use --force to re-extract)`);
+        skipped++;
+        continue;
+      }
+      console.log(`  ↻ ${r.id} (${r.week_label ?? 'no-week'}) — has ${count} rankings, --force: replacing`);
     }
 
     const content = r.content as ReportContent | null;
@@ -130,6 +143,7 @@ async function main() {
         weekLabel: r.week_label,
         content,
         apiKey,
+        replaceExisting: !!args.force,
       });
       console.log(
         `    inserted=${result.inserted} perModule=${JSON.stringify(result.perModule)} newLabels=${result.newLabels.length}`

@@ -37,7 +37,13 @@ function pickFirstArray(parsed: unknown): unknown[] | null {
 
 export interface TopicEntry {
   rank: number;
+  /** Canonical English label — cross-week join key for the trend chart */
   topic_label: string;
+  /**
+   * Chinese rendering of the same label. Used when the UI is in zh.
+   * Falls back to topic_label (English) on the dashboard if NULL.
+   */
+  topic_label_zh: string | null;
   raw_reason: string;
   raw_keywords: string;
 }
@@ -77,15 +83,16 @@ export async function extractTopicsForModule(
 
   const prompt = `You are a topic matching assistant. Given a list of report entries (each with a reason and keywords) and a list of existing standardized topic labels, your job is to:
 1. For each entry, determine if it matches an existing topic label (semantic match, not exact string match)
-2. If it matches, use the existing label
+2. If it matches, use the existing English label
 3. If it's a new topic, create a short standardized English label (max 40 chars)
+4. ALSO produce a short Chinese rendering of the same label (max 20 Chinese chars). This is what zh-language users see on the dashboard chart legend.
 
 Existing labels: ${JSON.stringify(existingLabels)}
 
 Report entries:
 ${entries.map((e) => `Rank ${e.rank}: Reason="${e.reason}", Keywords="${e.keywords}"`).join('\n')}
 
-Return ONLY a JSON array: [{ "rank": 1, "topic_label": "Account Association", "raw_reason": "Account Relation", "raw_keywords": "Broadband/Second review" }, ...]`;
+Return ONLY a JSON array: [{ "rank": 1, "topic_label": "Account Association", "topic_label_zh": "账号关联", "raw_reason": "Account Relation", "raw_keywords": "Broadband/Second review" }, ...]`;
 
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
@@ -153,14 +160,16 @@ async function stabilizeLabelsV4(
     };
   });
 
-  const prompt = `You are a topic matching assistant. For each entry below, map its Chinese topic to a standardized English label (max 40 chars). Reuse existing labels when semantically equivalent.
+  const prompt = `You are a topic matching assistant. For each entry below:
+1. Map its Chinese topic to a standardized English label (max 40 chars). Reuse existing labels when semantically equivalent.
+2. Also produce a short Chinese rendering of the same standardized label (max 20 Chinese chars). This is what zh-language users see on the dashboard chart legend. It can be the entry's original topic if it's already short enough, or a normalized shorter form.
 
 Existing labels: ${JSON.stringify(existingLabels)}
 
 Entries:
 ${entries.map((e) => `Rank ${e.rank}: Topic="${e.topic}", Keywords="${e.keywords}", Discussion="${e.discussion}"`).join('\n')}
 
-Return ONLY a JSON array: [{ "rank": 1, "topic_label": "Account Association", "raw_reason": "Topic Chinese name", "raw_keywords": "Keywords list" }, ...]`;
+Return ONLY a JSON array: [{ "rank": 1, "topic_label": "Account Association", "topic_label_zh": "账号关联", "raw_reason": "Topic Chinese name", "raw_keywords": "Keywords list" }, ...]`;
 
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
@@ -184,7 +193,12 @@ Return ONLY a JSON array: [{ "rank": 1, "topic_label": "Account Association", "r
     );
     return entries.map((e) => ({
       rank: e.rank,
+      // No LLM stabilization → trend chart joining will be weak,
+      // but at least the data lands.  English label = the Chinese
+      // topic verbatim (so two weeks with identical strings still
+      // group); zh label = same Chinese.
       topic_label: e.topic,
+      topic_label_zh: e.topic,
       raw_reason: e.topic,
       raw_keywords: e.keywords,
     }));
