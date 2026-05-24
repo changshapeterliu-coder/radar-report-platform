@@ -1,152 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { inngest } from '@/lib/inngest/client';
+import { extractAndPersistTopicRankings } from '@/lib/topic-rankings/persist';
 import type { ReportContent } from '@/types/report';
 
 type RouteContext = { params: Promise<{ id: string }> };
-
-interface TopicEntry {
-  rank: number;
-  topic_label: string;
-  raw_reason: string;
-  raw_keywords: string;
-}
-
-async function extractTopicsForModule(
-  content: ReportContent,
-  moduleIndex: number,
-  existingLabels: string[],
-  apiKey: string
-): Promise<TopicEntry[]> {
-  const mod = content.modules?.[moduleIndex];
-  if (!mod) return [];
-
-  // v4 fast path: module already has structured topTopics — bypass LLM.
-  // Each topTopic is our canonical rank/topic/keywords/discussion shape
-  // so we only need to map into TopicEntry + LLM-stabilize the label
-  // across weeks.
-  if (Array.isArray(mod.topTopics) && mod.topTopics.length > 0) {
-    return stabilizeLabelsV4(mod.topTopics, existingLabels, apiKey);
-  }
-
-  // Legacy path: fall back to reading the first table's rows.
-  const table = mod?.tables?.[0];
-  if (!table?.rows?.length) return [];
-
-  const entries = table.rows.map((row, i) => ({
-    rank: i + 1,
-    reason: row.cells[1]?.text || row.cells[0]?.text || '',
-    keywords: row.cells[2]?.text || '',
-  }));
-
-  const prompt = `You are a topic matching assistant. Given a list of report entries (each with a reason and keywords) and a list of existing standardized topic labels, your job is to:
-1. For each entry, determine if it matches an existing topic label (semantic match, not exact string match)
-2. If it matches, use the existing label
-3. If it's a new topic, create a short standardized English label (max 40 chars)
-
-Existing labels: ${JSON.stringify(existingLabels)}
-
-Report entries:
-${entries.map((e) => `Rank ${e.rank}: Reason="${e.reason}", Keywords="${e.keywords}"`).join('\n')}
-
-Return ONLY a JSON array: [{ "rank": 1, "topic_label": "Account Association", "raw_reason": "Account Relation", "raw_keywords": "Broadband/Second review" }, ...]`;
-
-  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'openrouter/auto',
-      messages: [
-        { role: 'system', content: 'You are a topic classification assistant. Return only valid JSON.' },
-        { role: 'user', content: prompt },
-      ],
-      response_format: { type: 'json_object' },
-    }),
-  });
-
-  if (!res.ok) return [];
-
-  const data = await res.json();
-  const raw = data?.choices?.[0]?.message?.content || '[]';
-  const parsed = JSON.parse(raw);
-  // Handle both direct array and { topics: [...] } wrapper
-  return Array.isArray(parsed) ? parsed : (parsed.topics || parsed.results || []);
-}
-
-/**
- * v4 path: topTopics already has canonical topic/keywords/seller_discussion.
- * We still call the LLM to stabilize topic_label across weeks (a canonical
- * English short label) so the Dashboard trending chart groups consistently.
- *
- * Input entries come from ReportModule.topTopics. Numeric rank is parsed
- * from the rank string (e.g. "1 ✓" -> 1, "2" -> 2). If parse fails, we
- * fall back to array index.
- */
-async function stabilizeLabelsV4(
-  topics: NonNullable<ReportContent['modules'][number]['topTopics']>,
-  existingLabels: string[],
-  apiKey: string
-): Promise<TopicEntry[]> {
-  const entries = topics.map((t, i) => {
-    const parsedRank = parseInt(t.rank, 10);
-    return {
-      rank: Number.isFinite(parsedRank) ? parsedRank : i + 1,
-      topic: t.topic,
-      keywords: t.keywords.join('、'),
-      discussion: t.seller_discussion,
-    };
-  });
-
-  const prompt = `You are a topic matching assistant. For each entry below, map its Chinese topic to a standardized English label (max 40 chars). Reuse existing labels when semantically equivalent.
-
-Existing labels: ${JSON.stringify(existingLabels)}
-
-Entries:
-${entries.map((e) => `Rank ${e.rank}: Topic="${e.topic}", Keywords="${e.keywords}", Discussion="${e.discussion}"`).join('\n')}
-
-Return ONLY a JSON array: [{ "rank": 1, "topic_label": "Account Association", "raw_reason": "Topic Chinese name", "raw_keywords": "Keywords list" }, ...]`;
-
-  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'openrouter/auto',
-      messages: [
-        { role: 'system', content: 'You are a topic classification assistant. Return only valid JSON.' },
-        { role: 'user', content: prompt },
-      ],
-      response_format: { type: 'json_object' },
-    }),
-  });
-  if (!res.ok) {
-    // If LLM labeling fails, fall back to using the Chinese topic as label.
-    // This keeps the Dashboard trending working (less-grouped) rather than
-    // silently dropping data.
-    return entries.map((e) => ({
-      rank: e.rank,
-      topic_label: e.topic,
-      raw_reason: e.topic,
-      raw_keywords: e.keywords,
-    }));
-  }
-  const data = await res.json();
-  const raw = data?.choices?.[0]?.message?.content || '[]';
-  try {
-    const parsed = JSON.parse(raw);
-    const out = Array.isArray(parsed)
-      ? parsed
-      : parsed.topics || parsed.results || [];
-    return out as TopicEntry[];
-  } catch {
-    return [];
-  }
-}
 
 export async function PUT(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
@@ -214,55 +72,40 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     }
   }
 
-  // Extract topics using LLM and store in topic_rankings
+  // Extract topics + persist to topic_rankings — powers the Dashboard
+  // trend chart. Non-blocking: a failure here must NOT roll back the
+  // publish itself.  We log loudly so silent skips become visible in
+  // Vercel logs and we don't end up with empty `topic_rankings` again.
   try {
     const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
     const reportContent = report.content as ReportContent | null;
-    if (OPENROUTER_KEY && reportContent?.modules?.length) {
-      // Fetch existing topic labels for this domain
-      const { data: existingTopics } = await supabase
-        .from('topic_rankings')
-        .select('topic_label')
-        .eq('domain_id', report.domain_id);
 
-      const existingLabels = [...new Set((existingTopics || []).map((t: { topic_label: string }) => t.topic_label))];
-
-      // Process Module 1 (index 0) and Module 2 (index 1)
-      for (const moduleIndex of [0, 1]) {
-        if (!reportContent.modules[moduleIndex]) continue;
-
-        const topics = await extractTopicsForModule(
-          reportContent,
-          moduleIndex,
-          existingLabels,
-          OPENROUTER_KEY
-        );
-
-        if (topics.length > 0) {
-          const rows = topics.map((t: TopicEntry) => ({
-            report_id: report.id,
-            domain_id: report.domain_id,
-            module_index: moduleIndex,
-            topic_label: t.topic_label,
-            rank: t.rank,
-            week_label: report.week_label,
-            raw_reason: t.raw_reason || null,
-            raw_keywords: t.raw_keywords || null,
-          }));
-
-          await supabase.from('topic_rankings').insert(rows);
-
-          // Add new labels to the existing set for the next module
-          topics.forEach((t: TopicEntry) => {
-            if (!existingLabels.includes(t.topic_label)) {
-              existingLabels.push(t.topic_label);
-            }
-          });
-        }
-      }
+    if (!OPENROUTER_KEY) {
+      console.warn(
+        `[publish ${id}] OPENROUTER_API_KEY missing — skipping topic_rankings extraction (Dashboard trend will not update)`
+      );
+    } else if (!reportContent?.modules?.length) {
+      console.warn(
+        `[publish ${id}] report.content has no modules — skipping topic_rankings extraction`
+      );
+    } else {
+      const result = await extractAndPersistTopicRankings({
+        supabase,
+        reportId: report.id,
+        domainId: report.domain_id,
+        weekLabel: report.week_label,
+        content: reportContent,
+        apiKey: OPENROUTER_KEY,
+      });
+      console.log(
+        `[publish ${id}] topic_rankings inserted=${result.inserted} perModule=${JSON.stringify(result.perModule)} newLabels=${result.newLabels.length}`
+      );
     }
-  } catch {
-    // Topic extraction failure should NOT block publish
+  } catch (err) {
+    console.error(
+      `[publish ${id}] topic_rankings extraction failed (non-blocking):`,
+      err
+    );
   }
 
   // AI-generated Hitting News based on topic ranking changes
