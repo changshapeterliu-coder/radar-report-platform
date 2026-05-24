@@ -6,6 +6,7 @@ import { dailyAlertTranslateTopic } from './daily-alert-translate-topic';
 import { dailyAlertTranslateCanonical } from './daily-alert-translate-canonical';
 import { reportTranslate } from './report-translate';
 import { newsTranslate } from './news-translate';
+import { translationSweeper } from './translation-sweeper';
 
 export {
   scheduleTick,
@@ -16,6 +17,7 @@ export {
   dailyAlertTranslateCanonical,
   reportTranslate,
   newsTranslate,
+  translationSweeper,
 };
 
 /**
@@ -38,4 +40,6 @@ export const functions = [
   // Unified content translation (reports + news)
   reportTranslate,
   newsTranslate,
+  // Daily safety net for any row that missed its translate fan-out
+  translationSweeper,
 ];
