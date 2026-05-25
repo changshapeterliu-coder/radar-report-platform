@@ -115,6 +115,7 @@ function NavBar() {
                 <Link
                   key={link.href}
                   href={link.href}
+                  prefetch
                   aria-current={active ? 'page' : undefined}
                   className={cn(
                     'relative rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
@@ -205,6 +206,7 @@ function NavBar() {
                 <Link
                   key={link.href}
                   href={link.href}
+                  prefetch
                   onClick={() => setMobileMenuOpen(false)}
                   aria-current={active ? 'page' : undefined}
                   className={cn(
