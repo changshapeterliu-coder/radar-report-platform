@@ -189,22 +189,24 @@ export async function PUT(request: NextRequest, context: RouteContext) {
           topics,
         }));
 
-        const newsPrompt = `You are a professional news editor for an Amazon seller account health intelligence platform. Analyze the topic ranking changes across weeks and generate newsworthy items.
+        const newsPrompt = `你是亚马逊卖家账户健康情报平台的专业新闻编辑。分析各周话题排名变化，生成值得关注的新闻条目。
 
-Topic rankings by week (most recent first):
+按周排名（最新在前）：
 ${JSON.stringify(weeksData.slice(0, 5), null, 2)}
 
-Generate 1-3 news items about noteworthy changes. Focus on:
-- New topics entering the rankings
-- Topics with significant rank increases
-- Topics that have stayed at #1 for multiple weeks
+围绕以下变化生成 1-3 条新闻：
+- 新进入排名的话题
+- 排名显著上升的话题
+- 连续多周保持 #1 的话题
 
-Write each news item in a professional but engaging news style. Each item should have a compelling headline and a 1-2 sentence summary.
+每条新闻用专业但抓人眼球的新闻语气，包含一个有冲击力的标题和 1-2 句话的摘要。
 
-Return JSON: { "news": [{ "title": "headline", "summary": "1-2 sentence summary", "content": "fuller 2-3 paragraph news article" }] }
+**重要：所有 title / summary / content 字段都用中文输出。** 平台后续会通过另一条独立 pipeline 自动翻译成英文 — 你只负责中文版本。
 
-If there are no noteworthy changes (e.g., only 1 week of data), return { "news": [] }.
-Return ONLY valid JSON.`;
+Return JSON: { "news": [{ "title": "中文标题", "summary": "1-2 句中文摘要", "content": "2-3 段中文正文" }] }
+
+如果没有显著变化（例如只有一周数据），返回 { "news": [] }。
+仅返回合法 JSON。`;
 
         const newsRes = await fetch(
           'https://openrouter.ai/api/v1/chat/completions',
@@ -219,7 +221,7 @@ Return ONLY valid JSON.`;
               messages: [
                 {
                   role: 'system',
-                  content: 'You are a news editor. Return only valid JSON.',
+                  content: '你是新闻编辑。仅返回合法 JSON，所有内容字段使用中文。',
                 },
                 { role: 'user', content: newsPrompt },
               ],
