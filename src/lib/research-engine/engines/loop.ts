@@ -386,40 +386,63 @@ async function runDeepDives(
 
   const promises = targets.map(({ module, topic }, idx) =>
     stageRunner(`stage2-deep-dive-${idx + 1}`, async () => {
-      const topicInput = JSON.stringify({
-        topic: topic.topic,
-        keywords: topic.keywords,
-        channels_observed: topic.channels_observed,
-        initial_evidence: topic.initial_evidence,
-        initial_misconception: topic.initial_misconception,
-        module,
-      });
-      const systemPrompt = substitute(config.deepDivePrompt, {
-        ...vars,
-        topic: topic.topic,
-        module,
-        keywords: topic.keywords.join('、'),
-        topic_input: topicInput,
-      });
-      const messages: ChatMessage[] = [
-        { role: 'system', content: systemPrompt },
-        {
-          role: 'user',
-          content: `请针对 topic "${topic.topic}" 做深挖 web search，返回 JSON。`,
-        },
-      ];
-      const result = await callResearcher<unknown>(config, {
-        messages,
-        timeoutMs: config.deepDiveTimeoutMs,
-        stage: 'deep-dive',
-        topicIndex: idx + 1,
-      });
-      if (!result.ok) {
-        errors.push(result.error);
+      // Outer try/catch: a deep-dive throwing (network blip, JSON parse,
+      // AbortError on timeout, callResearcher internal "Internal Server
+      // Error", etc.) used to bubble up as an Inngest step failure and
+      // retry-then-fail the WHOLE function — even though the engine loop's
+      // graceful-degrade design says one missing deep-dive is recoverable.
+      // Here we convert any throw into the same "ok=false, errors.push,
+      // empty deep-dive" shape the existing `if (!result.ok)` branch
+      // produces, so Stage 4 (assembler) still runs with the deep-dives
+      // it does have.
+      try {
+        const topicInput = JSON.stringify({
+          topic: topic.topic,
+          keywords: topic.keywords,
+          channels_observed: topic.channels_observed,
+          initial_evidence: topic.initial_evidence,
+          initial_misconception: topic.initial_misconception,
+          module,
+        });
+        const systemPrompt = substitute(config.deepDivePrompt, {
+          ...vars,
+          topic: topic.topic,
+          module,
+          keywords: topic.keywords.join('、'),
+          topic_input: topicInput,
+        });
+        const messages: ChatMessage[] = [
+          { role: 'system', content: systemPrompt },
+          {
+            role: 'user',
+            content: `请针对 topic "${topic.topic}" 做深挖 web search，返回 JSON。`,
+          },
+        ];
+        const result = await callResearcher<unknown>(config, {
+          messages,
+          timeoutMs: config.deepDiveTimeoutMs,
+          stage: 'deep-dive',
+          topicIndex: idx + 1,
+        });
+        if (!result.ok) {
+          errors.push(result.error);
+          return normalizeDeepDive(null, topic.topic, module);
+        }
+        pushRefs(trace, result.searchReferences);
+        return normalizeDeepDive(result.data, topic.topic, module);
+      } catch (err) {
+        // Reach here only on unexpected throws — log + degrade gracefully.
+        const message =
+          err instanceof Error ? err.message : String(err);
+        errors.push({
+          engine: config.engineLabel,
+          stage: 'deep-dive',
+          topicIndex: idx + 1,
+          errorClass: 'ServerError',
+          message: `deep-dive ${idx + 1} threw unexpectedly: ${message}`,
+        });
         return normalizeDeepDive(null, topic.topic, module);
       }
-      pushRefs(trace, result.searchReferences);
-      return normalizeDeepDive(result.data, topic.topic, module);
     })
   );
   return Promise.all(promises);
