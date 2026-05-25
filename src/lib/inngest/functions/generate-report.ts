@@ -216,16 +216,34 @@ export const generateReport = inngest.createFunction(
     let content: ReportContent | null = null;
     let synthError: EngineError | null = null;
     if (geminiLoop.assembled !== null || kimiLoop.assembled !== null) {
-      const synthResult = await step.run('synthesize', async () =>
-        synthesize({
-          geminiAssembled: geminiLoop.assembled,
-          kimiAssembled: kimiLoop.assembled,
-          synthesizerPrompt: config.synthesizerPrompt,
-          coverageWindow,
-          openRouterApiKey: config.openRouterApiKey,
-          timeoutMs: 3 * 60_000,
-        })
-      );
+      // Wrap the step body so a thrown error inside synthesize (network /
+      // timeout / provider 5xx) doesn't bubble out as an Inngest step
+      // failure that retries 3× then crashes the whole function. Convert
+      // any throw into the same { ok: false, error } shape the synth
+      // already returns on validation failures, then continue to the
+      // skeleton-draft fallback in Step 6.
+      const synthResult = await step.run('synthesize', async () => {
+        try {
+          return await synthesize({
+            geminiAssembled: geminiLoop.assembled,
+            kimiAssembled: kimiLoop.assembled,
+            synthesizerPrompt: config.synthesizerPrompt,
+            coverageWindow,
+            openRouterApiKey: config.openRouterApiKey,
+            timeoutMs: 3 * 60_000,
+          });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return {
+            ok: false as const,
+            error: {
+              engine: 'synthesizer' as const,
+              errorClass: 'ServerError' as const,
+              message: `synthesizer threw unexpectedly: ${message}`,
+            },
+          };
+        }
+      });
       if (synthResult.ok) {
         content = synthResult.content;
       } else {

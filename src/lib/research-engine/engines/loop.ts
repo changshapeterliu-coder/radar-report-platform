@@ -112,9 +112,28 @@ export async function runEngineLoop(
   };
 
   // ── Stage 1: Hot Radar Scan ──
-  const hotRadarResult = await stageRunner('stage1-hot-radar', () =>
-    callHotRadar(config, commonVars)
-  );
+  // Wrap step body in try/catch like Stage 2: a thrown error from
+  // callResearcher (network blip / timeout / provider 5xx) used to
+  // bubble up as an Inngest step failure → retried 3× → engine loop
+  // crashed. Now we convert any throw into an EngineError, push it to
+  // the errors array, and return early. The other engine can still
+  // run; the synthesizer can still produce content from one engine.
+  const hotRadarResult = await stageRunner('stage1-hot-radar', async () => {
+    try {
+      return await callHotRadar(config, commonVars);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        ok: false as const,
+        error: {
+          engine: config.engineLabel,
+          stage: 'hot-radar-scan' as const,
+          errorClass: 'ServerError' as const,
+          message: `hot-radar threw unexpectedly: ${message}`,
+        },
+      };
+    }
+  });
   if (!hotRadarResult.ok) {
     errors.push(hotRadarResult.error);
     return { trace, assembled: null, errors };
@@ -133,9 +152,27 @@ export async function runEngineLoop(
   );
 
   // ── Stage 3: Education Opportunity Mapper ──
-  const eduResult = await stageRunner('stage3-education-mapper', () =>
-    callEducationMapper(config, commonVars, hotRadarResult.data, trace.deepDives)
-  );
+  const eduResult = await stageRunner('stage3-education-mapper', async () => {
+    try {
+      return await callEducationMapper(
+        config,
+        commonVars,
+        hotRadarResult.data,
+        trace.deepDives
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        ok: false as const,
+        error: {
+          engine: config.engineLabel,
+          stage: 'education-mapper' as const,
+          errorClass: 'ServerError' as const,
+          message: `education-mapper threw unexpectedly: ${message}`,
+        },
+      };
+    }
+  });
   if (eduResult.ok) {
     trace.educationOpportunities = eduResult.data;
   } else {
@@ -144,15 +181,28 @@ export async function runEngineLoop(
   }
 
   // ── Stage 4: Assembler ──
-  const assembleResult = await stageRunner('stage4-assembler', () =>
-    callAssembler(
-      config,
-      commonVars,
-      hotRadarResult.data,
-      trace.deepDives,
-      trace.educationOpportunities
-    )
-  );
+  const assembleResult = await stageRunner('stage4-assembler', async () => {
+    try {
+      return await callAssembler(
+        config,
+        commonVars,
+        hotRadarResult.data,
+        trace.deepDives,
+        trace.educationOpportunities
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        ok: false as const,
+        error: {
+          engine: config.engineLabel,
+          stage: 'assembler' as const,
+          errorClass: 'ServerError' as const,
+          message: `assembler threw unexpectedly: ${message}`,
+        },
+      };
+    }
+  });
   if (assembleResult.ok) {
     trace.assembled = assembleResult.data;
     return { trace, assembled: assembleResult.data, errors };
