@@ -26,7 +26,7 @@ export interface ScheduledRunsTableProps {
   pageSize: number;
   onPageChange: (page: number) => void;
   onOpenDrawer: (runId: string) => void;
-  onRetry: (runId: string) => void;
+  onRetry: (runId: string, force: boolean) => void;
 }
 
 function formatTriggeredAt(iso: string): string {
@@ -123,8 +123,15 @@ export function ScheduledRunsTable({
                 row.duration_ms != null
                   ? Math.round(row.duration_ms / 1000)
                   : null;
-              const canRetry =
+              // Retry button is always available now. Two semantics:
+              //   * failed / partial → normal retry (preserves history)
+              //   * queued / running / succeeded → force-retry, marks any
+              //     stuck rows as failed first. UI confirms because this
+              //     is destructive (will produce a duplicate draft if the
+              //     run was actually still progressing).
+              const isStandardRetry =
                 row.status === 'failed' || row.status === 'partial';
+              const retryLabel = isStandardRetry ? 'Retry' : 'Force retry';
               return (
                 <tr
                   key={row.id}
@@ -186,15 +193,13 @@ export function ScheduledRunsTable({
                       >
                         View
                       </Button>
-                      {canRetry && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => onRetry(row.id)}
-                        >
-                          Retry
-                        </Button>
-                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onRetry(row.id, !isStandardRetry)}
+                      >
+                        {retryLabel}
+                      </Button>
                     </div>
                   </td>
                 </tr>

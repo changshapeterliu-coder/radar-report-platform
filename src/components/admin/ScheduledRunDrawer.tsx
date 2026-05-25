@@ -28,7 +28,7 @@ interface ScheduledRunDetail {
 export interface ScheduledRunDrawerProps {
   runId: string | null;
   onClose: () => void;
-  onRetry: (runId: string) => void;
+  onRetry: (runId: string, force: boolean) => void;
 }
 
 function formatShanghai(iso: string): string {
@@ -267,13 +267,24 @@ export function ScheduledRunDrawer({
                   value={data.synthesizer_output}
                 />
 
-                {(data.status === 'failed' || data.status === 'partial') && (
-                  <div className="pt-6">
-                    <Button onClick={() => onRetry(data.id)}>
-                      Retry this run
-                    </Button>
-                  </div>
-                )}
+                {(() => {
+                  const isStandard =
+                    data.status === 'failed' || data.status === 'partial';
+                  return (
+                    <div className="pt-6">
+                      <Button onClick={() => onRetry(data.id, !isStandard)}>
+                        {isStandard ? 'Retry this run' : 'Force retry this run'}
+                      </Button>
+                      {!isStandard && (
+                        <p className="mt-2 text-xs text-foreground-muted">
+                          This run is in <code>{data.status}</code> state. Force
+                          retry marks any stuck rows for this window as failed,
+                          then enqueues a fresh run.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>

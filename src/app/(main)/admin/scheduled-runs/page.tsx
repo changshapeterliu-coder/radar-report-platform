@@ -58,14 +58,24 @@ export default function ScheduledRunsPage() {
   }, [toast]);
 
   const handleRetry = useCallback(
-    async (runId: string) => {
-      try {
-        const res = await fetch(
-          `/api/admin/scheduled-runs/${encodeURIComponent(runId)}/retry`,
-          { method: 'POST' }
+    async (runId: string, force = false) => {
+      // Force retry is destructive (will produce a duplicate draft if the
+      // run was actually still progressing). Confirm before going through.
+      if (force) {
+        const ok = window.confirm(
+          'Force retry will mark any stuck rows for this window as failed and start a fresh run. ' +
+            'If the run is genuinely still in progress, this will produce a duplicate draft. Continue?'
         );
+        if (!ok) return;
+      }
+      try {
+        const url = `/api/admin/scheduled-runs/${encodeURIComponent(runId)}/retry${force ? '?force=1' : ''}`;
+        const res = await fetch(url, { method: 'POST' });
         if (res.status === 202) {
-          setToast({ kind: 'success', text: 'Retry queued.' });
+          setToast({
+            kind: 'success',
+            text: force ? 'Force retry queued.' : 'Retry queued.',
+          });
           setDrawerRunId(null);
           void fetchRows(page);
           return;
@@ -73,7 +83,8 @@ export default function ScheduledRunsPage() {
         if (res.status === 409) {
           setToast({
             kind: 'error',
-            text: 'A run is already in progress for this window',
+            text:
+              'A run is already in progress for this window. If it is stuck, use Force retry.',
           });
           return;
         }
@@ -81,8 +92,7 @@ export default function ScheduledRunsPage() {
           const body = await res.json().catch(() => ({}));
           setToast({
             kind: 'error',
-            text:
-              body?.message || 'Only failed or partial runs can be retried',
+            text: body?.message || 'Cannot retry this run',
           });
           return;
         }
