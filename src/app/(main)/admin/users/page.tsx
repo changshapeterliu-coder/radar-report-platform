@@ -34,6 +34,9 @@ export default function AdminUsersPage() {
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
+  const [createdCredentials, setCreatedCredentials] = useState<
+    { email: string; password: string } | null
+  >(null);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -72,23 +75,43 @@ export default function AdminUsersPage() {
   const handleCreateUser = async () => {
     setFormError('');
     setFormSuccess('');
-    if (!email.trim() || !password.trim()) {
+    setCreatedCredentials(null);
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !password) {
       setFormError('Email and password are required.');
       return;
     }
+    if (password.length < 6) {
+      setFormError('Password must be at least 6 characters.');
+      return;
+    }
+    if (password !== password.trim()) {
+      setFormError(
+        'Password must not start or end with whitespace. Please retype.'
+      );
+      return;
+    }
+    // Snapshot the password before any state reset so we can display it
+    // back to the admin and avoid the "password silently mutated" class of bug.
+    const passwordSnapshot = password;
     setCreating(true);
     try {
       const res = await fetch('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), password, role }),
+        body: JSON.stringify({
+          email: trimmedEmail,
+          password: passwordSnapshot,
+          role,
+        }),
       });
       if (res.ok) {
         const result = await res.json();
         const confirmNote = result.emailConfirmed
           ? '(email confirmed)'
           : '(email may need manual confirmation)';
-        setFormSuccess(`User ${email} created. ${confirmNote}`);
+        setFormSuccess(`User ${trimmedEmail} created. ${confirmNote}`);
+        setCreatedCredentials({ email: trimmedEmail, password: passwordSnapshot });
         setEmail('');
         setPassword('');
         setRole('team_member');
@@ -142,6 +165,28 @@ export default function AdminUsersPage() {
               <span>{formSuccess}</span>
             </div>
           )}
+          {createdCredentials && (
+            <div className="mb-4 rounded-md border border-warning/30 bg-warning-bg px-3 py-3 text-sm text-warning-fg">
+              <p className="mb-2 font-medium">
+                Send these credentials to the new user (shown once):
+              </p>
+              <div className="space-y-1 font-mono text-xs">
+                <div>
+                  <span className="text-foreground-muted">Email: </span>
+                  <span>{createdCredentials.email}</span>
+                </div>
+                <div>
+                  <span className="text-foreground-muted">Password: </span>
+                  <span>{createdCredentials.password}</span>
+                </div>
+              </div>
+              <p className="mt-2 text-xs text-foreground-muted">
+                If the user can't sign in with this exact string, the most
+                likely cause is browser autofill mutating the field. Reset
+                via Supabase Dashboard → Authentication → Users.
+              </p>
+            </div>
+          )}
           <div className="space-y-4">
             <div>
               <label
@@ -171,7 +216,24 @@ export default function AdminUsersPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Minimum 6 characters"
+                autoComplete="new-password"
+                spellCheck={false}
               />
+              <p className="mt-1 text-xs text-foreground-subtle">
+                {password.length > 0 ? (
+                  <>
+                    Length: {password.length}{' '}
+                    {(password !== password.trim() ||
+                      /[\s]/.test(password)) && (
+                      <span className="text-warning">
+                        — contains whitespace, double-check
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  '6+ chars. Avoid leading/trailing spaces. Browser autofill is disabled.'
+                )}
+              </p>
             </div>
             <div>
               <label
