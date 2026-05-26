@@ -175,10 +175,28 @@ export async function PUT(request: NextRequest) {
     );
   }
 
-  const { error } = await supabase
+  // Use service-role client to bypass the "Users can update own profile" RLS
+  // policy (migration 003). Without this, the verified-admin's session would
+  // try `UPDATE profiles WHERE id = <other-user-id>`, RLS silently returns
+  // 0 rows, and the UI thinks promotion succeeded but DB is unchanged.
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceRoleKey) {
+    return NextResponse.json(
+      { code: 'CONFIG_ERROR', message: 'SUPABASE_SERVICE_ROLE_KEY is not configured', statusCode: 500 },
+      { status: 500 }
+    );
+  }
+
+  const adminSupabase = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    serviceRoleKey
+  );
+
+  const { data: updated, error } = await adminSupabase
     .from('profiles')
     .update({ role })
-    .eq('id', userId);
+    .eq('id', userId)
+    .select('id, role');
 
   if (error) {
     return NextResponse.json(
@@ -187,5 +205,16 @@ export async function PUT(request: NextRequest) {
     );
   }
 
-  return NextResponse.json({ message: 'Role updated successfully' });
+  if (!updated || updated.length === 0) {
+    return NextResponse.json(
+      {
+        code: 'NOT_FOUND',
+        message: `No profile found for userId=${userId}`,
+        statusCode: 404,
+      },
+      { status: 404 }
+    );
+  }
+
+  return NextResponse.json({ message: 'Role updated successfully', data: updated[0] });
 }
