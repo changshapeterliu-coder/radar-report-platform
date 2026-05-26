@@ -19,6 +19,14 @@ i18n.use(initReactI18next).init({
   fallbackLng: 'zh',
   interpolation: {
     escapeValue: false,
+    // Project convention: locale strings use single-brace placeholders
+    // (e.g. "Published {time}", "{type} · {moduleCount} modules"). Override
+    // i18next's default {{var}} so existing locale files render correctly.
+    // Symptom that surfaced this: dashboard latest-report strip showed
+    // literal "{time}" / "{moduleCount}" because i18next's default never
+    // matched the single braces.
+    prefix: '{',
+    suffix: '}',
   },
 });
 
