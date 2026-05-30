@@ -58,6 +58,14 @@ const en = {
     dateRange: 'Date Range',
     publishedAt: 'Published',
     type: 'Type',
+    emailReport: {
+      button: 'Email this report',
+      dialogTitle: 'Email this report',
+      dialogHint: 'Copy the instruction below and paste it into Kiro to draft and send the email.',
+      copy: 'Copy',
+      copied: 'Copied',
+      close: 'Close',
+    },
   },
   news: {
     title: 'Hitting News',

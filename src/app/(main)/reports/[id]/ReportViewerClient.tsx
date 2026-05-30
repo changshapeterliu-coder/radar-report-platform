@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { Printer } from 'lucide-react';
 import ReportRenderer from '@/components/report/ReportRenderer';
 import ModuleTabs from '@/components/report/ModuleTabs';
+import { EmailReportButton } from '@/components/report/EmailReportButton';
 import DisclaimerBanner from '@/components/DisclaimerBanner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -141,6 +142,11 @@ export default function ReportViewerClient({
               <Printer className="h-4 w-4" strokeWidth={1.75} />
               Export PDF
             </Button>
+            <EmailReportButton
+              reportId={report.id}
+              title={report.title}
+              status={report.status}
+            />
           </div>
         </div>
 

@@ -58,6 +58,14 @@ const zh = {
     dateRange: '时间段',
     publishedAt: '发布日期',
     type: '类型',
+    emailReport: {
+      button: '邮件发送此报告',
+      dialogTitle: '邮件发送此报告',
+      dialogHint: '复制下面的指令，粘贴到 Kiro 即可起草并发送邮件。',
+      copy: '复制',
+      copied: '已复制',
+      close: '关闭',
+    },
   },
   news: {
     title: '热点新闻',
