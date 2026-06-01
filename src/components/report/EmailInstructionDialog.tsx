@@ -46,7 +46,7 @@ export function EmailInstructionDialog({
   }, [onClose]);
 
   // Fixed Chinese instruction to the skill — not translated.
-  const snippet = `用 send-report-email skill 把报告 ${reportId}（${title}）发邮件出去，收件人默认 radar-report-ah@amazon.com，其他收件人我待会儿告诉你`;
+  const snippet = `用 send-report-email skill 把报告 ${reportId}（${title}）发邮件出去，收件人默认 cn-radar-report@amazon.com，其他收件人我待会儿告诉你`;
 
   const handleCopy = async () => {
     try {

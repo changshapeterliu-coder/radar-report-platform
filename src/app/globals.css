@@ -176,6 +176,13 @@ body {
   overflow: hidden;
 }
 
+/* Print-only content: hidden on screen, revealed only in the PDF/print output
+   (e.g. the closing DisclaimerBanner). The matching `display: block` override
+   lives in the @media print block below. */
+.print-only {
+  display: none;
+}
+
 /* ========================================================================
    Print styles for PDF export of report pages
    ======================================================================== */
@@ -183,9 +190,15 @@ body {
 @media print {
   nav,
   .no-print,
+  aside,
   button:not(.print-keep),
   [data-no-print] {
     display: none !important;
+  }
+
+  /* Reveal print-only content (closing DisclaimerBanner) in the PDF (R6.6). */
+  .print-only {
+    display: block !important;
   }
 
   body {
@@ -199,10 +212,31 @@ body {
     position: relative !important;
   }
 
+  /* Collapse the viewer's two-column reading grid to a single column so the
+     report flows full-bleed top-to-bottom in the PDF (R8.4). The sidebar
+     <aside> is already display:none, but forcing one column is the safe
+     guarantee regardless of which grid utility is applied. */
   main {
     padding: 0 !important;
     margin: 0 !important;
     max-width: 100% !important;
+  }
+
+  .lg\:grid {
+    display: block !important;
+  }
+
+  [class*="grid-cols-"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Module section cards must never split across a page boundary (R8.3). */
+  section[id^="module-"] {
+    page-break-inside: avoid;
+    break-inside: avoid;
+    /* Neutralize the on-screen scroll-mt-[76px] so each section does not push
+       a stray top gap onto its print page. */
+    scroll-margin-top: 0 !important;
   }
 
   .page-break-before {
@@ -225,5 +259,6 @@ body {
 
   tr {
     page-break-inside: avoid;
+    break-inside: avoid;
   }
 }

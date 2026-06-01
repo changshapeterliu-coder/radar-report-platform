@@ -255,6 +255,14 @@ const zh = {
       quote: '卖家原声',
     },
     emptyModule: '本周该模块暂无显著发现',
+    outline: {
+      label: '目录',
+    },
+    export: {
+      button: '导出 PDF',
+      preparing: '准备中…',
+      error: '导出失败，请重试。',
+    },
   },
   adminActions: {
     reTranslate: '重新翻译',

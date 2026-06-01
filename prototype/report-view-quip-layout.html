@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Report View — Quip Layout Prototype</title>
+<style>
+  /* ============================================================
+     Design tokens — mirrors .kiro/steering/ui-design-system.md
+     ============================================================ */
+  :root {
+    --background: #fafafa;
+    --card: #ffffff;
+    --border: #e5e7eb;
+    --border-strong: #d1d5db;
+    --muted: #f3f4f6;
+    --foreground: #0a0a0a;
+    --foreground-muted: #6b7280;
+    --foreground-subtle: #9ca3af;
+    --primary: #ff9900;
+    --primary-foreground: #ffffff;
+    --primary-soft: #fff4e5;
+    --info: #146eb4;
+    --info-bg: #eff6ff;
+    --info-fg: #1e40af;
+    --success: #10b981;
+    --success-bg: #ecfdf5;
+    --success-fg: #047857;
+    --warning: #f59e0b;
+    --warning-bg: #fffbeb;
+    --warning-fg: #b45309;
+    --danger: #dc2626;
+    --danger-bg: #fef2f2;
+    --danger-fg: #991b1b;
+    --nav-bg: #1a1a2e;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', '微软雅黑', sans-serif;
+    background: var(--background);
+    color: var(--foreground);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  /* ── Top nav (site chrome) ── */
+  .topnav {
+    height: 56px;
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    position: sticky;
+    top: 0;
+    z-index: 40;
+  }
+  .topnav .brand {
+    font-weight: 600;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .topnav .brand .dot { color: var(--primary); }
+  .topnav .nav-actions { display: flex; align-items: center; gap: 8px; }
+  .lang-switch {
+    font-size: 13px;
+    color: var(--foreground-muted);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 10px;
+    background: var(--card);
+    cursor: pointer;
+  }
+
+  /* ── Report header ── */
+  .report-header {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 32px 24px 20px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .report-header .meta-tags {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .tag {
+    font-size: 12px;
+    padding: 2px 10px;
+    border-radius: 9999px;
+    border: 1px solid var(--border);
+    color: var(--foreground-muted);
+    background: var(--card);
+  }
+  .tag.type { border-color: var(--border-strong); }
+  .report-header h1 {
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 1.4;
+    max-width: 760px;
+  }
+  .report-header .daterange {
+    margin-top: 6px;
+    font-size: 13px;
+    color: var(--foreground-muted);
+  }
+  .header-actions { display: flex; gap: 8px; flex-shrink: 0; }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 150ms;
+    border: 1px solid var(--border-strong);
+    background: var(--card);
+    color: var(--foreground);
+    white-space: nowrap;
+  }
+  .btn:hover { background: var(--muted); }
+  .btn svg { width: 15px; height: 15px; }
+  .btn.primary {
+    background: var(--primary);
+    color: var(--primary-foreground);
+    border-color: var(--primary);
+  }
+  .btn.primary:hover { background: #e88a00; }
+
+  /* ── Quip three-zone layout ── */
+  .layout {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 24px 80px;
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 40px;
+    align-items: start;
+  }
+
+  /* Sticky sidebar outline */
+  .sidebar {
+    position: sticky;
+    top: 76px;
+    align-self: start;
+    max-height: calc(100vh - 96px);
+    overflow-y: auto;
+  }
+  .sidebar .outline-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--foreground-subtle);
+    padding: 0 12px 10px;
+  }
+  .outline-list { list-style: none; }
+  .outline-list li a {
+    display: flex;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    color: var(--foreground-muted);
+    text-decoration: none;
+    font-size: 13px;
+    line-height: 1.45;
+    border-left: 2px solid transparent;
+    transition: all 150ms;
+  }
+  .outline-list li a .num {
+    color: var(--foreground-subtle);
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+  }
+  .outline-list li a:hover {
+    background: var(--muted);
+    color: var(--foreground);
+  }
+  .outline-list li a.active {
+    background: var(--primary-soft);
+    color: var(--foreground);
+    font-weight: 500;
+    border-left-color: var(--primary);
+  }
+  .outline-list li a.active .num { color: var(--primary); }
+
+  /* Main body */
+  .main-body { min-width: 0; }
+
+  .module-section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    margin-bottom: 24px;
+    overflow: hidden;
+    scroll-margin-top: 76px;
+  }
+  .module-section .module-head {
+    padding: 20px 32px;
+    border-bottom: 1px solid var(--border);
+  }
+  .module-section .module-head h2 {
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  .module-body {
+    padding: 28px 32px;
+    max-width: 820px;
+  }
+  .module-body p {
+    font-size: 15px;
+    line-height: 1.85;
+    margin-bottom: 14px;
+    color: var(--foreground);
+  }
+  .module-body h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 26px 0 10px;
+  }
+
+  /* Top topics table */
+  .tt-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+  .tt-table thead { background: rgba(243,244,246,0.5); }
+  .tt-table th {
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--foreground-muted);
+    border-bottom: 1px solid var(--border);
+  }
+  .tt-table td {
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .tt-table tr:last-child td { border-bottom: none; }
+  .tt-table .rank { font-weight: 600; color: var(--primary); font-variant-numeric: tabular-nums; }
+  .tt-table .rank .check { color: var(--success); }
+
+  /* Badges */
+  .badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 9px;
+    border-radius: 9999px;
+    border: 1px solid;
+    white-space: nowrap;
+  }
+  .badge.high { background: var(--danger-bg); color: var(--danger-fg); border-color: rgba(220,38,38,0.25); }
+  .badge.medium { background: var(--warning-bg); color: var(--warning-fg); border-color: rgba(245,158,11,0.3); }
+  .badge.low { background: var(--info-bg); color: var(--info-fg); border-color: rgba(20,110,180,0.25); }
+
+  /* Callouts */
+  .callout {
+    border-left: 2px solid;
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin: 18px 0;
+  }
+  .callout .callout-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    margin-bottom: 5px;
+  }
+  .callout p { font-size: 14px; line-height: 1.65; margin: 0; }
+  .callout svg { width: 14px; height: 14px; }
+  .callout.insight { border-color: var(--primary); background: rgba(255,244,229,0.4); }
+  .callout.insight .callout-label { color: var(--primary); }
+  .callout.warning { border-color: var(--danger); background: var(--danger-bg); }
+  .callout.warning .callout-label { color: var(--danger-fg); }
+  .callout.recommendation { border-color: var(--success); background: var(--success-bg); }
+  .callout.recommendation .callout-label { color: var(--success-fg); }
+
+  /* GFM-style table in body */
+  .md-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin: 18px 0;
+    font-size: 13px;
+  }
+  .md-table th { background: rgba(243,244,246,0.5); text-align: left; padding: 9px 12px; font-size: 12px; font-weight: 600; color: var(--foreground-muted); border-bottom: 1px solid var(--border); }
+  .md-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .md-table tr:last-child td { border-bottom: none; }
+
+  /* Mobile drawer control (hidden on desktop) */
+  .mobile-outline {
+    display: none;
+    position: sticky;
+    top: 56px;
+    z-index: 30;
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 24px;
+  }
+  .mobile-outline select {
+    width: 100%;
+    font-size: 14px;
+    padding: 9px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--card);
+    color: var(--foreground);
+  }
+
+  /* Responsive: collapse sidebar into top dropdown */
+  @media (max-width: 880px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .mobile-outline { display: block; }
+    .report-header { flex-direction: column; }
+    .module-body { padding: 22px; }
+  }
+
+  /* Print: hide chrome, flow all sections */
+  @media print {
+    .topnav, .sidebar, .mobile-outline, .header-actions { display: none !important; }
+    .layout { grid-template-columns: 1fr; max-width: none; padding: 0; gap: 0; }
+    .module-section { box-shadow: none; border: none; border-bottom: 1px solid var(--border); border-radius: 0; page-break-inside: avoid; }
+    body { background: #fff; }
+    .tt-table tr, .md-table tr { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Site nav chrome -->
+<nav class="topnav">
+  <div class="brand">Radar <span class="dot">&middot;</span> Account Health</div>
+  <div class="nav-actions">
+    <button class="lang-switch">中文 / EN</button>
+  </div>
+</nav>
+
+<!-- Report header -->
+<header class="report-header">
+  <div>
+    <div class="meta-tags">
+      <span class="tag type">Topic Deep-Dive</span>
+      <span class="tag">Account Health</span>
+    </div>
+    <h1>亚马逊PN15合规风暴下中国卖家主体变更潮与境外灰产链条深度穿透调查报告</h1>
+    <div class="daterange">2025-07 ~ 2026-12</div>
+  </div>
+  <div class="header-actions">
+    <button class="btn" id="exportBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Export PDF
+    </button>
+  </div>
+</header>
+
+<!-- Mobile collapsed outline -->
+<div class="mobile-outline">
+  <select id="mobileSelect">
+    <option value="m1">1 · PN15 政策全貌与穿透式监管</option>
+    <option value="m2">2 · 卖家声量与讨论焦点</option>
+    <option value="m3">3 · 服务商衍生灰色产业链</option>
+    <option value="m4">4 · 法律与合规的双重绞杀</option>
+    <option value="m5">5 · 关联封禁与资金冻结</option>
+    <option value="m6">6 · 专家合规指引与应对策略</option>
+  </select>
+</div>
+
+<!-- Quip three-zone layout -->
+<div class="layout">
+
+  <!-- Sticky sidebar outline -->
+  <aside class="sidebar">
+    <div class="outline-label">Sections</div>
+    <ul class="outline-list" id="outline">
+      <li><a href="#m1" data-target="m1"><span class="num">1</span><span>PN15 政策全貌与穿透式监管逻辑</span></a></li>
+      <li><a href="#m2" data-target="m2"><span class="num">2</span><span>卖家声量与讨论焦点</span></a></li>
+      <li><a href="#m3" data-target="m3"><span class="num">3</span><span>服务商衍生灰色产业链</span></a></li>
+      <li><a href="#m4" data-target="m4"><span class="num">4</span><span>法律与合规的双重绞杀</span></a></li>
+      <li><a href="#m5" data-target="m5"><span class="num">5</span><span>关联封禁与资金冻结</span></a></li>
+      <li><a href="#m6" data-target="m6"><span class="num">6</span><span>专家合规指引与实务化应对策略</span></a></li>
+    </ul>
+  </aside>
+
+  <!-- Main body — all sections mounted at once -->
+  <main class="main-body">
+
+    <section class="module-section" id="m1">
+      <div class="module-head"><h2>1. PN15政策的政策全貌、穿透式监管逻辑及涉税数据报送细节</h2></div>
+      <div class="module-body">
+        <p>中国跨境电商行业正式迎来全方位、阳光化的穿透式税务监管时代。核心源于国务院第810号令《互联网平台企业涉税信息报送规定》及国家税务总局2025年第15号公告（PN15）。亚马逊已指定北京奋迅（上海）律师事务所作为境内涉税信息报送代理人。</p>
+        <div class="callout insight">
+          <div class="callout-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.6 1 1.4 1 2.3h6c0-.9.4-1.7 1-2.3A7 7 0 0 0 12 2z"/></svg>Key Insight</div>
+          <p>亚马逊已于 2025-10-31 完成首次季度报送，覆盖范围追溯至 2025 Q3，且对仅在海外站点销售的卖家同样无死角覆盖。</p>
+        </div>
+        <p>即使中国境内卖家仅在美国站、欧洲站、日本站销售，其身份信息、店铺 MCID、季度订单交易量、总营收、退款、佣金及 FBA 费用均会递交税务机关。亚马逊采用订单发货日汇率中间价计算全球销售额。</p>
+      </div>
+    </section>
+
+    <section class="module-section" id="m2">
+      <div class="module-head"><h2>2. 卖家声量与讨论焦点：合规转型中的阵痛博弈</h2></div>
+      <div class="module-body">
+        <p>伴随季度报送常态化，知无不言、海圈及微信行业社群中关于"变更亚马逊店铺主体"的讨论声量和恐慌指数在 2026 年达到历史峰值。</p>
+        <table class="tt-table">
+          <thead><tr><th>Rank</th><th>话题</th><th>声量</th><th>严重度</th></tr></thead>
+          <tbody>
+            <tr><td class="rank">1 <span class="check">✓</span></td><td>变更主体触发二审与卡审</td><td>9.5</td><td><span class="badge high">high</span></td></tr>
+            <tr><td class="rank">2</td><td>老店铺权重与经营连续性丧失</td><td>8.8</td><td><span class="badge high">high</span></td></tr>
+            <tr><td class="rank">3</td><td>欧盟 VAT 解绑与重绑税务真空期</td><td>7.5</td><td><span class="badge medium">medium</span></td></tr>
+          </tbody>
+        </table>
+        <div class="callout warning">
+          <div class="callout-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Warning</div>
+          <p>变更为香港新公司后，后台高频触发"消费者告知法案"审核，提示"信息与文件不符"，导致店铺陷入无限期停售死循环。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="module-section" id="m3">
+      <div class="module-head"><h2>3. 服务商衍生灰色产业链深度剖析：套利与爆雷的温床</h2></div>
+      <div class="module-body">
+        <p>PN15 引发的主体变更热潮催生了庞大的灰色服务产业链。其底层三大核心衍生链路如下。</p>
+        <h3>核心链路一：香港独立办公室租赁与包装账单</h3>
+        <p>服务商在低端工厦租大套间分割成微型格子间，编制独立房间号、定制企业水牌，通过 PS 篡改水电账单抬头，制造"独立办公"假象。</p>
+        <table class="md-table">
+          <thead><tr><th>方案</th><th>收费 (CNY/年)</th><th>首次通过率</th><th>核心风险</th></tr></thead>
+          <tbody>
+            <tr><td>标准秘书合规地址</td><td>800–2,000</td><td>约 15%</td><td>地址共用触发关联</td></tr>
+            <tr><td>灰色实地挂靠 + 包装账单</td><td>6,000–15,000</td><td>约 65%</td><td>伪造文书、税务欺诈</td></tr>
+            <tr><td>代办变更 / 强开保过</td><td>15,000–40,000</td><td>约 10%</td><td>账户永久封禁清零</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="module-section" id="m4">
+      <div class="module-head"><h2>4. 法律与合规的双重绞杀：虚假申报的刑事与行政风险</h2></div>
+      <div class="module-body">
+        <p>虚假申报直接触犯香港《公司条例》——注册地址须真实可查册。共用虚拟地址、伪造水电账单可能涉及伪造公文印章罪，并被强制除名。</p>
+        <div class="callout warning">
+          <div class="callout-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Warning</div>
+          <p>深圳一卖家利用变更主体避税，被粤港深三地联合监管精准定位，因收款账户与主体不符暴露，最终被追缴巨额税款及罚款。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="module-section" id="m5">
+      <div class="module-head"><h2>5. 关联封禁与资金冻结：灰色服务对单个卖家账号稳定性的致命打击</h2></div>
+      <div class="module-body">
+        <p>亚马逊风控可通过大数据识别异常地址模式。当数十家店铺注册地址指向同一栋写字楼不同单元时，系统将其标记为"高风险集群"，触发批量二次审查甚至直接封禁。</p>
+        <div class="callout warning">
+          <div class="callout-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Warning</div>
+          <p>2026 年初一卖家将三间内地店铺合并至一个香港公司，被判定为"高风险集群"冻结全部账户，超 200 万人民币无法动用，申诉全部失败。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="module-section" id="m6">
+      <div class="module-head"><h2>6. 专家合规指引与实务化应对策略</h2></div>
+      <div class="module-body">
+        <p>跨境电商野蛮生长时代已终结，未来生存法则建立在阳光化、体系化合规之上。本报告提出三条实操合规演进路径。</p>
+        <div class="callout recommendation">
+          <div class="callout-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>Recommendation</div>
+          <p>规范香港地址变更申报（14 天内备案、30 天内缴厘印税）；构筑独立交易原则的跨国关联交易体系；对历史涉税数据做软着陆清算与合规注销。</p>
+        </div>
+        <h3>关键动作</h3>
+        <p>登录后台下载每季度 PN15 申报副本，核对人民币营收、净利润及平台扣费；将大陆主体定位为采购供应链中心，香港主体定位为海外销售结算中心。</p>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+  // ── Scroll-spy: highlight the outline entry for the section in view ──
+  const links = Array.from(document.querySelectorAll('#outline a'));
+  const sections = links.map(a => document.getElementById(a.dataset.target));
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id;
+        links.forEach(a => a.classList.toggle('active', a.dataset.target === id));
+        // keep mobile select in sync
+        const sel = document.getElementById('mobileSelect');
+        if (sel) sel.value = id;
+      }
+    });
+  }, { rootMargin: '-76px 0px -65% 0px', threshold: 0 });
+
+  sections.forEach(s => s && observer.observe(s));
+
+  // first item active by default
+  if (links[0]) links[0].classList.add('active');
+
+  // ── Mobile dropdown jump ──
+  const mobileSelect = document.getElementById('mobileSelect');
+  if (mobileSelect) {
+    mobileSelect.addEventListener('change', (e) => {
+      const el = document.getElementById(e.target.value);
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    });
+  }
+
+  // ── Export → browser print dialog ──
+  document.getElementById('exportBtn').addEventListener('click', () => {
+    window.print();
+  });
+</script>
+
+</body>
+</html>

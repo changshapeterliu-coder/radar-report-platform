@@ -7,15 +7,21 @@ import {
   type ReactNode,
   type ErrorInfo,
 } from 'react';
-import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
-import { Printer } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import ReportRenderer from '@/components/report/ReportRenderer';
-import ModuleTabs from '@/components/report/ModuleTabs';
+import ReportOutline from '@/components/report/ReportOutline';
+import { ExportPdfButton } from '@/components/report/ExportPdfButton';
 import { EmailReportButton } from '@/components/report/EmailReportButton';
 import DisclaimerBanner from '@/components/DisclaimerBanner';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import {
+  deriveSections,
+  deriveFilenameBase,
+  canExport,
+  type Section,
+} from '@/lib/report-export';
+import { useRole } from '@/hooks/useRole';
 import {
   getDisplayReportContent,
   getDisplayReportTitle,
@@ -36,7 +42,7 @@ function parseTopTopicRank(label: string): number {
 
 interface EBProps {
   children: ReactNode;
-  onError: () => void;
+  onError?: () => void;
 }
 interface EBState {
   hasError: boolean;
@@ -51,7 +57,7 @@ class ErrorBoundary extends Component<EBProps, EBState> {
     return { hasError: true };
   }
   componentDidCatch(_error: Error, _info: ErrorInfo) {
-    this.props.onError();
+    this.props.onError?.();
   }
   render() {
     return this.state.hasError ? null : this.props.children;
@@ -64,10 +70,9 @@ export default function ReportViewerClient({
   data: ReportViewerData;
 }) {
   const { i18n } = useTranslation();
-  const router = useRouter();
+  const { isAdmin } = useRole();
   const { report, rankings } = data;
 
-  const [activeTab, setActiveTab] = useState(0);
   const [renderError, setRenderError] = useState(false);
 
   const categoryResolutionByModule = useMemo<
@@ -111,14 +116,21 @@ export default function ReportViewerClient({
   const displayDateRange = getDisplayReportDateRange(report, i18n.language);
 
   const modules = displayContent?.modules ?? [];
-  const activeModule = modules[activeTab];
 
-  // Suppress warning: `router` reserved for future inline navigation.
-  void router;
+  // Single source of truth for the outline entries + body section anchors.
+  const sections = useMemo<Section[]>(() => deriveSections(modules), [modules]);
+
+  const showOutline = sections.length > 1;
+
+  const filenameBase = deriveFilenameBase({
+    title: displayTitle || report.title,
+    dateRange: displayDateRange || report.date_range || '',
+    reportId: report.id,
+  });
 
   return (
     <div>
-      <header className="no-print sticky top-14 z-30 -mx-4 border-b border-border bg-card px-4 py-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+      <header className="no-print -mx-4 border-b border-border bg-card px-4 py-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <h1 className="text-xl font-semibold text-foreground">
@@ -134,14 +146,9 @@ export default function ReportViewerClient({
             </div>
           </div>
           <div className="flex flex-shrink-0 items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => window.print()}
-            >
-              <Printer className="h-4 w-4" strokeWidth={1.75} />
-              Export PDF
-            </Button>
+            {canExport(report.status, isAdmin) && (
+              <ExportPdfButton filenameBase={filenameBase} />
+            )}
             <EmailReportButton
               reportId={report.id}
               title={report.title}
@@ -149,48 +156,61 @@ export default function ReportViewerClient({
             />
           </div>
         </div>
-
-        {modules.length > 0 && (
-          <div className="mt-4">
-            <ModuleTabs
-              titles={modules.map((m) => m.title)}
-              activeIndex={activeTab}
-              onSelect={setActiveTab}
-            />
-          </div>
-        )}
       </header>
 
-      <main className="pt-6">
-        <DisclaimerBanner className="mb-6" />
-        {renderError ? (
-          <div className="overflow-x-auto rounded-lg border border-border bg-card p-6">
-            <p className="mb-2 text-sm text-foreground-muted">
-              Rendering failed — showing raw data:
-            </p>
-            <pre className="whitespace-pre-wrap break-words text-xs text-foreground">
-              {JSON.stringify(displayContent, null, 2)}
-            </pre>
-          </div>
-        ) : activeModule ? (
-          <ErrorBoundary onError={() => setRenderError(true)}>
-            <ReportRenderer
-              module={activeModule}
-              moduleIndex={activeTab}
-              categoryResolutionByModule={categoryResolutionByModule}
-            />
-          </ErrorBoundary>
-        ) : (
-          <div className="overflow-x-auto rounded-lg border border-border bg-card p-6">
-            <p className="mb-2 text-sm text-foreground-muted">
-              No module content available — showing raw data:
-            </p>
-            <pre className="whitespace-pre-wrap break-words text-xs text-foreground">
-              {JSON.stringify(displayContent, null, 2)}
-            </pre>
-          </div>
+      <div
+        className={cn(
+          'pt-6',
+          showOutline && 'lg:grid lg:grid-cols-[240px_1fr] lg:gap-10'
         )}
-      </main>
+      >
+        {showOutline && <ReportOutline sections={sections} />}
+
+        <main>
+          <DisclaimerBanner className="no-print mb-6" />
+          {renderError ? (
+            <div className="overflow-x-auto rounded-lg border border-border bg-card p-6">
+              <p className="mb-2 text-sm text-foreground-muted">
+                Rendering failed — showing raw data:
+              </p>
+              <pre className="whitespace-pre-wrap break-words text-xs text-foreground">
+                {JSON.stringify(displayContent, null, 2)}
+              </pre>
+            </div>
+          ) : modules.length > 0 ? (
+            <ErrorBoundary onError={() => setRenderError(true)}>
+              <div className="space-y-12">
+                {modules.map((m, i) => (
+                  <section
+                    key={i}
+                    id={`module-${i}`}
+                    className="scroll-mt-[76px]"
+                  >
+                    <ErrorBoundary>
+                      <ReportRenderer
+                        module={m}
+                        moduleIndex={i}
+                        categoryResolutionByModule={categoryResolutionByModule}
+                      />
+                    </ErrorBoundary>
+                  </section>
+                ))}
+              </div>
+            </ErrorBoundary>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-border bg-card p-6">
+              <p className="mb-2 text-sm text-foreground-muted">
+                No module content available — showing raw data:
+              </p>
+              <pre className="whitespace-pre-wrap break-words text-xs text-foreground">
+                {JSON.stringify(displayContent, null, 2)}
+              </pre>
+            </div>
+          )}
+
+          <DisclaimerBanner className="print-only mt-8" />
+        </main>
+      </div>
     </div>
   );
 }

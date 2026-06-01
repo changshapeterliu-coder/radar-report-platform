@@ -255,6 +255,14 @@ const en = {
       quote: 'Seller Voice',
     },
     emptyModule: 'No notable findings this period',
+    outline: {
+      label: 'Sections',
+    },
+    export: {
+      button: 'Export PDF',
+      preparing: 'Preparing…',
+      error: 'Export failed. Please try again.',
+    },
   },
   adminActions: {
     reTranslate: 'Re-translate',
