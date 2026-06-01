@@ -44,3 +44,15 @@ next-env.d.ts
 .tavily-probe-results.json
 .url-date-probe-results.json
 .url-date-probe-results.md
+.cn-media-probe-results.json
+.cn-media-probe-results.md
+.amz123-w21-experiment.md
+.multi-site-w21-experiment.md
+.compliance-providers-probe.json
+.sogou-wechat-probe.json
+.sogou-wechat-probe.md
+
+# Kiro runtime / local artifacts (not source)
+.kiro/tmp/
+.kiro/logs/
+tmp-ebrun-cb.html

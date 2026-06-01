@@ -1,0 +1,26 @@
+{
+  "mcpServers": {
+    "outlook-mcp-server": {
+      "command": "uvx",
+      "args": [
+        "--with",
+        "pywin32>=226",
+        "--with-editable",
+        "C:\\Users\\chenliua\\.kiro\\mcp-servers\\outlook-mcp-server",
+        "outlook-mcp-server"
+      ],
+      "env": {
+        "RADAR_MCP_RELOAD": "2026-05-30T02"
+      },
+      "disabled": false,
+      "autoApprove": [
+        "list_recent_emails_tool",
+        "view_email_cache_tool",
+        "get_email_by_number_tool",
+        "get_folder_list_tool",
+        "compose_email_tool",
+        "compose_email_tool"
+      ]
+    }
+  }
+}

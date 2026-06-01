@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Radar MEMORY capture (manual)",
+  "description": "Manually triggered in the Radar workspace after a substantive turn. Reviews the turn and, if it produced a milestone / decision / tradeoff / pitfall, drafts a candidate MEMORY.md entry and asks for confirmation before writing. No auto-trigger, no noise.",
+  "version": "1",
+  "when": {
+    "type": "userTriggered"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Review the turn that just ended in this (Radar Report Platform) workspace and decide whether it produced anything worth recording in MEMORY.md.\n\nONLY consider it worth recording if the turn produced one of:\n- a non-obvious architecture or scope decision (with a why)\n- a feature/milestone that actually shipped or completed\n- a bug fixed or pitfall discovered that should not regress\n- a tradeoff chosen between two valid approaches\n\nIf NONE of these happened (routine Q&A, reading files, running queries, wording tweaks, exploration, failed/abandoned attempts), output NOTHING except the single line: \"MEMORY: nothing to record.\" Do not pad, do not summarize the turn.\n\nIf something IS worth recording:\n1. Read the current MEMORY.md at the workspace root to match its existing sections and append-only style.\n2. Draft ONE concise candidate entry (what + why, one or two lines, dated if the existing entries are dated), and name which section it belongs under.\n3. Show the draft to the user and ask them to confirm with a short yes before you write it. DO NOT modify MEMORY.md until the user confirms. If the user does not confirm, do not write.\n\nKeep it short. The user values signal over volume — when in doubt, lean toward \"nothing to record\"."
+  }
+}

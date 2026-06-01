@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>TopTopicsTable — layout preview</title>
+<style>
+  :root {
+    --background: #fafafa;
+    --card: #ffffff;
+    --border: #e5e7eb;
+    --border-strong: #d1d5db;
+    --muted: #f3f4f6;
+    --foreground: #0a0a0a;
+    --foreground-muted: #6b7280;
+    --foreground-subtle: #9ca3af;
+    --primary: #ff9900;
+    --primary-soft: #fff4e5;
+    --info: #146eb4;
+    --info-bg: #eff6ff;
+    --info-fg: #1e40af;
+    --success: #10b981;
+    --success-bg: #ecfdf5;
+    --success-fg: #047857;
+    --warning: #f59e0b;
+    --warning-bg: #fffbeb;
+    --warning-fg: #b45309;
+    --danger: #dc2626;
+    --danger-bg: #fef2f2;
+    --danger-fg: #991b1b;
+  }
+  body {
+    margin: 0;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', '微软雅黑', sans-serif;
+    padding: 32px 24px 64px;
+  }
+  .wrap { max-width: 1280px; margin: 0 auto; }
+  h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
+  .sub { font-size: 13px; color: var(--foreground-muted); margin: 0 0 24px; }
+  .group { margin-bottom: 48px; }
+  .group h2 {
+    font-size: 13px; font-weight: 600; color: var(--foreground-muted);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    margin: 0 0 12px;
+  }
+  .desc { font-size: 13px; color: var(--foreground-muted); margin: 0 0 16px; }
+
+  /* shared table chrome */
+  .tbl-wrap {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--card);
+  }
+  table { width: 100%; border-collapse: collapse; }
+  thead tr { background: rgba(243, 244, 246, 0.5); }
+  th {
+    text-align: left; padding: 10px 16px;
+    font-size: 11px; font-weight: 600; color: var(--foreground-muted);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--border);
+  }
+  td { padding: 12px 16px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover { background: rgba(243, 244, 246, 0.5); }
+
+  .rank { color: var(--foreground); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+  .rank svg { width: 14px; height: 14px; color: var(--success); }
+  .topic-name { font-weight: 500; color: var(--foreground); }
+  .category-zh { color: var(--foreground); }
+  .category-hint { color: var(--foreground-muted); }
+  .voice { font-family: 'JetBrains Mono', 'Menlo', monospace; color: var(--foreground); }
+  .severity-pill {
+    display: inline-block; padding: 2px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 500;
+    background: var(--danger-bg); color: var(--danger-fg);
+    border: 1px solid color-mix(in srgb, var(--danger) 20%, transparent);
+  }
+
+  /* === BEFORE === */
+  .before .keywords-cell {
+    font-size: 12px; color: var(--foreground-muted);
+  }
+  .before .seller-cell { font-size: 14px; line-height: 1.6; color: var(--foreground); }
+
+  /* === AFTER === */
+  .after table { table-layout: fixed; }
+  .after col.rank-col { width: 64px; }
+  .after col.topic-col { width: 14%; }
+  .after col.category-col { width: 11%; }
+  .after col.voice-col { width: 80px; }
+  .after col.keywords-col { width: 18%; }
+  .after col.seller-col { /* takes remainder */ }
+  .after col.severity-col { width: 84px; }
+
+  .after .keywords-chips {
+    display: flex; flex-wrap: wrap; gap: 4px;
+  }
+  .after .chip {
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    background: var(--muted); color: var(--foreground-muted);
+    font-size: 11px; line-height: 1.4;
+    border: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .after .seller-cell {
+    font-size: 15px; line-height: 1.65; color: var(--foreground);
+  }
+  .after .topic-name { font-size: 14px; line-height: 1.45; }
+  .after .category-zh { font-size: 13px; line-height: 1.5; }
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>TopTopicsTable — layout preview</h1>
+  <p class="sub">同样的数据，左为现在线上的样式，右为提案。重点看每行高度 + Seller Discussion 段落的可读性。</p>
+
+  <!-- BEFORE -->
+  <div class="group before">
+    <h2>Before — 当前线上</h2>
+    <p class="desc">Topic / Category / Keywords 三列被挤到 ~10% 列宽，中文 cell 几乎无法横向铺开 —— 单行 25-row 高的 "面条" 来自这里。</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:64px;">RANK</th>
+            <th>TOPIC</th>
+            <th>CATEGORY</th>
+            <th>VOICE VOLUME</th>
+            <th>KEYWORDS</th>
+            <th>SELLER DISCUSSION</th>
+            <th>SEVERITY</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="rank">1 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25"><polyline points="20 6 9 17 4 12"></polyline></svg></span></td>
+            <td class="topic-name">Surge in Second Review and Video Verification</td>
+            <td>
+              <div class="category-zh">二次审核及视频验证</div>
+              <div class="category-hint" style="font-size:12px;">(Chinese original)</div>
+            </td>
+            <td class="voice">50.0</td>
+            <td class="keywords-cell">video verification、second review、supply chain review、legal entity cooperation、appointment difficulty、document review</td>
+            <td class="seller-cell">This week many sellers reported that submitted second review documents were rejected without reason, triggering video verification. A large number of sellers suddenly faced second review video verification, with appointment queues exceeding two weeks, and legal entities unfamiliar with operations being rejected.</td>
+            <td><span class="severity-pill">High</span></td>
+          </tr>
+          <tr>
+            <td><span class="rank">2</span></td>
+            <td class="topic-name">CA/BR KYC Disclosure Requirements</td>
+            <td>
+              <div class="category-zh">CA/BR KYC 披露</div>
+            </td>
+            <td class="voice">22.4</td>
+            <td class="keywords-cell">CA marketplace、BR marketplace、KYC disclosure、entity owner、document upload deadline</td>
+            <td class="seller-cell">Sellers in CA and BR continue to face confusing KYC disclosure prompts. Many report uploading the right document type but still receiving rejections, with no clear path to escalate. The 30-day deadline before suspension is creating panic.</td>
+            <td><span class="severity-pill" style="background:var(--warning-bg); color:var(--warning-fg); border-color:color-mix(in srgb, var(--warning) 20%, transparent);">Medium</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- AFTER -->
+  <div class="group after">
+    <h2>After — 提案</h2>
+    <p class="desc">列宽固定 (table-layout: fixed)、Seller Discussion 字号 14→15px / 行高 1.65、Keywords 改成 chips。每行高度从 ~25 行压回 6-8 行，长段落可读性 +1。</p>
+    <div class="tbl-wrap">
+      <table>
+        <colgroup>
+          <col class="rank-col" />
+          <col class="topic-col" />
+          <col class="category-col" />
+          <col class="voice-col" />
+          <col class="keywords-col" />
+          <col class="seller-col" />
+          <col class="severity-col" />
+        </colgroup>
+        <thead>
+          <tr>
+            <th>RANK</th>
+            <th>TOPIC</th>
+            <th>CATEGORY</th>
+            <th>VOICE VOLUME</th>
+            <th>KEYWORDS</th>
+            <th>SELLER DISCUSSION</th>
+            <th>SEVERITY</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="rank">1 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25"><polyline points="20 6 9 17 4 12"></polyline></svg></span></td>
+            <td class="topic-name">Surge in Second Review and Video Verification</td>
+            <td>
+              <div class="category-zh">二次审核及视频验证</div>
+              <div class="category-hint" style="font-size:12px; margin-top:2px;">(Chinese original)</div>
+            </td>
+            <td class="voice">50.0</td>
+            <td>
+              <div class="keywords-chips">
+                <span class="chip">video verification</span>
+                <span class="chip">second review</span>
+                <span class="chip">supply chain review</span>
+                <span class="chip">legal entity cooperation</span>
+                <span class="chip">appointment difficulty</span>
+                <span class="chip">document review</span>
+              </div>
+            </td>
+            <td class="seller-cell">This week many sellers reported that submitted second review documents were rejected without reason, triggering video verification. A large number of sellers suddenly faced second review video verification, with appointment queues exceeding two weeks, and legal entities unfamiliar with operations being rejected.</td>
+            <td><span class="severity-pill">High</span></td>
+          </tr>
+          <tr>
+            <td><span class="rank">2</span></td>
+            <td class="topic-name">CA/BR KYC Disclosure Requirements</td>
+            <td>
+              <div class="category-zh">CA/BR KYC 披露</div>
+            </td>
+            <td class="voice">22.4</td>
+            <td>
+              <div class="keywords-chips">
+                <span class="chip">CA marketplace</span>
+                <span class="chip">BR marketplace</span>
+                <span class="chip">KYC disclosure</span>
+                <span class="chip">entity owner</span>
+                <span class="chip">document upload deadline</span>
+              </div>
+            </td>
+            <td class="seller-cell">Sellers in CA and BR continue to face confusing KYC disclosure prompts. Many report uploading the right document type but still receiving rejections, with no clear path to escalate. The 30-day deadline before suspension is creating panic.</td>
+            <td><span class="severity-pill" style="background:var(--warning-bg); color:var(--warning-fg); border-color:color-mix(in srgb, var(--warning) 20%, transparent);">Medium</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <p class="sub" style="margin-top:32px;">Spec ref: ui-design-system.md §1 (tokens), §3.3 (card chrome), §4.4 (no emoji). 只动 layout + Seller Discussion 字号，颜色 / 边框 / chip 样式都用现有 token。</p>
+</div>
+</body>
+</html>
