@@ -187,6 +187,15 @@ body {
    Print styles for PDF export of report pages
    ======================================================================== */
 
+/* Page box: a uniform margin gives the printed report breathing room AND, in
+   Chromium, suppresses the browser's default header/footer chrome (page title,
+   URL, page number, timestamp) — those only render when @page margins are the
+   browser default. Other engines may still show their chrome (a known
+   window.print limitation). */
+@page {
+  margin: 14mm;
+}
+
 @media print {
   nav,
   .no-print,
@@ -213,9 +222,8 @@ body {
   }
 
   /* Collapse the viewer's two-column reading grid to a single column so the
-     report flows full-bleed top-to-bottom in the PDF (R8.4). The sidebar
-     <aside> is already display:none, but forcing one column is the safe
-     guarantee regardless of which grid utility is applied. */
+     report flows full-bleed top-to-bottom in the PDF (R8.4). The @page box
+     supplies the page margin now, so the content wrapper itself is flush. */
   main {
     padding: 0 !important;
     margin: 0 !important;
@@ -230,13 +238,30 @@ body {
     grid-template-columns: 1fr !important;
   }
 
-  /* Module section cards must never split across a page boundary (R8.3). */
+  /* Modules may be TALLER than a page. Forcing page-break-inside: avoid on the
+     whole card was the cause of orphaned headings + half-empty pages: an
+     unbreakable block that doesn't fit gets pushed whole to the next page.
+     Let long cards/prose flow across pages; protect only atomic units below. */
   section[id^="module-"] {
-    page-break-inside: avoid;
-    break-inside: avoid;
     /* Neutralize the on-screen scroll-mt-[76px] so each section does not push
        a stray top gap onto its print page. */
     scroll-margin-top: 0 !important;
+  }
+
+  /* Keep a heading with the content that follows it (no orphaned headings). */
+  h1,
+  h2,
+  h3,
+  h4 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  /* Avoid single dangling lines at the top/bottom of a page in prose. */
+  p,
+  li {
+    orphans: 3;
+    widows: 3;
   }
 
   .page-break-before {
@@ -247,12 +272,8 @@ body {
     page-break-after: always;
   }
 
-  .bg-white,
-  .bg-card,
-  [class*="rounded-lg"] {
-    page-break-inside: avoid;
-  }
-
+  /* Atomic units that look broken if split mid-way: table rows and the
+     admonition callouts (insight / warning / recommendation / stat / quote). */
   table {
     page-break-inside: auto;
   }
@@ -260,5 +281,11 @@ body {
   tr {
     page-break-inside: avoid;
     break-inside: avoid;
+  }
+
+  blockquote,
+  .my-4.rounded-md {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 }
