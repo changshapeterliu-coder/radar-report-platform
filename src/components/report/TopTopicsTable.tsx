@@ -10,7 +10,15 @@ import type { TopTopic } from '@/types/report';
  * TopTopic[] (v4 schema), not from AI-produced table JSON.
  *
  * Columns (fixed):
- *   Rank / Topic / Category? / Voice Volume / Keywords / Seller Discussion / Severity
+ *   Rank / Topic / Category? / Heat / Keywords / Seller Discussion
+ *
+ * The `Heat` column renders the `severity` level as a categorical pill
+ * (高/中/低). Source reports describe heat as a level word ("高频热度评级:
+ * 高/中/低"), not a number — pasted reports frequently carry no numeric
+ * `voice_volume` at all (defaults to 0), so showing "0.0" was misleading.
+ * Mapping heat to the existing severity enum is the faithful representation.
+ * The former standalone Severity column is folded into this one (it rendered
+ * the same `severity` value, so the two were duplicates).
  *
  * The `Category` column is conditional: it only renders when the caller
  * passes `categoryResolution` (zero-impact for existing call sites that
@@ -20,10 +28,10 @@ import type { TopTopic } from '@/types/report';
  *   - confirmed  -> rank + green lucide Check (cross-engine)
  *   - unconfirmed -> rank plain (single-engine)
  *
- * Severity uses the Badge primitive's semantic variants (aligned to
+ * Heat uses the Badge primitive's semantic variants (aligned to
  * ui-design-system.md sec 1.3 — high = danger, medium = warning, low = info).
  *
- * All column labels + severity pill labels go through i18n so the UI follows
+ * All column labels + heat pill labels go through i18n so the UI follows
  * the global zh/en language switch (Principle 3, user rule: language toggle
  * is the single system switch).
  */
@@ -170,7 +178,7 @@ export default function TopTopicsTable({
                 scope="col"
                 className="w-20 border-b border-border px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-foreground-muted"
               >
-                {t('report.topTopics.voiceVolume')}
+                {t('report.topTopics.heat')}
               </th>
               <th
                 scope="col"
@@ -183,12 +191,6 @@ export default function TopTopicsTable({
                 className="border-b border-border px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-foreground-muted"
               >
                 {t('report.topTopics.sellerDiscussion')}
-              </th>
-              <th
-                scope="col"
-                className="w-20 border-b border-border px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-foreground-muted"
-              >
-                {t('report.topTopics.severity')}
               </th>
             </tr>
           </thead>
@@ -214,17 +216,14 @@ export default function TopTopicsTable({
                       />
                     </td>
                   )}
-                  <td className="border-b border-border px-4 py-3 font-mono text-foreground">
-                    {topicRow.voice_volume.toFixed(1)}
+                  <td className="border-b border-border px-4 py-3">
+                    <Badge variant={sev.variant}>{t(sev.labelKey)}</Badge>
                   </td>
                   <td className="border-b border-border px-4 py-3 text-xs text-foreground-muted">
                     {topicRow.keywords.join('、')}
                   </td>
                   <td className="border-b border-border px-4 py-3 leading-relaxed text-foreground">
                     {topicRow.seller_discussion}
-                  </td>
-                  <td className="border-b border-border px-4 py-3">
-                    <Badge variant={sev.variant}>{t(sev.labelKey)}</Badge>
                   </td>
                 </tr>
               );

@@ -20,7 +20,12 @@ import type { CategoryCellState } from './TopTopicsTable';
  *   Category into the Topic cell as a secondary line.
  *
  * Columns (fixed layout):
- *   Rank  | Topic (+ canonical category)  | Voice  | Severity
+ *   Rank  | Topic (+ canonical category)  | Heat
+ *
+ * The `Heat` column renders `severity` as a categorical pill (高/中/低). The
+ * former numeric Voice column showed "0.0" for pasted reports that carry no
+ * numeric volume, and the separate Severity column rendered the same value —
+ * the two are merged into one faithful Heat column.
  *
  * Topic cell:
  *   line 1 — TopTopic.topic (the per-week display label)
@@ -115,7 +120,6 @@ export default function CompactTopTopicsTable({
         <colgroup>
           <col className="w-14" />
           <col />
-          <col className="w-20" />
           <col className="w-24" />
         </colgroup>
         <thead>
@@ -136,13 +140,7 @@ export default function CompactTopTopicsTable({
               scope="col"
               className="border-b border-border px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-foreground-muted"
             >
-              {t('report.topTopics.voiceVolume')}
-            </th>
-            <th
-              scope="col"
-              className="border-b border-border px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-foreground-muted"
-            >
-              {t('report.topTopics.severity')}
+              {t('report.topTopics.heat')}
             </th>
           </tr>
         </thead>
@@ -169,9 +167,6 @@ export default function CompactTopTopicsTable({
                       <CategorySubtitle state={categoryState} lang={lang} />
                     </div>
                   )}
-                </td>
-                <td className="border-b border-border px-3 py-3 text-right align-top font-mono tabular-nums text-foreground last:border-b-0">
-                  {topicRow.voice_volume.toFixed(1)}
                 </td>
                 <td className="border-b border-border px-3 py-3 text-right align-top last:border-b-0">
                   <Badge variant={sev.variant}>{t(sev.labelKey)}</Badge>

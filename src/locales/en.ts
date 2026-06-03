@@ -240,6 +240,7 @@ const en = {
       rank: 'Rank',
       topic: 'Topic',
       voiceVolume: 'Voice Volume',
+      heat: 'Heat',
       keywords: 'Keywords',
       sellerDiscussion: 'Seller Discussion',
       severity: 'Severity',

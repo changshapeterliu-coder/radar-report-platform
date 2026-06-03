@@ -240,6 +240,7 @@ const zh = {
       rank: '排名',
       topic: '话题',
       voiceVolume: '热度',
+      heat: '热度',
       keywords: '关键词',
       sellerDiscussion: '卖家讨论',
       severity: '严重度',
