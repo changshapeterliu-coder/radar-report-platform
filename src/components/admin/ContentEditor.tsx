@@ -587,6 +587,24 @@ function ModuleEditor({
 
 /* ─── Smart Paste ─── */
 
+// Transient topic-extraction summary returned alongside ReportContent by
+// POST /api/ai/format-report. It is NOT part of ReportContent and must be
+// stripped before the content enters editor state (see design: it must not be
+// saved into reports.content). Kept local on purpose so this component does
+// not couple to the new-report page's copy of the same shape.
+type ModuleOutcome = 'ok' | 'empty' | 'failed';
+
+interface ExtractionSummary {
+  perModule: Array<{
+    moduleIndex: number;
+    title: string;
+    extracted: number;
+    dropped: number;
+    outcome: ModuleOutcome;
+  }>;
+  total: number;
+}
+
 function SmartPasteSection({
   reportType,
   onResult,
@@ -597,11 +615,13 @@ function SmartPasteSection({
   const [rawText, setRawText] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [extraction, setExtraction] = useState<ExtractionSummary | null>(null);
 
   const handleFormat = async () => {
     if (!rawText.trim()) return;
     setLoading(true);
     setError('');
+    setExtraction(null);
     try {
       const res = await fetch('/api/ai/format-report', {
         method: 'POST',
@@ -613,7 +633,13 @@ function SmartPasteSection({
         setError(data.error || 'AI formatting failed');
         return;
       }
-      onResult(data as ReportContent);
+      // Strip the transient `extraction` summary so it never enters editor
+      // state / reports.content; surface it as a non-blocking notice instead.
+      const { extraction: extractionSummary, ...content } = data;
+      onResult(content as ReportContent);
+      if (extractionSummary) {
+        setExtraction(extractionSummary as ExtractionSummary);
+      }
       setRawText('');
     } catch {
       setError('Network error — could not reach AI service.');
@@ -621,6 +647,10 @@ function SmartPasteSection({
       setLoading(false);
     }
   };
+
+  const okModuleCount = extraction
+    ? extraction.perModule.filter((p) => p.outcome === 'ok').length
+    : 0;
 
   return (
     <div className="mb-6 rounded-lg border border-primary/40 bg-primary-soft p-4">
@@ -648,6 +678,37 @@ function SmartPasteSection({
         <Sparkles className="h-4 w-4" strokeWidth={1.75} aria-hidden />
         {loading ? 'AI Processing…' : 'AI 智能格式化'}
       </Button>
+
+      {extraction && (
+        <div
+          className="mt-3 rounded-md border border-border bg-primary-soft px-3 py-2.5 text-xs text-foreground-muted"
+          role="status"
+        >
+          <p className="font-medium text-foreground">
+            Extracted {extraction.total} topic
+            {extraction.total === 1 ? '' : 's'} across {okModuleCount} module
+            {okModuleCount === 1 ? '' : 's'} · 已提取 {extraction.total} 个话题
+          </p>
+          <ul className="mt-1.5 space-y-0.5">
+            {extraction.perModule.map((p) => (
+              <li key={p.moduleIndex}>
+                <span className="text-foreground">
+                  {p.title || `Module ${p.moduleIndex + 1}`}
+                </span>
+                {': '}
+                {p.outcome === 'ok' && (
+                  <>
+                    {p.extracted} topic{p.extracted === 1 ? '' : 's'} · 提取 {p.extracted} 个
+                    {p.dropped > 0 && ` (${p.dropped} dropped · 丢弃 ${p.dropped})`}
+                  </>
+                )}
+                {p.outcome === 'empty' && <>no topics found · 未发现话题</>}
+                {p.outcome === 'failed' && <>extraction failed · 提取失败</>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

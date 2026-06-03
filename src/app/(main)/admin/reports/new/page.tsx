@@ -14,6 +14,22 @@ import { Select } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import type { ReportContent } from '@/types/report';
 
+// Transient Smart Paste extraction summary (sibling of ReportContent in the
+// /api/ai/format-report response). It is UI-only metadata — never folded into
+// editor state and never saved into reports.content.
+type ModuleOutcome = 'ok' | 'empty' | 'failed';
+
+interface ExtractionSummary {
+  perModule: Array<{
+    moduleIndex: number;
+    title: string;
+    extracted: number;
+    dropped: number;
+    outcome: ModuleOutcome;
+  }>;
+  total: number;
+}
+
 const defaultContent: ReportContent = {
   title: '',
   dateRange: '',
@@ -56,11 +72,13 @@ export default function CreateReportPage() {
   const [aiRawText, setAiRawText] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState('');
+  const [extractionNotice, setExtractionNotice] = useState<ExtractionSummary | null>(null);
 
   const handleAiFormat = async () => {
     if (!aiRawText.trim()) return;
     setAiLoading(true);
     setAiError('');
+    setExtractionNotice(null);
     try {
       const res = await fetch('/api/ai/format-report', {
         method: 'POST',
@@ -72,9 +90,15 @@ export default function CreateReportPage() {
         setAiError(data.error || 'AI formatting failed');
         return;
       }
-      if (data.title) setTitle(data.title);
-      if (data.dateRange) setDateRange(data.dateRange);
-      setContent(data as ReportContent);
+      // Strip the transient `extraction` summary so it never enters editor
+      // state (it is sibling UI metadata, not part of ReportContent).
+      const { extraction, ...content } = data as ReportContent & {
+        extraction?: ExtractionSummary;
+      };
+      if (content.title) setTitle(content.title);
+      if (content.dateRange) setDateRange(content.dateRange);
+      setContent(content as ReportContent);
+      if (extraction) setExtractionNotice(extraction);
       setAiRawText('');
     } catch {
       setAiError('Network error — could not reach AI service.');
@@ -194,6 +218,34 @@ export default function CreateReportPage() {
               {aiLoading ? 'Processing...' : 'Format with AI'}
             </Button>
           </div>
+
+          {extractionNotice && (
+            <div className="mt-3 rounded-md bg-primary-soft px-3 py-2.5 text-xs text-foreground-muted">
+              <p className="font-medium text-foreground">
+                Extracted {extractionNotice.total}{' '}
+                {extractionNotice.total === 1 ? 'topic' : 'topics'} across{' '}
+                {extractionNotice.perModule.filter((m) => m.extracted > 0).length}{' '}
+                {extractionNotice.perModule.filter((m) => m.extracted > 0).length === 1
+                  ? 'module'
+                  : 'modules'}
+              </p>
+              <ul className="mt-1.5 space-y-0.5">
+                {extractionNotice.perModule.map((m) => (
+                  <li key={m.moduleIndex}>
+                    module {m.moduleIndex + 1}
+                    {m.title ? ` (${m.title})` : ''}:{' '}
+                    {m.outcome === 'failed'
+                      ? 'extraction failed'
+                      : m.outcome === 'empty'
+                        ? 'no topics found'
+                        : `${m.extracted} ${m.extracted === 1 ? 'topic' : 'topics'}${
+                            m.dropped > 0 ? ` (${m.dropped} dropped)` : ''
+                          }`}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
 
         {errors.length > 0 && (

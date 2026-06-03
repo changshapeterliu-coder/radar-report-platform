@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { TopTopic } from '@/types/report';
+import { extractTopTopicsForModule } from '@/lib/smart-paste/extract-top-topics';
+import { stripReferenceMarkers } from '@/lib/smart-paste/strip-reference-markers';
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
@@ -11,10 +14,14 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
  * ("Expected ',' or '}'"). By taking the LLM out of JSON assembly for the
  * fragile big-content part, that entire failure class disappears (Principle 2
  * — architecture over prompt-hope). The ReportContent structure is then
- * assembled DETERMINISTICALLY in code by splitting on `##` headings. This is
- * safe here precisely because Smart Paste sets topTopics = [] — manual pastes
- * skip the topic-extraction pipeline, so there is nothing structured to mine
- * out of the prose.
+ * assembled DETERMINISTICALLY in code by splitting on `##` headings.
+ *
+ * Layer 1 (this markdown assembly) sets topTopics = [] for every module. A
+ * second, additive Layer 2 (see the POST handler) then runs a best-effort,
+ * per-module LLM extraction that mines structured topTopics out of each module
+ * body — a table OR prose — so a manual paste feeds the same publish-time
+ * topic-extraction pipeline an auto-run report does. Layer 2 never mutates the
+ * markdown body (R1.6) and never blocks the reliable Layer 1 backbone.
  */
 const SYSTEM_PROMPT = `You are a report formatting assistant. Convert raw pasted report text into clean Markdown. Your job is classification & light restructuring — NOT rewriting.
 
@@ -57,7 +64,7 @@ RULES:
 
 interface ReportModuleLite {
   title: string;
-  topTopics: never[];
+  topTopics: TopTopic[];
   markdown: string;
 }
 
@@ -86,9 +93,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const truncatedText = text.trim().length > 50000
-      ? text.trim().slice(0, 50000) + '\n\n[Text truncated]'
-      : text.trim();
+    // Strip dangling citation / footnote markers (Gemini Deep Research leaves
+    // " 1" " 3" glued to sentence ends after its hyperlinked citations are
+    // flattened to plain text — true for both pasted text and docx-extracted
+    // text). Pure code-level cleanup BEFORE the LLM sees it, so both Layer 1
+    // (markdown) and Layer 2 (topTopics / keywords) are citation-free. Real
+    // numeric data ("第3条", "15%", "3000欧元", "模块 1：") is preserved — see
+    // strip-reference-markers.ts for the boundary rules.
+    const cleanedText = stripReferenceMarkers(text);
+
+    const truncatedText = cleanedText.trim().length > 50000
+      ? cleanedText.trim().slice(0, 50000) + '\n\n[Text truncated]'
+      : cleanedText.trim();
 
     const typeHint = reportType === 'topic'
       ? 'This is a TOPIC report focusing on a single subject — it may have fewer sections.'
@@ -148,7 +164,52 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(parsed);
+    // ─── Layer 2 — additive, best-effort topic extraction (no table pre-gate) ───
+    // One constrained LLM call per module body, run in parallel. Every in-scope
+    // module is attempted; extractTopTopicsForModule never throws and returns a
+    // genuine-empty vs failed distinction. A module's extraction failure leaves
+    // its topTopics: [] and never touches the markdown body (R1.6) or blocks the
+    // paste (R5.2). The `extraction` summary rides alongside ReportContent so the
+    // editor can show a non-blocking notice (R5.3/R5.4) — it is NOT folded into
+    // content and must not be saved into reports.content.
+    const apiKey = OPENROUTER_API_KEY;
+    const results = await Promise.allSettled(
+      parsed.modules.map((m) =>
+        extractTopTopicsForModule({
+          markdown: m.markdown,
+          apiKey,
+          signal: AbortSignal.timeout(45_000),
+        })
+      )
+    );
+
+    const perModule = parsed.modules.map((m, idx) => {
+      const r = results[idx];
+      const ok =
+        r.status === 'fulfilled'
+          ? r.value
+          : { topics: [] as TopTopic[], dropped: 0, failed: true }; // settled-rejected → failed
+      m.topTopics = ok.topics; // additive; markdown untouched (R1.6)
+      return {
+        moduleIndex: idx,
+        title: m.title,
+        extracted: ok.topics.length,
+        dropped: ok.dropped,
+        outcome: ok.failed
+          ? 'failed'
+          : ok.topics.length === 0
+            ? 'empty'
+            : 'ok',
+      };
+    });
+
+    return NextResponse.json({
+      ...parsed, // title, dateRange, modules (now with extracted topTopics)
+      extraction: {
+        perModule,
+        total: perModule.reduce((n, p) => n + p.extracted, 0),
+      },
+    });
   } catch (err: unknown) {
     console.error('format-report error:', err);
     const message = err instanceof Error ? err.message : 'Unknown error';
@@ -270,7 +331,7 @@ function splitMarkdownIntoModules(body: string): ReportModuleLite[] {
 
   return sections.map((s) => ({
     title: s.title,
-    topTopics: [] as never[],
+    topTopics: [],
     markdown: s.lines.join('\n').trim(),
   }));
 }

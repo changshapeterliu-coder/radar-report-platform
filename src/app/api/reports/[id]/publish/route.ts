@@ -142,6 +142,18 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   try {
     const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
     if (OPENROUTER_KEY) {
+      // Idempotent replace (R9.1): before (re)generating, delete this
+      // report's existing AI Insight news rows so a re-publish REPLACES
+      // rather than appends. Mirrors `persist_weekly_topic_rankings`'
+      // DELETE-by-report_id-then-insert. The report owns its derived
+      // artifacts; re-publishing produces a fresh set, not an accumulating
+      // one. Requires migration 028 (`news.report_id`) to be applied.
+      await supabase
+        .from('news')
+        .delete()
+        .eq('report_id', id)
+        .eq('source_channel', 'AI Insight');
+
       const { data: allRankings } = await supabase
         .from('topic_rankings')
         .select(
@@ -244,6 +256,7 @@ Return JSON: { "news": [{ "title": "中文标题", "summary": "1-2 句中文摘�
                 .insert({
                   domain_id: report.domain_id,
                   created_by: user.id,
+                  report_id: id, // R9.3 — ownership link for idempotent replace (R9.1) + cascade delete (R9.2)
                   title: item.title,
                   summary: item.summary || null,
                   content: item.content,
