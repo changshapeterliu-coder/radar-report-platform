@@ -75,6 +75,45 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     );
   }
 
+  // ── Pre-publish gate: regular reports MUST carry a week_label ─────
+  // The dashboard trend chart groups topic_rankings by week_label; a NULL
+  // week_label collapses every unlabeled report onto one "null" bucket, so
+  // the report never appears as its own week and the chart silently fails to
+  // grow. A missing week_label is the single most common, most determinate
+  // cause of "I published but nothing updated", so block it here rather than
+  // discover it later in the chart. Topic reports do not feed the trend chart,
+  // so they are exempt.
+  const { data: preCheck, error: preErr } = await supabase
+    .from('reports')
+    .select('type, week_label')
+    .eq('id', id)
+    .single();
+
+  if (preErr) {
+    if (preErr.code === 'PGRST116') {
+      return NextResponse.json(
+        { code: 'NOT_FOUND', message: 'Report not found', statusCode: 404 },
+        { status: 404 }
+      );
+    }
+    return NextResponse.json(
+      { code: 'LOAD_ERROR', message: preErr.message, statusCode: 500 },
+      { status: 500 }
+    );
+  }
+
+  if (preCheck.type === 'regular' && !preCheck.week_label?.trim()) {
+    return NextResponse.json(
+      {
+        code: 'WEEK_LABEL_REQUIRED',
+        message:
+          'Week label is required to publish a regular report — it drives the dashboard trend chart. Set it (e.g. "W23-W24") and publish again. 发布常规报告前必须填写 Week Label（用于趋势图按周分组）。',
+        statusCode: 400,
+      },
+      { status: 400 }
+    );
+  }
+
   // Update report status to published
   const now = new Date().toISOString();
   const { data: report, error: updateError } = await supabase

@@ -130,7 +130,14 @@ export default function AdminPage() {
   }, [fetchDrafts, fetchPublished, fetchNews, fetchRequests]);
 
   const handlePublish = async (id: string) => {
-    await fetch(`/api/reports/${id}/publish`, { method: 'PUT' });
+    const res = await fetch(`/api/reports/${id}/publish`, { method: 'PUT' });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      // Surface the server gate (e.g. WEEK_LABEL_REQUIRED) instead of silently
+      // doing nothing — the draft stays a draft and the operator sees why.
+      window.alert(data.message || 'Publish failed.');
+      return;
+    }
     fetchDrafts();
     fetchPublished();
   };

@@ -126,6 +126,16 @@ export default function CreateReportPage() {
       return;
     }
 
+    // Pre-publish gate (mirrors the server gate in /publish): a regular report
+    // with no week_label collapses onto the dashboard trend chart's "null"
+    // bucket and never shows as its own week. Block before creating a draft.
+    if (publish && type === 'regular' && !weekLabel.trim()) {
+      setErrors([
+        'Week Label is required to publish a regular report — it drives the dashboard trend chart. 发布常规报告前请填写 Week Label（如 "W23-W24"）。',
+      ]);
+      return;
+    }
+
     setSaving(true);
     try {
       const res = await fetch('/api/reports', {
@@ -151,7 +161,15 @@ export default function CreateReportPage() {
       const id = result.data?.id;
 
       if (publish && id) {
-        await fetch(`/api/reports/${id}/publish`, { method: 'PUT' });
+        const pubRes = await fetch(`/api/reports/${id}/publish`, { method: 'PUT' });
+        if (!pubRes.ok) {
+          const pubData = await pubRes.json().catch(() => ({}));
+          setErrors([
+            pubData.message ||
+              'Report saved as draft, but publishing failed. Open it from the admin list to publish.',
+          ]);
+          return; // draft exists; stay so the user sees the reason
+        }
       }
 
       router.push('/admin');
